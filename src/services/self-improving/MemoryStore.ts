@@ -99,8 +99,14 @@ export class MemoryStore implements MemoryBackend {
 	async recall(maxResults: number = 20): Promise<MemoryEntry[]> {
 		await this.ensureInitialized()
 
-		const allEntries = [...this.environment, ...this.userProfile]
-		return allEntries.slice(-maxResults).map((entry) => this.cloneEntry(entry))
+		return [...this.environment, ...this.userProfile]
+			.sort((left, right) => {
+				const leftTimestamp = left.updatedAt ?? left.createdAt
+				const rightTimestamp = right.updatedAt ?? right.createdAt
+				return rightTimestamp - leftTimestamp
+			})
+			.slice(0, maxResults)
+			.map((entry) => this.cloneEntry(entry))
 	}
 
 	async forget(id: string): Promise<boolean> {
@@ -126,7 +132,11 @@ export class MemoryStore implements MemoryBackend {
 	async forgetByContent(substring: string): Promise<number> {
 		await this.ensureInitialized()
 
-		const lowerSubstring = substring.toLowerCase()
+		const lowerSubstring = substring.trim().toLowerCase()
+		if (!lowerSubstring) {
+			return 0
+		}
+
 		let removed = 0
 
 		const envBefore = this.environment.length

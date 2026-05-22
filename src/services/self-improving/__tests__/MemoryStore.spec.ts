@@ -59,6 +59,7 @@ describe("MemoryStore", () => {
 		await store.initialize()
 
 		expect(await store.getStats()).toEqual({ entryCount: 3, backend: "builtin" })
+		await expect(store.recall(2)).resolves.toMatchObject([{ id: "user-1" }, { id: "env-3" }])
 		expect(store.getSnapshotString()).toContain("Prefer semantic search first")
 		expect(store.getSnapshotString()).not.toContain("prefer semantic search first")
 
@@ -81,8 +82,10 @@ describe("MemoryStore", () => {
 		await expect(store.addEnvironmentEntry("alpha guidance")).resolves.toBeNull()
 
 		await store.addEnvironmentEntry("Beta guidance")
+		await store.addUserProfileEntry("User prefers short answers")
 		await store.replaceEnvironmentEntry("beta", "Gamma guidance", { tags: ["replacement"] })
 		await expect(store.removeEnvironmentEntry("alpha")).resolves.toBe(true)
+		await expect(store.forgetByContent("   ")).resolves.toBe(0)
 
 		for (let index = 0; index < 55; index += 1) {
 			await store.addEnvironmentEntry(`Fact ${index}`)
@@ -92,7 +95,7 @@ describe("MemoryStore", () => {
 			await fs.readFile(path.join(tempDir, "self-improving", "memory", "environment.json"), "utf8"),
 		) as Array<{ content: string }>
 
-		expect((await store.getStats()).entryCount).toBe(50)
+		expect((await store.getStats()).entryCount).toBe(51)
 		expect(persisted).toHaveLength(50)
 		expect(persisted.some((entry) => entry.content === "Gamma guidance")).toBe(false)
 		expect(persisted.some((entry) => entry.content === "Alpha guidance")).toBe(false)

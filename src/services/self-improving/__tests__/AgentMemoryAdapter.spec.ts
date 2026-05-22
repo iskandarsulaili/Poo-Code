@@ -67,6 +67,16 @@ describe("AgentMemoryAdapter", () => {
 		expect(results).toEqual([])
 	})
 
+	it("should ignore empty forgetByContent queries", async () => {
+		const fetchSpy = vi.fn()
+		vi.stubGlobal("fetch", fetchSpy)
+
+		const adapter = createAdapter()
+
+		await expect(adapter.forgetByContent("   ")).resolves.toBe(0)
+		expect(fetchSpy).not.toHaveBeenCalled()
+	})
+
 	it("should clean up health check interval on dispose", async () => {
 		vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Connection refused")))
 

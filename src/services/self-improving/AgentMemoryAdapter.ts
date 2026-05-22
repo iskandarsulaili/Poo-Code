@@ -189,11 +189,16 @@ export class AgentMemoryAdapter implements MemoryBackend {
 	 * Uses agentmemory search + forget pattern.
 	 */
 	async forgetByContent(substring: string): Promise<number> {
+		const normalized = substring.trim().toLowerCase()
+		if (!normalized) {
+			return 0
+		}
+
 		const entries = await this.search(substring, 50)
 		let removed = 0
 
 		for (const entry of entries) {
-			if (entry.content.toLowerCase().includes(substring.toLowerCase())) {
+			if (entry.content.toLowerCase().includes(normalized)) {
 				const ok = await this.forget(entry.id)
 				if (ok) removed += 1
 			}
