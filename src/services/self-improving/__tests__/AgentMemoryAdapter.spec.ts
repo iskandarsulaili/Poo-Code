@@ -85,7 +85,7 @@ describe("AgentMemoryAdapter", () => {
 
 			if (input.endsWith("/agentmemory/search")) {
 				const body = JSON.parse(String(init?.body)) as { query: string }
-				expect(body.query).toBe("foo")
+				expect(body.query).toBe("Foo")
 				return {
 					ok: true,
 					json: async () => ({ results: [{ id: "memory-1", content: "foo memory" }] }),
@@ -103,7 +103,7 @@ describe("AgentMemoryAdapter", () => {
 		const adapter = createAdapter()
 		await adapter.initialize()
 
-		await expect(adapter.forgetByContent("  foo  ")).resolves.toBe(1)
+		await expect(adapter.forgetByContent("  Foo  ")).resolves.toBe(1)
 	})
 
 	it("should clean up health check interval on dispose", async () => {
