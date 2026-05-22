@@ -77,6 +77,16 @@ export interface SelfImprovingManagerOptions {
 	logger: Logger
 	getExperiments: () => Record<string, boolean> | undefined
 	getCodeIndexInfo?: () => CodeIndexInfo
+	/** Optional curator configuration overrides */
+	curatorConfig?: {
+		intervalMs?: number
+		minIdleMs?: number
+		firstRunDeferred?: boolean
+		staleAfterDays?: number
+		archiveAfterDays?: number
+		backupsEnabled?: boolean
+		maxBackups?: number
+	}
 	/** Optional SkillsManager reference for skill telemetry integration */
 	skillsManager?: {
 		getSkillNames(): string[]

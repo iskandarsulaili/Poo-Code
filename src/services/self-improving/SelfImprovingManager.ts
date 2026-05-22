@@ -15,6 +15,10 @@ import { CodeIndexAdapter } from "./CodeIndexAdapter"
 import { MemoryStore } from "./MemoryStore"
 import { SkillUsageStore } from "./SkillUsageStore"
 import { ActionExecutor } from "./ActionExecutor"
+import { CuratorService } from "./CuratorService"
+import type { CuratorReport } from "./CuratorService"
+import { ReviewPromptFactory } from "./ReviewPromptFactory"
+import { TranscriptRecall } from "./TranscriptRecall"
 
 const SELF_IMPROVING_EXPERIMENT_ID = "selfImproving"
 const REVIEW_CHECK_INTERVAL_MS = 60_000
@@ -34,6 +38,9 @@ export class SelfImprovingManager {
 	private readonly getCodeIndexInfo: SelfImprovingManagerOptions["getCodeIndexInfo"]
 	public readonly memoryStore: MemoryStore
 	public readonly skillUsageStore: SkillUsageStore
+	public readonly curatorService: CuratorService
+	public readonly reviewPromptFactory: ReviewPromptFactory
+	public readonly transcriptRecall: TranscriptRecall
 	private readonly actionExecutor: ActionExecutor
 
 	private runtime: Runtime | undefined
@@ -41,6 +48,7 @@ export class SelfImprovingManager {
 	private reviewTimer: ReturnType<typeof setInterval> | null = null
 	private curatorTimer: ReturnType<typeof setInterval> | null = null
 	private promptRevision = 0
+	private lastUserActivityAt = 0
 
 	constructor(options: SelfImprovingManagerOptions) {
 		this.globalStoragePath = options.globalStoragePath
@@ -50,6 +58,14 @@ export class SelfImprovingManager {
 		this.memoryStore = new MemoryStore(options.globalStoragePath, options.logger)
 		this.skillUsageStore = new SkillUsageStore(options.globalStoragePath, options.logger)
 		this.actionExecutor = new ActionExecutor(this.memoryStore, this.skillUsageStore, options.logger)
+		this.curatorService = new CuratorService(
+			options.globalStoragePath,
+			this.skillUsageStore,
+			options.logger,
+			options.curatorConfig,
+		)
+		this.reviewPromptFactory = new ReviewPromptFactory()
+		this.transcriptRecall = new TranscriptRecall(options.globalStoragePath, options.logger)
 	}
 
 	static isExperimentEnabled(experiments: Record<string, boolean> | undefined): boolean {
@@ -74,6 +90,8 @@ export class SelfImprovingManager {
 			await runtime.store.initialize()
 			await this.memoryStore.initialize()
 			await this.skillUsageStore.initialize()
+			await this.transcriptRecall.initialize()
+			await this.curatorService.initialize()
 			this.started = true
 			this.startTimers(runtime.store)
 			this.logger.appendLine(
@@ -137,6 +155,21 @@ export class SelfImprovingManager {
 		try {
 			const event = this.runtime.feedbackCollector.createTaskEvent(info)
 			this.runtime.store.addEvent(event)
+			this.lastUserActivityAt = event.timestamp
+			await this.transcriptRecall.record({
+				id: event.id,
+				timestamp: event.timestamp,
+				taskId: info.taskId,
+				mode: info.mode,
+				summary: info.success
+					? `Task completed: ${info.mode || "unknown"}`
+					: `Task failed: ${info.errorKey || "unknown"}`,
+				signal: info.success ? "TASK_SUCCESS" : "TASK_FAILURE",
+				workspacePath: info.workspacePath,
+				toolNames: info.toolNames,
+				errorKey: info.errorKey,
+				success: info.success,
+			})
 			this.runtime.store.incrementToolIterations(
 				Math.max(1, info.toolIterationCount ?? info.toolNames?.length ?? 1),
 			)
@@ -158,6 +191,7 @@ export class SelfImprovingManager {
 		try {
 			const event = this.runtime.feedbackCollector.createCorrectionEvent(info)
 			this.runtime.store.addEvent(event)
+			this.lastUserActivityAt = event.timestamp
 			await this.checkReviewTriggers(this.runtime.store)
 		} catch (error) {
 			this.logError("recordUserCorrection error", error)
@@ -174,6 +208,7 @@ export class SelfImprovingManager {
 		}
 
 		try {
+			this.lastUserActivityAt = Date.now()
 			this.runtime.store.incrementUserTurns()
 			await this.checkReviewTriggers(this.runtime.store)
 		} catch (error) {
@@ -198,6 +233,7 @@ export class SelfImprovingManager {
 			const codeIndexInfo = this.runtime.codeIndexAdapter.getInfo()
 			const event = this.runtime.feedbackCollector.createCodeIndexEvent(codeIndexInfo, taskId)
 			this.runtime.store.addEvent(event)
+			this.lastUserActivityAt = event.timestamp
 		} catch (error) {
 			this.logError("recordCodeIndexEvent error", error)
 		}
@@ -255,39 +291,33 @@ export class SelfImprovingManager {
 		}
 	}
 
-	async runCuratorCycle(): Promise<void> {
+	async runCuratorCycle(): Promise<CuratorReport | undefined> {
 		if (!SelfImprovingManager.isExperimentEnabled(this.getExperiments())) {
-			return
+			return undefined
 		}
 
 		if (!this.started || !this.runtime) {
-			return
+			return undefined
 		}
 
 		try {
-			const config = this.runtime.store.getConfig()
 			const now = Date.now()
-			const staleThreshold = now - config.staleAfterDays * 24 * 60 * 60 * 1000
-			const archiveThreshold = now - config.archiveAfterDays * 24 * 60 * 60 * 1000
-			let transitions = 0
+			const report = await this.curatorService.run(
+				now,
+				this.lastUserActivityAt > 0 ? this.lastUserActivityAt : undefined,
+			)
+			this.runtime.store.updateTelemetry({ lastCuratorRunAt: report.timestamp })
 
-			for (const pattern of [...this.runtime.store.getPatterns()]) {
-				if (pattern.state === "active" && pattern.lastSeenAt < staleThreshold) {
-					this.runtime.store.updatePattern(pattern.id, { state: "stale" })
-					transitions += 1
-				} else if (pattern.state === "stale" && pattern.lastSeenAt < archiveThreshold) {
-					this.runtime.store.archivePattern(pattern.id)
-					transitions += 1
-				}
+			if (report.transitions.length > 0) {
+				this.logger.appendLine(`[SelfImprovingManager] Curator cycle: ${report.transitions.length} transitions`)
 			}
 
-			if (transitions > 0) {
-				this.runtime.store.updateTelemetry({ lastCuratorRunAt: now })
-				await this.runtime.store.persist()
-				this.logger.appendLine(`[SelfImprovingManager] Curator cycle: ${transitions} patterns transitioned`)
-			}
+			return report
 		} catch (error) {
-			this.logError("Curator cycle error", error)
+			this.logger.appendLine(
+				`[SelfImprovingManager] Curator cycle error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+			return undefined
 		}
 	}
 
@@ -332,10 +362,12 @@ export class SelfImprovingManager {
 		actionCount: number
 		memoryEntries: number
 		skillRecords: number
+		curatorStatus: ReturnType<CuratorService["getStatus"]>
 		lastReviewAt?: number
 		lastCuratorRunAt?: number
 	} {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
+		const curatorStatus = this.curatorService.getStatus()
 		if (!enabled) {
 			return {
 				enabled: false,
@@ -345,6 +377,7 @@ export class SelfImprovingManager {
 				actionCount: 0,
 				memoryEntries: 0,
 				skillRecords: 0,
+				curatorStatus,
 			}
 		}
 
@@ -357,6 +390,7 @@ export class SelfImprovingManager {
 				actionCount: 0,
 				memoryEntries: 0,
 				skillRecords: 0,
+				curatorStatus,
 			}
 		}
 
@@ -372,6 +406,7 @@ export class SelfImprovingManager {
 				actionCount: this.runtime.store.getPendingActions().length,
 				memoryEntries: memoryStats.environment + memoryStats.userProfile,
 				skillRecords: skillStats.total,
+				curatorStatus,
 				lastReviewAt: telemetry.lastReviewAt,
 				lastCuratorRunAt: telemetry.lastCuratorRunAt,
 			}
@@ -384,6 +419,7 @@ export class SelfImprovingManager {
 				actionCount: 0,
 				memoryEntries: 0,
 				skillRecords: 0,
+				curatorStatus,
 			}
 		}
 	}
@@ -429,7 +465,11 @@ export class SelfImprovingManager {
 
 		if (config.curatorEnabled) {
 			this.curatorTimer = setInterval(() => {
-				void this.runCuratorCycle()
+				this.runCuratorCycle().catch((error) => {
+					this.logger.appendLine(
+						`[SelfImprovingManager] Curator cycle error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
 			}, config.curatorIntervalMs)
 		}
 	}

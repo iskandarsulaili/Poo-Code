@@ -7,7 +7,24 @@ const mockState = vi.hoisted(() => ({
 	memoryStores: [] as any[],
 	skillUsageStores: [] as any[],
 	actionExecutors: [] as any[],
+	curatorServices: [] as any[],
+	reviewPromptFactories: [] as any[],
+	transcriptRecalls: [] as any[],
 }))
+
+const DEFAULT_CURATOR_STATUS = {
+	lastRunAt: 0,
+	firstRunDone: false,
+	config: {
+		intervalMs: 3_600_000,
+		minIdleMs: 300_000,
+		firstRunDeferred: true,
+		staleAfterDays: 14,
+		archiveAfterDays: 60,
+		backupsEnabled: true,
+		maxBackups: 5,
+	},
+}
 
 function createStoreMock() {
 	return {
@@ -66,6 +83,34 @@ function createSkillUsageStoreMock() {
 function createActionExecutorMock() {
 	return {
 		executeBatch: vi.fn().mockResolvedValue(new Set()),
+	}
+}
+
+function createCuratorServiceMock() {
+	return {
+		initialize: vi.fn().mockResolvedValue(undefined),
+		run: vi.fn().mockResolvedValue({
+			runId: "curator-run-1",
+			timestamp: 1,
+			durationMs: 1,
+			transitions: [],
+			stats: {
+				totalSkills: 0,
+				activeSkills: 0,
+				staleSkills: 0,
+				archivedSkills: 0,
+				pinnedSkills: 0,
+				transitionsApplied: 0,
+			},
+		}),
+		getStatus: vi.fn().mockReturnValue({ ...DEFAULT_CURATOR_STATUS, config: { ...DEFAULT_CURATOR_STATUS.config } }),
+	}
+}
+
+function createTranscriptRecallMock() {
+	return {
+		initialize: vi.fn().mockResolvedValue(undefined),
+		record: vi.fn().mockResolvedValue(undefined),
 	}
 }
 
@@ -159,6 +204,30 @@ vi.mock("../ActionExecutor", () => ({
 	}),
 }))
 
+vi.mock("../CuratorService", () => ({
+	CuratorService: vi.fn().mockImplementation(() => {
+		const service = createCuratorServiceMock()
+		mockState.curatorServices.push(service)
+		return service
+	}),
+}))
+
+vi.mock("../ReviewPromptFactory", () => ({
+	ReviewPromptFactory: vi.fn().mockImplementation(() => {
+		const factory = {}
+		mockState.reviewPromptFactories.push(factory)
+		return factory
+	}),
+}))
+
+vi.mock("../TranscriptRecall", () => ({
+	TranscriptRecall: vi.fn().mockImplementation(() => {
+		const store = createTranscriptRecallMock()
+		mockState.transcriptRecalls.push(store)
+		return store
+	}),
+}))
+
 import { SelfImprovingManager } from "../SelfImprovingManager"
 
 describe("SelfImprovingManager", () => {
@@ -184,6 +253,9 @@ describe("SelfImprovingManager", () => {
 		mockState.memoryStores.length = 0
 		mockState.skillUsageStores.length = 0
 		mockState.actionExecutors.length = 0
+		mockState.curatorServices.length = 0
+		mockState.reviewPromptFactories.length = 0
+		mockState.transcriptRecalls.length = 0
 		experiments = undefined
 		logger = { appendLine: vi.fn() }
 	})
@@ -208,6 +280,7 @@ describe("SelfImprovingManager", () => {
 			actionCount: 0,
 			memoryEntries: 0,
 			skillRecords: 0,
+			curatorStatus: DEFAULT_CURATOR_STATUS,
 		})
 	})
 
@@ -221,6 +294,8 @@ describe("SelfImprovingManager", () => {
 		expect(mockState.stores[0].initialize).toHaveBeenCalledTimes(1)
 		expect(mockState.memoryStores[0].initialize).toHaveBeenCalledTimes(1)
 		expect(mockState.skillUsageStores[0].initialize).toHaveBeenCalledTimes(1)
+		expect(mockState.transcriptRecalls[0].initialize).toHaveBeenCalledTimes(1)
+		expect(mockState.curatorServices[0].initialize).toHaveBeenCalledTimes(1)
 		expect(vi.getTimerCount()).toBe(2)
 		expect(manager.getStatus()).toMatchObject({ enabled: true, started: true })
 	})
@@ -234,6 +309,7 @@ describe("SelfImprovingManager", () => {
 		const analyzer = mockState.analyzers[0]
 		const applier = mockState.appliers[0]
 		const executor = mockState.actionExecutors[0]
+		const transcriptRecall = mockState.transcriptRecalls[0]
 		const pattern = {
 			id: "pattern-1",
 			patternType: "prompt",
@@ -268,6 +344,18 @@ describe("SelfImprovingManager", () => {
 		await manager.recordTaskCompletion({ taskId: "task-1", success: true, toolNames: ["search_files"] })
 
 		expect(store.addEvent).toHaveBeenCalledTimes(1)
+		expect(transcriptRecall.record).toHaveBeenCalledWith({
+			id: "evt-task",
+			timestamp: 1,
+			taskId: "task-1",
+			mode: undefined,
+			summary: "Task completed: unknown",
+			signal: "TASK_SUCCESS",
+			workspacePath: undefined,
+			toolNames: ["search_files"],
+			errorKey: undefined,
+			success: true,
+		})
 		expect(store.incrementToolIterations).toHaveBeenCalledWith(1)
 		expect(analyzer.analyze).toHaveBeenCalledTimes(1)
 		expect(store.addPattern).toHaveBeenCalledWith(pattern)
@@ -311,6 +399,43 @@ describe("SelfImprovingManager", () => {
 			actionCount: 0,
 			memoryEntries: 0,
 			skillRecords: 0,
+			curatorStatus: DEFAULT_CURATOR_STATUS,
 		})
+	})
+
+	it("runs curator cycles through the curator service", async () => {
+		experiments = { selfImproving: true }
+		const manager = createManager()
+		await manager.initialize()
+
+		const report = {
+			runId: "curator-run-2",
+			timestamp: 123,
+			durationMs: 5,
+			transitions: [
+				{
+					skillId: "skill-1",
+					skillName: "Skill 1",
+					fromState: "active",
+					toState: "stale",
+					reason: "No activity for 14 days",
+				},
+			],
+			stats: {
+				totalSkills: 1,
+				activeSkills: 0,
+				staleSkills: 1,
+				archivedSkills: 0,
+				pinnedSkills: 0,
+				transitionsApplied: 1,
+			},
+		}
+		mockState.curatorServices[0].run.mockResolvedValue(report)
+
+		const result = await manager.runCuratorCycle()
+
+		expect(mockState.curatorServices[0].run).toHaveBeenCalledTimes(1)
+		expect(mockState.stores[0].updateTelemetry).toHaveBeenCalledWith({ lastCuratorRunAt: 123 })
+		expect(result).toEqual(report)
 	})
 })
