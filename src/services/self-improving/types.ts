@@ -77,6 +77,10 @@ export interface SelfImprovingManagerOptions {
 	logger: Logger
 	getExperiments: () => Record<string, boolean> | undefined
 	getCodeIndexInfo?: () => CodeIndexInfo
+	/** Memory backend type: "builtin" (default) or "agentmemory" */
+	memoryBackend?: "builtin" | "agentmemory"
+	/** agentmemory server URL (default: http://localhost:4001) */
+	agentMemoryUrl?: string
 	/** Optional curator configuration overrides */
 	curatorConfig?: {
 		intervalMs?: number

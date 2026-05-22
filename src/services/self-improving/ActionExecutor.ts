@@ -1,6 +1,6 @@
 import crypto from "crypto"
 
-import type { MemoryStore } from "./MemoryStore"
+import type { MemoryBackend } from "./MemoryBackend"
 import type { SkillProvenance, SkillUsageStore } from "./SkillUsageStore"
 import type { ImprovementAction, Logger } from "./types"
 
@@ -18,11 +18,11 @@ import type { ImprovementAction, Logger } from "./types"
  * Failed actions remain pending for later retry.
  */
 export class ActionExecutor {
-	private readonly memoryStore: MemoryStore
+	private readonly memoryStore: MemoryBackend
 	private readonly skillUsageStore: SkillUsageStore
 	private readonly logger: Logger
 
-	constructor(memoryStore: MemoryStore, skillUsageStore: SkillUsageStore, logger: Logger) {
+	constructor(memoryStore: MemoryBackend, skillUsageStore: SkillUsageStore, logger: Logger) {
 		this.memoryStore = memoryStore
 		this.skillUsageStore = skillUsageStore
 		this.logger = logger
@@ -94,7 +94,8 @@ export class ActionExecutor {
 			return false
 		}
 
-		const entry = await this.memoryStore.addEnvironmentEntry(summary, {
+		const entry = await this.memoryStore.store({
+			content: summary,
 			source: "learning",
 			tags: ["learned", "prompt"],
 		})
@@ -117,7 +118,8 @@ export class ActionExecutor {
 			return false
 		}
 
-		const entry = await this.memoryStore.addEnvironmentEntry(summary, {
+		const entry = await this.memoryStore.store({
+			content: summary,
 			source: "learning",
 			tags: ["error-avoidance", ...errorKeys.map((key) => `error:${key}`)],
 		})
@@ -140,7 +142,8 @@ export class ActionExecutor {
 			return false
 		}
 
-		const entry = await this.memoryStore.addEnvironmentEntry(summary, {
+		const entry = await this.memoryStore.store({
+			content: summary,
 			source: "learning",
 			tags: ["tool-preference", ...toolNames.map((toolName) => `tool:${toolName}`)],
 		})

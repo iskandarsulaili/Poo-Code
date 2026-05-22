@@ -12,6 +12,8 @@ import { FeedbackCollector } from "./FeedbackCollector"
 import { PatternAnalyzer } from "./PatternAnalyzer"
 import { ImprovementApplier } from "./ImprovementApplier"
 import { CodeIndexAdapter } from "./CodeIndexAdapter"
+import type { MemoryBackend } from "./MemoryBackend"
+import { MemoryBackendFactory } from "./MemoryBackendFactory"
 import { MemoryStore } from "./MemoryStore"
 import { SkillUsageStore } from "./SkillUsageStore"
 import { ActionExecutor } from "./ActionExecutor"
@@ -36,7 +38,7 @@ export class SelfImprovingManager {
 	private readonly logger: Logger
 	private readonly getExperiments: () => Record<string, boolean> | undefined
 	private readonly getCodeIndexInfo: SelfImprovingManagerOptions["getCodeIndexInfo"]
-	public readonly memoryStore: MemoryStore
+	public readonly memoryStore: MemoryBackend
 	public readonly skillUsageStore: SkillUsageStore
 	public readonly curatorService: CuratorService
 	public readonly reviewPromptFactory: ReviewPromptFactory
@@ -57,7 +59,12 @@ export class SelfImprovingManager {
 		this.logger = options.logger
 		this.getExperiments = options.getExperiments
 		this.getCodeIndexInfo = options.getCodeIndexInfo
-		this.memoryStore = new MemoryStore(options.globalStoragePath, options.logger)
+		this.memoryStore = MemoryBackendFactory.create(
+			options.memoryBackend || "builtin",
+			options.globalStoragePath,
+			options.logger,
+			options.agentMemoryUrl,
+		)
 		this.skillUsageStore = new SkillUsageStore(options.globalStoragePath, options.logger)
 		this.actionExecutor = new ActionExecutor(this.memoryStore, this.skillUsageStore, options.logger)
 		this.curatorService = new CuratorService(
@@ -143,8 +150,12 @@ export class SelfImprovingManager {
 		try {
 			if (this.started) {
 				await this.runtime?.store.persist()
-				this.memoryStore.takeSnapshot()
+				if (this.memoryStore instanceof MemoryStore) {
+					this.memoryStore.takeSnapshot()
+				}
 			}
+
+			await this.memoryStore.dispose()
 		} catch (error) {
 			this.logError("Persist on dispose error", error)
 		} finally {
@@ -374,24 +385,29 @@ export class SelfImprovingManager {
 		}
 
 		try {
-			return this.memoryStore.getSnapshotString()
+			if (this.memoryStore instanceof MemoryStore) {
+				return this.memoryStore.getSnapshotString()
+			}
+
+			return ""
 		} catch {
 			return ""
 		}
 	}
 
-	getStatus(): {
+	async getStatus(): Promise<{
 		enabled: boolean
 		started: boolean
 		patternCount: number
 		eventCount: number
 		actionCount: number
 		memoryEntries: number
+		memoryBackend?: string
 		skillRecords: number
 		curatorStatus: ReturnType<CuratorService["getStatus"]>
 		lastReviewAt?: number
 		lastCuratorRunAt?: number
-	} {
+	}> {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
 		const curatorStatus = this.curatorService.getStatus()
 		if (!enabled) {
@@ -422,7 +438,7 @@ export class SelfImprovingManager {
 
 		try {
 			const telemetry = this.runtime.store.getTelemetry()
-			const memoryStats = this.memoryStore.getStats()
+			const memStats = await this.memoryStore.getStats()
 			const skillStats = this.skillUsageStore.getStats()
 			return {
 				enabled: true,
@@ -430,7 +446,8 @@ export class SelfImprovingManager {
 				patternCount: this.runtime.store.getPatterns().length,
 				eventCount: this.runtime.store.getRecentEvents().length,
 				actionCount: this.runtime.store.getPendingActions().length,
-				memoryEntries: memoryStats.environment + memoryStats.userProfile,
+				memoryEntries: memStats.entryCount,
+				memoryBackend: memStats.backend,
 				skillRecords: skillStats.total,
 				curatorStatus,
 				lastReviewAt: telemetry.lastReviewAt,

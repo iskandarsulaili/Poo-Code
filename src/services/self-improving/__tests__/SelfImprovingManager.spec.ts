@@ -66,10 +66,12 @@ function createStoreMock() {
 
 function createMemoryStoreMock() {
 	return {
+		backendType: "builtin",
 		initialize: vi.fn().mockResolvedValue(undefined),
 		getSnapshotString: vi.fn().mockReturnValue(""),
-		getStats: vi.fn().mockReturnValue({ environment: 0, userProfile: 0, revision: 1 }),
+		getStats: vi.fn().mockResolvedValue({ entryCount: 0, backend: "builtin" }),
 		takeSnapshot: vi.fn(),
+		dispose: vi.fn().mockResolvedValue(undefined),
 	}
 }
 
@@ -181,10 +183,9 @@ vi.mock("../CodeIndexAdapter", () => ({
 }))
 
 vi.mock("../MemoryStore", () => ({
-	MemoryStore: vi.fn().mockImplementation(() => {
-		const store = createMemoryStoreMock()
-		mockState.memoryStores.push(store)
-		return store
+	MemoryStore: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+		Object.assign(this, createMemoryStoreMock())
+		mockState.memoryStores.push(this)
 	}),
 }))
 
@@ -272,7 +273,7 @@ describe("SelfImprovingManager", () => {
 
 		expect(mockState.stores).toHaveLength(0)
 		expect(vi.getTimerCount()).toBe(0)
-		expect(manager.getStatus()).toEqual({
+		expect(await manager.getStatus()).toEqual({
 			enabled: false,
 			started: false,
 			patternCount: 0,
@@ -297,7 +298,7 @@ describe("SelfImprovingManager", () => {
 		expect(mockState.transcriptRecalls[0].initialize).toHaveBeenCalledTimes(1)
 		expect(mockState.curatorServices[0].initialize).toHaveBeenCalledTimes(1)
 		expect(vi.getTimerCount()).toBe(2)
-		expect(manager.getStatus()).toMatchObject({ enabled: true, started: true })
+		expect(await manager.getStatus()).toMatchObject({ enabled: true, started: true })
 	})
 
 	it("runs a review cycle from task completion triggers", async () => {
@@ -372,7 +373,7 @@ describe("SelfImprovingManager", () => {
 
 		const memoryStore = mockState.memoryStores[0]
 		memoryStore.getSnapshotString.mockReturnValue("\n## Learned Context\n- Search relevant code before editing\n")
-		memoryStore.getStats.mockReturnValue({ environment: 2, userProfile: 1, revision: 1 })
+		memoryStore.getStats.mockResolvedValue({ entryCount: 3, backend: "builtin" })
 		mockState.skillUsageStores[0].getStats.mockReturnValue({
 			total: 4,
 			active: 3,
@@ -383,15 +384,16 @@ describe("SelfImprovingManager", () => {
 		})
 
 		expect(manager.getPromptContextString()).toBe("\n## Learned Context\n- Search relevant code before editing\n")
-		expect(manager.getStatus()).toMatchObject({ memoryEntries: 3, skillRecords: 4 })
+		expect(await manager.getStatus()).toMatchObject({ memoryEntries: 3, memoryBackend: "builtin", skillRecords: 4 })
 
 		experiments = { selfImproving: false }
 		await manager.handleExperimentChange(false)
 
 		expect(mockState.stores[0].persist).toHaveBeenCalledTimes(1)
 		expect(memoryStore.takeSnapshot).toHaveBeenCalledTimes(1)
+		expect(memoryStore.dispose).toHaveBeenCalledTimes(1)
 		expect(vi.getTimerCount()).toBe(0)
-		expect(manager.getStatus()).toEqual({
+		expect(await manager.getStatus()).toEqual({
 			enabled: false,
 			started: false,
 			patternCount: 0,

@@ -58,7 +58,7 @@ describe("MemoryStore", () => {
 		const store = new MemoryStore(tempDir, logger)
 		await store.initialize()
 
-		expect(store.getStats()).toEqual({ environment: 2, userProfile: 1, revision: 1 })
+		expect(await store.getStats()).toEqual({ entryCount: 3, backend: "builtin" })
 		expect(store.getSnapshotString()).toContain("Prefer semantic search first")
 		expect(store.getSnapshotString()).not.toContain("prefer semantic search first")
 
@@ -66,7 +66,7 @@ describe("MemoryStore", () => {
 			tags: ["live"],
 		})
 
-		expect(store.getStats().environment).toBe(3)
+		expect((await store.getStats()).entryCount).toBe(4)
 		expect(store.getSnapshotString()).not.toContain("Live write should not appear until next snapshot")
 
 		store.takeSnapshot()
@@ -92,7 +92,7 @@ describe("MemoryStore", () => {
 			await fs.readFile(path.join(tempDir, "self-improving", "memory", "environment.json"), "utf8"),
 		) as Array<{ content: string }>
 
-		expect(store.getStats().environment).toBe(50)
+		expect((await store.getStats()).entryCount).toBe(50)
 		expect(persisted).toHaveLength(50)
 		expect(persisted.some((entry) => entry.content === "Gamma guidance")).toBe(false)
 		expect(persisted.some((entry) => entry.content === "Alpha guidance")).toBe(false)

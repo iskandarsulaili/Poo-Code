@@ -10,7 +10,7 @@ describe("ActionExecutor", () => {
 
 	it("writes prompt, error, and tool guidance into memory", async () => {
 		const memoryStore = {
-			addEnvironmentEntry: vi.fn().mockResolvedValue({ id: "mem-1" }),
+			store: vi.fn().mockResolvedValue({ id: "mem-1" }),
 		} as any
 		const skillUsageStore = { getOrCreate: vi.fn() } as any
 		const executor = new ActionExecutor(memoryStore, skillUsageStore, logger)
@@ -42,26 +42,25 @@ describe("ActionExecutor", () => {
 		const succeeded = await executor.executeBatch(actions)
 
 		expect(succeeded).toEqual(new Set(["action-1", "action-2", "action-3"]))
-		expect(memoryStore.addEnvironmentEntry).toHaveBeenNthCalledWith(
-			1,
-			"Prefer semantic search before regex search",
-			{
-				source: "learning",
-				tags: ["learned", "prompt"],
-			},
-		)
-		expect(memoryStore.addEnvironmentEntry).toHaveBeenNthCalledWith(2, "Handle ENOENT before retry", {
+		expect(memoryStore.store).toHaveBeenNthCalledWith(1, {
+			content: "Prefer semantic search before regex search",
+			source: "learning",
+			tags: ["learned", "prompt"],
+		})
+		expect(memoryStore.store).toHaveBeenNthCalledWith(2, {
+			content: "Handle ENOENT before retry",
 			source: "learning",
 			tags: ["error-avoidance", "error:ENOENT"],
 		})
-		expect(memoryStore.addEnvironmentEntry).toHaveBeenNthCalledWith(3, "Use codebase_search before search_files", {
+		expect(memoryStore.store).toHaveBeenNthCalledWith(3, {
+			content: "Use codebase_search before search_files",
 			source: "learning",
 			tags: ["tool-preference", "tool:codebase_search"],
 		})
 	})
 
 	it("records skill suggestions in the telemetry sidecar", async () => {
-		const memoryStore = { addEnvironmentEntry: vi.fn() } as any
+		const memoryStore = { store: vi.fn() } as any
 		const skillUsageStore = { getOrCreate: vi.fn() } as any
 		const executor = new ActionExecutor(memoryStore, skillUsageStore, logger)
 
@@ -88,11 +87,7 @@ describe("ActionExecutor", () => {
 	})
 
 	it("keeps invalid actions pending by reporting failure", async () => {
-		const executor = new ActionExecutor(
-			{ addEnvironmentEntry: vi.fn() } as any,
-			{ getOrCreate: vi.fn() } as any,
-			logger,
-		)
+		const executor = new ActionExecutor({ store: vi.fn() } as any, { getOrCreate: vi.fn() } as any, logger)
 
 		await expect(
 			executor.execute({

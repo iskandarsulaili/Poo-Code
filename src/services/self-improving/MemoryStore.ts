@@ -4,6 +4,7 @@ import crypto from "crypto"
 
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import type { MemoryContext, MemoryEntry } from "@roo-code/types"
+import type { MemoryBackend, MemoryBackendType } from "./MemoryBackend"
 import type { Logger } from "./types"
 
 /**
@@ -28,7 +29,7 @@ const MEMORY_SOURCES: ReadonlySet<MemoryEntry["source"]> = new Set(["learning", 
  * - Substring-based replace and remove
  * - Bounded retention per store
  */
-export class MemoryStore {
+export class MemoryStore implements MemoryBackend {
 	private readonly baseDir: string
 	private readonly logger: Logger
 	private environment: MemoryEntry[] = []
@@ -47,6 +48,10 @@ export class MemoryStore {
 	constructor(baseDir: string, logger: Logger) {
 		this.baseDir = path.join(baseDir, "self-improving", "memory")
 		this.logger = logger
+	}
+
+	get backendType(): MemoryBackendType {
+		return "builtin"
 	}
 
 	/**
@@ -70,6 +75,74 @@ export class MemoryStore {
 		} finally {
 			this.initialized = true
 		}
+	}
+
+	async store(entry: Omit<MemoryEntry, "id" | "createdAt" | "updatedAt">): Promise<MemoryEntry | null> {
+		return this.addEnvironmentEntry(entry.content, {
+			source: entry.source,
+			tags: entry.tags,
+			expiresAt: entry.expiresAt,
+		})
+	}
+
+	async search(query: string, maxResults: number = 10): Promise<MemoryEntry[]> {
+		await this.ensureInitialized()
+
+		const lowerQuery = query.toLowerCase()
+		const allEntries = [...this.environment, ...this.userProfile]
+		return allEntries
+			.filter((entry) => entry.content.toLowerCase().includes(lowerQuery))
+			.slice(0, maxResults)
+			.map((entry) => this.cloneEntry(entry))
+	}
+
+	async recall(maxResults: number = 20): Promise<MemoryEntry[]> {
+		await this.ensureInitialized()
+
+		const allEntries = [...this.environment, ...this.userProfile]
+		return allEntries.slice(-maxResults).map((entry) => this.cloneEntry(entry))
+	}
+
+	async forget(id: string): Promise<boolean> {
+		await this.ensureInitialized()
+
+		const envIdx = this.environment.findIndex((entry) => entry.id === id)
+		if (envIdx >= 0) {
+			this.environment.splice(envIdx, 1)
+			await this.persistStore("environment")
+			return true
+		}
+
+		const userIdx = this.userProfile.findIndex((entry) => entry.id === id)
+		if (userIdx >= 0) {
+			this.userProfile.splice(userIdx, 1)
+			await this.persistStore("userProfile")
+			return true
+		}
+
+		return false
+	}
+
+	async forgetByContent(substring: string): Promise<number> {
+		await this.ensureInitialized()
+
+		const lowerSubstring = substring.toLowerCase()
+		let removed = 0
+
+		const envBefore = this.environment.length
+		this.environment = this.environment.filter((entry) => !entry.content.toLowerCase().includes(lowerSubstring))
+		removed += envBefore - this.environment.length
+
+		const userBefore = this.userProfile.length
+		this.userProfile = this.userProfile.filter((entry) => !entry.content.toLowerCase().includes(lowerSubstring))
+		removed += userBefore - this.userProfile.length
+
+		if (removed > 0) {
+			await this.persistStore("environment")
+			await this.persistStore("userProfile")
+		}
+
+		return removed
 	}
 
 	/**
@@ -479,12 +552,17 @@ export class MemoryStore {
 	/**
 	 * Get count of entries per store.
 	 */
-	getStats(): { environment: number; userProfile: number; revision: number } {
+	async getStats(): Promise<{ entryCount: number; backend: string }> {
+		await this.ensureInitialized()
+
 		return {
-			environment: this.environment.length,
-			userProfile: this.userProfile.length,
-			revision: this.revision,
+			entryCount: this.environment.length + this.userProfile.length,
+			backend: "builtin",
 		}
+	}
+
+	async clear(): Promise<void> {
+		await this.reset()
 	}
 
 	/**
@@ -509,5 +587,9 @@ export class MemoryStore {
 				`[MemoryStore] Reset error: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
+	}
+
+	async dispose(): Promise<void> {
+		this.initialized = false
 	}
 }
