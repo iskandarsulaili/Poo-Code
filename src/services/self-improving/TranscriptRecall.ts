@@ -54,6 +54,10 @@ export class TranscriptRecall {
 	}
 
 	async record(entry: TranscriptEntry): Promise<void> {
+		if (!this.initialized) {
+			await this.initialize()
+		}
+
 		this.entries.push({
 			...entry,
 			toolNames: entry.toolNames ? [...entry.toolNames] : undefined,
@@ -117,7 +121,10 @@ export class TranscriptRecall {
 			const raw = await fs.readFile(this.filePath, "utf-8")
 			const parsed = JSON.parse(raw)
 			if (Array.isArray(parsed)) {
-				this.entries = parsed.slice(-TranscriptRecall.MAX_ENTRIES)
+				this.entries = parsed
+					.map((entry) => this.sanitizeEntry(entry))
+					.filter((entry): entry is TranscriptEntry => entry !== null)
+					.slice(-TranscriptRecall.MAX_ENTRIES)
 			}
 		} catch (error: unknown) {
 			const errorCode = typeof error === "object" && error !== null && "code" in error ? error.code : undefined
@@ -126,6 +133,39 @@ export class TranscriptRecall {
 					`[TranscriptRecall] Load error: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
+		}
+	}
+
+	private sanitizeEntry(value: unknown): TranscriptEntry | null {
+		if (!value || typeof value !== "object") {
+			return null
+		}
+
+		const candidate = value as Partial<TranscriptEntry>
+		if (
+			typeof candidate.id !== "string" ||
+			typeof candidate.timestamp !== "number" ||
+			typeof candidate.summary !== "string" ||
+			typeof candidate.signal !== "string"
+		) {
+			return null
+		}
+
+		return {
+			id: candidate.id,
+			timestamp: candidate.timestamp,
+			taskId: typeof candidate.taskId === "string" ? candidate.taskId : undefined,
+			mode: typeof candidate.mode === "string" ? candidate.mode : undefined,
+			summary: candidate.summary,
+			signal: candidate.signal,
+			workspacePath: typeof candidate.workspacePath === "string" ? candidate.workspacePath : undefined,
+			toolNames:
+				Array.isArray(candidate.toolNames) &&
+				candidate.toolNames.every((toolName) => typeof toolName === "string")
+					? [...candidate.toolNames]
+					: undefined,
+			errorKey: typeof candidate.errorKey === "string" ? candidate.errorKey : undefined,
+			success: typeof candidate.success === "boolean" ? candidate.success : undefined,
 		}
 	}
 
