@@ -22,11 +22,25 @@ describe("SkillUsageStore", () => {
 		await store.initialize()
 
 		const record = store.getOrCreate("skill-1", "Generated Skill", "agent")
-		await new Promise((resolve) => setTimeout(resolve, 20))
+		const persistedPath = path.join(tempDir, "self-improving", "skill-usage.json")
+		const deadline = Date.now() + 1000
+		let persisted: Array<{ skillId: string; skillName: string }> = []
 
-		const persisted = JSON.parse(
-			await fs.readFile(path.join(tempDir, "self-improving", "skill-usage.json"), "utf8"),
-		) as Array<{ skillId: string; skillName: string }>
+		while (Date.now() < deadline) {
+			try {
+				persisted = JSON.parse(await fs.readFile(persistedPath, "utf8")) as Array<{
+					skillId: string
+					skillName: string
+				}>
+				if (persisted.some((entry) => entry.skillId === "skill-1")) {
+					break
+				}
+			} catch {
+				// Persist is async; retry until the file is ready.
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, 25))
+		}
 
 		expect(record).toMatchObject({ skillId: "skill-1", skillName: "Generated Skill", createdBy: "agent" })
 		expect(persisted).toContainEqual(expect.objectContaining({ skillId: "skill-1", skillName: "Generated Skill" }))

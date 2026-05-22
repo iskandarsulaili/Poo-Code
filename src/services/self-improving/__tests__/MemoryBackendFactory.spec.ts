@@ -19,7 +19,7 @@ describe("MemoryBackendFactory", () => {
 	})
 
 	it("should create built-in backend for unknown type", () => {
-		const backend = MemoryBackendFactory.create("builtin" as any, baseDir, logger)
+		const backend = MemoryBackendFactory.create("unknown-backend" as any, baseDir, logger)
 		expect(backend).toBeInstanceOf(MemoryStore)
 	})
 

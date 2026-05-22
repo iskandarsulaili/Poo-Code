@@ -1,4 +1,4 @@
-// npx vitest run src/__tests__/learning-memory.test.ts
+// npx vitest run packages/types/src/__tests__/learning-memory.test.ts
 
 import {
 	DEFAULT_LEARNING_CONFIG,
