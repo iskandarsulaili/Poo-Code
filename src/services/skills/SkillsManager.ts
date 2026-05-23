@@ -49,6 +49,23 @@ export class SkillsManager {
 		}
 	}
 
+	private async postSkillsUpdatedMessage(text: string): Promise<void> {
+		const provider = this.providerRef.deref()
+		if (!provider) {
+			return
+		}
+
+		await provider.postMessageToWebview({
+			type: "skillsUpdated",
+			text,
+			skills: this.getSkillsMetadata(),
+		})
+	}
+
+	private getSkillNameFromUri(uri: vscode.Uri): string {
+		return path.basename(path.dirname(uri.fsPath)) || "skill"
+	}
+
 	/**
 	 * Scan a skills directory for skill subdirectories.
 	 * Handles two symlink cases:
@@ -451,6 +468,7 @@ Add your skill instructions here.
 		await fs.mkdir(skillDir, { recursive: true })
 		await fs.writeFile(skillMdPath, content, "utf-8")
 		await this.discoverSkills()
+		await this.postSkillsUpdatedMessage(`Skill created: "${name}"`)
 
 		return skillMdPath
 	}
@@ -472,6 +490,7 @@ Add your skill instructions here.
 
 		await fs.writeFile(skill.path, content, "utf-8")
 		await this.discoverSkills()
+		await this.postSkillsUpdatedMessage(`Skill updated: "${name}"`)
 	}
 
 	/**
@@ -496,6 +515,7 @@ Add your skill instructions here.
 
 		// Refresh skills list
 		await this.discoverSkills()
+		await this.postSkillsUpdatedMessage(`Skill deleted: "${name}"`)
 	}
 
 	/**
@@ -567,6 +587,7 @@ Add your skill instructions here.
 
 		// Refresh skills list
 		await this.discoverSkills()
+		await this.postSkillsUpdatedMessage(`Skill updated: "${name}"`)
 	}
 
 	/**
@@ -610,6 +631,7 @@ Add your skill instructions here.
 
 		// Refresh skills list
 		await this.discoverSkills()
+		await this.postSkillsUpdatedMessage(`Skill updated: "${name}"`)
 	}
 
 	/**
@@ -745,17 +767,23 @@ Add your skill instructions here.
 
 		watcher.onDidChange(async (uri) => {
 			if (this.isDisposed) return
+			const skillName = this.getSkillNameFromUri(uri)
 			await this.discoverSkills()
+			await this.postSkillsUpdatedMessage(`Skill updated: "${skillName}"`)
 		})
 
 		watcher.onDidCreate(async (uri) => {
 			if (this.isDisposed) return
+			const skillName = this.getSkillNameFromUri(uri)
 			await this.discoverSkills()
+			await this.postSkillsUpdatedMessage(`Skill created: "${skillName}"`)
 		})
 
 		watcher.onDidDelete(async (uri) => {
 			if (this.isDisposed) return
+			const skillName = this.getSkillNameFromUri(uri)
 			await this.discoverSkills()
+			await this.postSkillsUpdatedMessage(`Skill deleted: "${skillName}"`)
 		})
 
 		this.disposables.push(watcher)

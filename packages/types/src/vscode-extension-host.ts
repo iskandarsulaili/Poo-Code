@@ -98,6 +98,7 @@ export interface ExtensionMessage {
 		| "branchWorktreeIncludeResult"
 		| "folderSelected"
 		| "skills"
+		| "skillsUpdated"
 		| "fileContent"
 	text?: string
 	/** For fileContent: { path, content, error? } */
