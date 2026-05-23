@@ -92,6 +92,8 @@ export const globalSettingsSchema = z.object({
 	imageGenerationProvider: z.enum(["openrouter"]).optional(),
 	openRouterImageApiKey: z.string().optional(),
 	openRouterImageGenerationSelectedModel: z.string().optional(),
+	memoryBackend: z.enum(["builtin", "agentmemory"]).optional(),
+	agentMemoryUrl: z.string().optional(),
 
 	customCondensingPrompt: z.string().optional(),
 

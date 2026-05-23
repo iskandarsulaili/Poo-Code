@@ -255,6 +255,16 @@ describe("ContextProxy", () => {
 			const storedValue = proxy.getGlobalState("apiModelId")
 			expect(storedValue).toBe("gpt-4")
 		})
+
+		it("should persist self-improving memory backend settings in global settings", async () => {
+			await proxy.setValue("memoryBackend" as any, "agentmemory" as any)
+			await proxy.setValue("agentMemoryUrl" as any, "http://agentmemory.internal:4001" as any)
+
+			const globalSettings = proxy.getGlobalSettings() as any
+
+			expect(globalSettings.memoryBackend).toBe("agentmemory")
+			expect(globalSettings.agentMemoryUrl).toBe("http://agentmemory.internal:4001")
+		})
 	})
 
 	describe("setValues", () => {

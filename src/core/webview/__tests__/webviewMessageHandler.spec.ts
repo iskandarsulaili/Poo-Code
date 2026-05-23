@@ -61,6 +61,9 @@ const mockFetchOpenAiCodexRateLimitInfo = vi.mocked(fetchOpenAiCodexRateLimitInf
 const mockClineProvider = {
 	getState: vi.fn(),
 	postMessageToWebview: vi.fn(),
+	selfImprovingManager: {
+		onSettingsChanged: vi.fn(),
+	},
 	customModesManager: {
 		getCustomModes: vi.fn(),
 		deleteCustomMode: vi.fn(),
@@ -76,6 +79,7 @@ const mockClineProvider = {
 		},
 		setValue: vi.fn(),
 		getValue: vi.fn(),
+		getGlobalState: vi.fn(),
 	},
 	log: vi.fn(),
 	postStateToWebview: vi.fn(),
@@ -856,6 +860,31 @@ describe("webviewMessageHandler - mcpEnabled", () => {
 		})
 
 		expect((mockClineProvider as any).getMcpHub).toHaveBeenCalledTimes(1)
+		expect(mockClineProvider.postStateToWebview).toHaveBeenCalledTimes(1)
+	})
+})
+
+describe("webviewMessageHandler - self-improving memory settings", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+		vi.mocked(mockClineProvider.contextProxy.getGlobalState).mockReturnValue(undefined)
+	})
+
+	it("persists memory backend settings and refreshes self-improving runtime", async () => {
+		await webviewMessageHandler(mockClineProvider, {
+			type: "updateSettings",
+			updatedSettings: {
+				memoryBackend: "agentmemory",
+				agentMemoryUrl: "http://agentmemory.internal:4001",
+			} as any,
+		})
+
+		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith("memoryBackend", "agentmemory")
+		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith(
+			"agentMemoryUrl",
+			"http://agentmemory.internal:4001",
+		)
+		expect(mockClineProvider.selfImprovingManager.onSettingsChanged).toHaveBeenCalledWith(undefined)
 		expect(mockClineProvider.postStateToWebview).toHaveBeenCalledTimes(1)
 	})
 })

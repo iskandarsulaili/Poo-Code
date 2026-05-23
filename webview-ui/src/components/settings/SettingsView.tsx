@@ -198,6 +198,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		imageGenerationProvider,
 		openRouterImageApiKey,
 		openRouterImageGenerationSelectedModel,
+		memoryBackend,
+		agentMemoryUrl,
 		reasoningBlockCollapsed,
 		enterBehavior,
 		includeCurrentTime,
@@ -342,6 +344,28 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		})
 	}, [])
 
+	const setMemoryBackend = useCallback((backend: "builtin" | "agentmemory") => {
+		setCachedState((prevState) => {
+			if (prevState.memoryBackend === backend) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, memoryBackend: backend }
+		})
+	}, [])
+
+	const setAgentMemoryUrl = useCallback((url: string) => {
+		setCachedState((prevState) => {
+			if (prevState.agentMemoryUrl === url) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, agentMemoryUrl: url }
+		})
+	}, [])
+
 	const setCustomSupportPromptsField = useCallback((prompts: Record<string, string | undefined>) => {
 		setCachedState((prevState) => {
 			const previousStr = JSON.stringify(prevState.customSupportPrompts)
@@ -420,6 +444,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					imageGenerationProvider,
 					openRouterImageApiKey,
 					openRouterImageGenerationSelectedModel,
+					memoryBackend,
+					agentMemoryUrl: agentMemoryUrl || "http://localhost:3111",
 					experiments,
 					customSupportPrompts,
 				},
@@ -908,9 +934,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								openRouterImageGenerationSelectedModel={
 									openRouterImageGenerationSelectedModel as string | undefined
 								}
+								memoryBackend={memoryBackend}
+								agentMemoryUrl={agentMemoryUrl}
 								setImageGenerationProvider={setImageGenerationProvider}
 								setOpenRouterImageApiKey={setOpenRouterImageApiKey}
 								setImageGenerationSelectedModel={setImageGenerationSelectedModel}
+								setMemoryBackend={setMemoryBackend}
+								setAgentMemoryUrl={setAgentMemoryUrl}
 							/>
 						)}
 

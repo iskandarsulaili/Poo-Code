@@ -579,4 +579,14 @@ describe("ClineProvider - API Handler Rebuild Guard", () => {
 			expect(getModelId({})).toBeUndefined()
 		})
 	})
+
+	test("includes self-improving memory backend settings in provider state", async () => {
+		await (provider as any).setValue("memoryBackend", "agentmemory")
+		await (provider as any).setValue("agentMemoryUrl", "http://agentmemory.internal:4001")
+
+		const state = await provider.getState()
+
+		expect((state as any).memoryBackend).toBe("agentmemory")
+		expect((state as any).agentMemoryUrl).toBe("http://agentmemory.internal:4001")
+	})
 })

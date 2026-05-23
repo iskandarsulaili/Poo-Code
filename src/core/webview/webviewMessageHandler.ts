@@ -663,6 +663,7 @@ export const webviewMessageHandler = async (
 		case "updateSettings":
 			if (message.updatedSettings) {
 				let experimentsUpdated = false
+				let selfImprovingSettingsUpdated = false
 
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
 					let newValue = value
@@ -747,6 +748,8 @@ export const webviewMessageHandler = async (
 							...(getGlobalState("experiments") ?? experimentDefault),
 							...(value as Record<ExperimentId, boolean>),
 						}
+					} else if (key === "memoryBackend" || key === "agentMemoryUrl") {
+						selfImprovingSettingsUpdated = true
 					} else if (key === "customSupportPrompts") {
 						if (!value) {
 							continue
@@ -756,7 +759,7 @@ export const webviewMessageHandler = async (
 					await provider.contextProxy.setValue(key as keyof RooCodeSettings, newValue)
 				}
 
-				if (experimentsUpdated) {
+				if (experimentsUpdated || selfImprovingSettingsUpdated) {
 					await provider.selfImprovingManager.onSettingsChanged(
 						provider.contextProxy.getGlobalState("experiments"),
 					)

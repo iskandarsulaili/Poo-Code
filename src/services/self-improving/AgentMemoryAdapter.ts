@@ -6,7 +6,7 @@ import type { Logger } from "./types"
 /**
  * Default agentmemory server URL
  */
-const DEFAULT_AGENTMEMORY_URL = "http://localhost:4001"
+const DEFAULT_AGENTMEMORY_URL = "http://localhost:3111"
 
 type AgentMemoryApiResult = {
 	id: string

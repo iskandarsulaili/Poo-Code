@@ -40,13 +40,17 @@ export class SelfImprovingManager {
 	private readonly logger: Logger
 	private readonly getExperiments: () => Experiments | undefined
 	private readonly getCodeIndexInfo: SelfImprovingManagerOptions["getCodeIndexInfo"]
+	private readonly getMemoryBackend: SelfImprovingManagerOptions["getMemoryBackend"]
+	private readonly getAgentMemoryUrl: SelfImprovingManagerOptions["getAgentMemoryUrl"]
 	private readonly skillsManager: SelfImprovingManagerOptions["skillsManager"]
-	public readonly memoryStore: MemoryBackend
+	public memoryStore: MemoryBackend
 	public readonly skillUsageStore: SkillUsageStore
 	public readonly curatorService: CuratorService
 	public readonly reviewPromptFactory: ReviewPromptFactory
 	public readonly transcriptRecall: TranscriptRecall
-	private readonly actionExecutor: ActionExecutor
+	private actionExecutor: ActionExecutor
+	private memoryBackendType: "builtin" | "agentmemory"
+	private agentMemoryUrl: string | undefined
 
 	private runtime: Runtime | undefined
 	private started = false
@@ -62,20 +66,14 @@ export class SelfImprovingManager {
 		this.logger = options.logger
 		this.getExperiments = options.getExperiments
 		this.getCodeIndexInfo = options.getCodeIndexInfo
+		this.getMemoryBackend = options.getMemoryBackend
+		this.getAgentMemoryUrl = options.getAgentMemoryUrl
 		this.skillsManager = options.skillsManager
-		this.memoryStore = MemoryBackendFactory.create(
-			options.memoryBackend || "builtin",
-			options.globalStoragePath,
-			options.logger,
-			options.agentMemoryUrl,
-		)
+		this.memoryBackendType = this.resolveMemoryBackend(options.memoryBackend)
+		this.agentMemoryUrl = this.resolveAgentMemoryUrl(options.agentMemoryUrl)
+		this.memoryStore = this.createMemoryStore()
 		this.skillUsageStore = new SkillUsageStore(options.globalStoragePath, options.logger)
-		this.actionExecutor = new ActionExecutor(
-			this.memoryStore,
-			this.skillUsageStore,
-			options.logger,
-			options.skillsManager,
-		)
+		this.actionExecutor = this.createActionExecutor()
 		this.curatorService = new CuratorService(
 			options.globalStoragePath,
 			this.skillUsageStore,
@@ -153,6 +151,7 @@ export class SelfImprovingManager {
 	 * This enables/disables the module at runtime.
 	 */
 	async onSettingsChanged(_experiments: Experiments | undefined): Promise<void> {
+		await this.reconfigureMemoryBackendIfNeeded()
 		await this.handleExperimentChange()
 	}
 
@@ -518,6 +517,58 @@ export class SelfImprovingManager {
 		}
 
 		return this.runtime
+	}
+
+	private resolveMemoryBackend(fallback?: "builtin" | "agentmemory"): "builtin" | "agentmemory" {
+		return this.getMemoryBackend?.() ?? fallback ?? "builtin"
+	}
+
+	private resolveAgentMemoryUrl(fallback?: string): string | undefined {
+		return this.getAgentMemoryUrl?.() ?? fallback
+	}
+
+	private createMemoryStore(): MemoryBackend {
+		return MemoryBackendFactory.create(
+			this.memoryBackendType,
+			this.globalStoragePath,
+			this.logger,
+			this.agentMemoryUrl,
+		)
+	}
+
+	private createActionExecutor(): ActionExecutor {
+		return new ActionExecutor(this.memoryStore, this.skillUsageStore, this.logger, this.skillsManager)
+	}
+
+	private async reconfigureMemoryBackendIfNeeded(): Promise<void> {
+		const nextBackend = this.resolveMemoryBackend(this.memoryBackendType)
+		const nextUrl = this.resolveAgentMemoryUrl(this.agentMemoryUrl)
+
+		if (nextBackend === this.memoryBackendType && nextUrl === this.agentMemoryUrl) {
+			return
+		}
+
+		const wasStarted = this.started
+		const previousStore = this.memoryStore
+
+		if (wasStarted && previousStore instanceof MemoryStore) {
+			previousStore.takeSnapshot()
+		}
+
+		await previousStore.dispose()
+
+		this.memoryBackendType = nextBackend
+		this.agentMemoryUrl = nextUrl
+		this.memoryStore = this.createMemoryStore()
+		this.actionExecutor = this.createActionExecutor()
+
+		if (wasStarted && SelfImprovingManager.isExperimentEnabled(this.getExperiments())) {
+			await this.memoryStore.initialize()
+		}
+
+		this.logger.appendLine(
+			`[SelfImprovingManager] Memory backend configured: ${this.memoryBackendType}${this.agentMemoryUrl ? ` (${this.agentMemoryUrl})` : ""}`,
+		)
 	}
 
 	private startTimers(store: LearningStore): void {

@@ -81,9 +81,11 @@ export interface SelfImprovingManagerOptions {
 	logger: Logger
 	getExperiments: () => Experiments | undefined
 	getCodeIndexInfo?: () => CodeIndexInfo
+	getMemoryBackend?: () => "builtin" | "agentmemory" | undefined
+	getAgentMemoryUrl?: () => string | undefined
 	/** Memory backend type: "builtin" (default) or "agentmemory" */
 	memoryBackend?: "builtin" | "agentmemory"
-	/** agentmemory server URL (default: http://localhost:4001) */
+	/** agentmemory server URL (default: http://localhost:3111) */
 	agentMemoryUrl?: string
 	/** Optional curator configuration overrides */
 	curatorConfig?: {

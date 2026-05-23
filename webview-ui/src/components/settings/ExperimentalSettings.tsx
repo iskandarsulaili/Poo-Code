@@ -5,6 +5,7 @@ import type { Experiments, ImageGenerationProvider } from "@roo-code/types"
 import { EXPERIMENT_IDS, experimentConfigsMap } from "@roo/experiments"
 
 import { useAppTranslation } from "@src/i18n/TranslationContext"
+import { Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui"
 import { cn } from "@src/lib/utils"
 
 import { SetExperimentEnabled } from "./types"
@@ -23,9 +24,13 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	imageGenerationProvider?: ImageGenerationProvider
 	openRouterImageApiKey?: string
 	openRouterImageGenerationSelectedModel?: string
+	memoryBackend?: "builtin" | "agentmemory"
+	agentMemoryUrl?: string
 	setImageGenerationProvider?: (provider: ImageGenerationProvider) => void
 	setOpenRouterImageApiKey?: (apiKey: string) => void
 	setImageGenerationSelectedModel?: (model: string) => void
+	setMemoryBackend?: (backend: "builtin" | "agentmemory") => void
+	setAgentMemoryUrl?: (url: string) => void
 }
 
 export const ExperimentalSettings = ({
@@ -36,14 +41,19 @@ export const ExperimentalSettings = ({
 	imageGenerationProvider,
 	openRouterImageApiKey,
 	openRouterImageGenerationSelectedModel,
+	memoryBackend,
+	agentMemoryUrl,
 	setImageGenerationProvider,
 	setOpenRouterImageApiKey,
 	setImageGenerationSelectedModel,
+	setMemoryBackend,
+	setAgentMemoryUrl,
 	className,
 	...props
 }: ExperimentalSettingsProps) => {
 	const { t } = useAppTranslation()
 	const autoSkillsVisible = experiments[EXPERIMENT_IDS.SELF_IMPROVING] ?? false
+	const currentMemoryBackend = memoryBackend ?? "builtin"
 
 	return (
 		<div className={cn("flex flex-col gap-2", className)} {...props}>
@@ -116,7 +126,7 @@ export const ExperimentalSettings = ({
 											checkboxTestId="experimental-self-improving-checkbox"
 										/>
 										{autoSkillsVisible && (
-											<div className="ml-6 border-l border-vscode-panel-border pl-4">
+											<div className="ml-6 space-y-3 border-l border-vscode-panel-border pl-4">
 												<ExperimentalFeature
 													experimentKey="SELF_IMPROVING_AUTO_SKILLS"
 													enabled={
@@ -130,6 +140,52 @@ export const ExperimentalSettings = ({
 													}
 													checkboxTestId="experimental-self-improving-auto-skills-checkbox"
 												/>
+												{setMemoryBackend && (
+													<div className="space-y-2">
+														<label className="block font-medium">
+															{t(
+																"settings:experimental.SELF_IMPROVING.memoryBackendLabel",
+																{
+																	defaultValue: "Memory backend",
+																},
+															)}
+														</label>
+														<Select
+															value={currentMemoryBackend}
+															onValueChange={(value) =>
+																setMemoryBackend(value as "builtin" | "agentmemory")
+															}
+															data-testid="self-improving-memory-backend-select">
+															<SelectTrigger className="w-full">
+																<SelectValue
+																	placeholder={t("settings:common.select")}
+																/>
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="builtin">Built-in</SelectItem>
+																<SelectItem value="agentmemory">agentmemory</SelectItem>
+															</SelectContent>
+														</Select>
+													</div>
+												)}
+												{currentMemoryBackend === "agentmemory" && setAgentMemoryUrl && (
+													<div className="space-y-2">
+														<label className="block font-medium">
+															{t(
+																"settings:experimental.SELF_IMPROVING.agentMemoryUrlLabel",
+																{
+																	defaultValue: "agentmemory URL",
+																},
+															)}
+														</label>
+														<Input
+															value={agentMemoryUrl ?? "http://localhost:3111"}
+															onChange={(event) => setAgentMemoryUrl(event.target.value)}
+															placeholder="http://localhost:3111"
+															data-testid="self-improving-agent-memory-url-input"
+														/>
+													</div>
+												)}
 											</div>
 										)}
 									</div>

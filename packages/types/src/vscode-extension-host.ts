@@ -290,6 +290,8 @@ export type ExtensionState = Pick<
 	| "includeDiagnosticMessages"
 	| "maxDiagnosticMessages"
 	| "imageGenerationProvider"
+	| "memoryBackend"
+	| "agentMemoryUrl"
 	| "openRouterImageGenerationSelectedModel"
 	| "includeTaskHistoryInEnhance"
 	| "reasoningBlockCollapsed"
@@ -360,6 +362,8 @@ export type ExtensionState = Pick<
 	profileThresholds: Record<string, number>
 	hasOpenedModeSelector: boolean
 	openRouterImageApiKey?: string
+	memoryBackend?: "builtin" | "agentmemory"
+	agentMemoryUrl?: string
 	messageQueue?: QueuedMessage[]
 	selfImprovingStatus?: {
 		enabled: boolean

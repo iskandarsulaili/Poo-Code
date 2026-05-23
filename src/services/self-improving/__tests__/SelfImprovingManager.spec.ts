@@ -233,6 +233,8 @@ import { SelfImprovingManager } from "../SelfImprovingManager"
 
 describe("SelfImprovingManager", () => {
 	let experiments: Record<string, boolean> | undefined
+	let memoryBackend: "builtin" | "agentmemory" | undefined
+	let agentMemoryUrl: string | undefined
 	let logger: { appendLine: ReturnType<typeof vi.fn> }
 
 	const createManager = () =>
@@ -240,6 +242,8 @@ describe("SelfImprovingManager", () => {
 			globalStoragePath: "/tmp/zoo-code-tests",
 			logger,
 			getExperiments: () => experiments,
+			getMemoryBackend: () => memoryBackend,
+			getAgentMemoryUrl: () => agentMemoryUrl,
 			getCodeIndexInfo: () => ({ available: true, hits: 2, topScore: 0.8 }),
 		})
 
@@ -258,6 +262,8 @@ describe("SelfImprovingManager", () => {
 		mockState.reviewPromptFactories.length = 0
 		mockState.transcriptRecalls.length = 0
 		experiments = undefined
+		memoryBackend = undefined
+		agentMemoryUrl = undefined
 		logger = { appendLine: vi.fn() }
 	})
 
@@ -414,6 +420,25 @@ describe("SelfImprovingManager", () => {
 			skillRecords: 0,
 			curatorStatus: DEFAULT_CURATOR_STATUS,
 		})
+	})
+
+	it("rebuilds the memory backend when settings change", async () => {
+		experiments = { selfImproving: true }
+		const manager = createManager()
+		await manager.initialize()
+
+		const originalStore = mockState.memoryStores[0]
+		memoryBackend = "agentmemory"
+		agentMemoryUrl = "http://agentmemory.internal:4001"
+
+		await manager.onSettingsChanged(experiments as any)
+
+		expect(originalStore.takeSnapshot).toHaveBeenCalledTimes(1)
+		expect(originalStore.dispose).toHaveBeenCalledTimes(1)
+		expect(manager.memoryStore.backendType).toBe("agentmemory")
+		expect(logger.appendLine).toHaveBeenCalledWith(
+			"[SelfImprovingManager] Memory backend configured: agentmemory (http://agentmemory.internal:4001)",
+		)
 	})
 
 	it("runs curator cycles through the curator service", async () => {

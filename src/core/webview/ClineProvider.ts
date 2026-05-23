@@ -235,6 +235,8 @@ export class ClineProvider
 				appendLine: (message: string) => this.log(message),
 			},
 			getExperiments: () => this.contextProxy.getGlobalState("experiments"),
+			getMemoryBackend: () => this.contextProxy.getGlobalState("memoryBackend"),
+			getAgentMemoryUrl: () => this.contextProxy.getGlobalState("agentMemoryUrl"),
 			skillsManager: this.skillsManager,
 			getCodeIndexInfo: () => {
 				const manager = this.codeIndexManager
@@ -2166,6 +2168,8 @@ export class ClineProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
+			memoryBackend,
+			agentMemoryUrl,
 			lockApiConfigAcrossModes,
 		} = await this.getState()
 
@@ -2345,6 +2349,8 @@ export class ClineProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
+			memoryBackend,
+			agentMemoryUrl,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -2541,6 +2547,8 @@ export class ClineProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
+			memoryBackend: stateValues.memoryBackend,
+			agentMemoryUrl: stateValues.agentMemoryUrl,
 		}
 	}
 
