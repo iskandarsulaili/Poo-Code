@@ -482,7 +482,14 @@ Add your skill instructions here.
 		content: string,
 		mode?: string,
 	): Promise<void> {
-		const skill = mode ? this.getSkill(name, source, mode) : this.findSkillByNameAndSource(name, source)
+		const skill = mode
+			? Array.from(this.skills.values()).find(
+					(candidate) =>
+						candidate.name === name &&
+						candidate.source === source &&
+						(candidate.mode === mode || candidate.modeSlugs?.includes(mode)),
+				)
+			: this.findSkillByNameAndSource(name, source)
 		if (!skill) {
 			const modeInfo = mode ? ` (mode: ${mode})` : ""
 			throw new Error(t("skills:errors.not_found", { name, source, modeInfo }))

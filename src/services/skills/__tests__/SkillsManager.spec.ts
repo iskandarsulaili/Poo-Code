@@ -1400,6 +1400,35 @@ Instructions`)
 			expect(mockWriteFile).toHaveBeenCalledWith(testSkillMd, updatedContent, "utf-8")
 		})
 
+		it("updates a multi-mode skill when addressed by a secondary mode slug", async () => {
+			const testSkillDir = p(globalSkillsDir, "test-skill")
+			const testSkillMd = p(testSkillDir, "SKILL.md")
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === globalSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === globalSkillsDir ? ["test-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === testSkillDir) {
+					return { isDirectory: () => true }
+				}
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === testSkillMd)
+			mockReadFile.mockResolvedValue(
+				`---\nname: test-skill\ndescription: A test skill\nmodeSlugs:\n  - code\n  - architect\n---\n\nOriginal content`,
+			)
+			mockWriteFile.mockResolvedValue(undefined)
+
+			await skillsManager.discoverSkills()
+
+			const updatedContent = `---\nname: test-skill\ndescription: Updated test skill\nmodeSlugs:\n  - code\n  - architect\n---\n\nUpdated content`
+
+			await expect(
+				skillsManager.updateSkillContent("test-skill", "global", updatedContent, "architect"),
+			).resolves.toBeUndefined()
+			expect(mockWriteFile).toHaveBeenCalledWith(testSkillMd, updatedContent, "utf-8")
+		})
+
 		it("should push a live skills updated message to the webview after updating a skill", async () => {
 			const testSkillDir = p(globalSkillsDir, "test-skill")
 			const testSkillMd = p(testSkillDir, "SKILL.md")
