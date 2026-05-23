@@ -511,6 +511,42 @@ describe("SettingsView - Sound Settings", () => {
 	})
 })
 
+describe("SettingsView - Experimental Settings", () => {
+	beforeEach(() => {
+		vi.clearAllMocks()
+	})
+
+	it("shows the auto-skills sub-option under self-improving and saves it", () => {
+		const { activateTab, getSettingsContent } = renderSettingsView()
+
+		activateTab("experimental")
+
+		const content = getSettingsContent()
+		const selfImprovingCheckbox = within(content).getByTestId("experimental-self-improving-checkbox")
+		fireEvent.click(selfImprovingCheckbox)
+		expect(selfImprovingCheckbox).toBeChecked()
+
+		const autoSkillsCheckbox = within(content).getByTestId("experimental-self-improving-auto-skills-checkbox")
+		fireEvent.click(autoSkillsCheckbox)
+		expect(autoSkillsCheckbox).toBeChecked()
+
+		const saveButton = screen.getByTestId("save-button")
+		fireEvent.click(saveButton)
+
+		expect(vscode.postMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				type: "updateSettings",
+				updatedSettings: expect.objectContaining({
+					experiments: expect.objectContaining({
+						selfImproving: true,
+						selfImprovingAutoSkills: true,
+					}),
+				}),
+			}),
+		)
+	})
+})
+
 describe("SettingsView - API Configuration", () => {
 	beforeEach(() => {
 		vi.clearAllMocks()

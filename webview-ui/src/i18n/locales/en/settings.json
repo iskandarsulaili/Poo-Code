@@ -883,6 +883,10 @@
 			"name": "Self-Improving",
 			"description": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time"
 		},
+		"SELF_IMPROVING_AUTO_SKILLS": {
+			"name": "Auto-create and update skills from learned workflows",
+			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+		},
 		"CUSTOM_TOOLS": {
 			"name": "Enable custom tools",
 			"description": "When enabled, Zoo can load and use custom TypeScript/JavaScript tools from your project's .roo/tools directory or ~/.roo/tools for global tools. Note: these tools will automatically be auto-approved.",

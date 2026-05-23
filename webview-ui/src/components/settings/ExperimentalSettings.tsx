@@ -43,6 +43,7 @@ export const ExperimentalSettings = ({
 	...props
 }: ExperimentalSettingsProps) => {
 	const { t } = useAppTranslation()
+	const autoSkillsVisible = experiments[EXPERIMENT_IDS.SELF_IMPROVING] ?? false
 
 	return (
 		<div className={cn("flex flex-col gap-2", className)} {...props}>
@@ -50,9 +51,8 @@ export const ExperimentalSettings = ({
 
 			<Section>
 				{Object.entries(experimentConfigsMap)
-					.filter(([key]) => key in EXPERIMENT_IDS)
+					.filter(([key]) => key in EXPERIMENT_IDS && key !== "SELF_IMPROVING_AUTO_SKILLS")
 					.map((config) => {
-						// Use the same translation key pattern as ExperimentalFeature
 						const experimentKey = config[0]
 						const label = t(`settings:experimental.${experimentKey}.name`)
 
@@ -96,6 +96,43 @@ export const ExperimentalSettings = ({
 											setExperimentEnabled(EXPERIMENT_IDS.CUSTOM_TOOLS, enabled)
 										}
 									/>
+								</SearchableSetting>
+							)
+						}
+						if (config[0] === "SELF_IMPROVING") {
+							return (
+								<SearchableSetting
+									key={config[0]}
+									settingId={`experimental-${config[0].toLowerCase()}`}
+									section="experimental"
+									label={label}>
+									<div className="space-y-3">
+										<ExperimentalFeature
+											experimentKey={config[0]}
+											enabled={experiments[EXPERIMENT_IDS.SELF_IMPROVING] ?? false}
+											onChange={(enabled) =>
+												setExperimentEnabled(EXPERIMENT_IDS.SELF_IMPROVING, enabled)
+											}
+											checkboxTestId="experimental-self-improving-checkbox"
+										/>
+										{autoSkillsVisible && (
+											<div className="ml-6 border-l border-vscode-panel-border pl-4">
+												<ExperimentalFeature
+													experimentKey="SELF_IMPROVING_AUTO_SKILLS"
+													enabled={
+														experiments[EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-self-improving-auto-skills-checkbox"
+												/>
+											</div>
+										)}
+									</div>
 								</SearchableSetting>
 							)
 						}
