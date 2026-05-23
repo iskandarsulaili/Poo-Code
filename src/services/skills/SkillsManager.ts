@@ -364,6 +364,36 @@ export class SkillsManager {
 		return { valid: true }
 	}
 
+	private validateSkillDocumentStructure(name: string, content: string, expectedDescription?: string): void {
+		const { data: frontmatter } = matter(content)
+		const frontmatterName = typeof frontmatter.name === "string" ? frontmatter.name.trim() : ""
+		const frontmatterDescription = typeof frontmatter.description === "string" ? frontmatter.description.trim() : ""
+
+		if (!frontmatterName || !frontmatterDescription) {
+			throw new Error(
+				t("skills:errors.invalid_structure", {
+					reason: "missing required frontmatter fields: name, description",
+				}),
+			)
+		}
+
+		if (frontmatterName !== name) {
+			throw new Error(t("skills:errors.invalid_structure", { reason: `frontmatter name must match \"${name}\"` }))
+		}
+
+		if (frontmatterDescription.length < 1 || frontmatterDescription.length > 1024) {
+			throw new Error(t("skills:errors.description_length", { length: frontmatterDescription.length }))
+		}
+
+		if (expectedDescription && frontmatterDescription !== expectedDescription.trim()) {
+			throw new Error(
+				t("skills:errors.invalid_structure", {
+					reason: "frontmatter description must match the provided description",
+				}),
+			)
+		}
+	}
+
 	/**
 	 * Convert skill name validation error code to a user-friendly error message.
 	 */
@@ -444,6 +474,7 @@ Add your skill instructions here.
 		if (!content.trim()) {
 			throw new Error(t("skills:errors.description_length", { length: 0 }))
 		}
+		this.validateSkillDocumentStructure(name, content, trimmedDescription)
 
 		// Determine base directory
 		let baseDir: string
@@ -494,6 +525,7 @@ Add your skill instructions here.
 			const modeInfo = mode ? ` (mode: ${mode})` : ""
 			throw new Error(t("skills:errors.not_found", { name, source, modeInfo }))
 		}
+		this.validateSkillDocumentStructure(name, content)
 
 		await fs.writeFile(skill.path, content, "utf-8")
 		await this.discoverSkills()

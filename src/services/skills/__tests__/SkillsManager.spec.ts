@@ -101,6 +101,7 @@ vi.mock("../../../i18n", () => ({
 			"skills:errors.name_format":
 				"Skill name must be lowercase letters/numbers/hyphens only (no leading/trailing hyphen, no consecutive hyphens)",
 			"skills:errors.description_length": `Skill description must be 1-1024 characters (got ${params?.length})`,
+			"skills:errors.invalid_structure": `Invalid SKILL.md structure: ${params?.reason}`,
 			"skills:errors.no_workspace": "Cannot create project skill: no workspace folder is open",
 			"skills:errors.already_exists": `Skill "${params?.name}" already exists at ${params?.path}`,
 			"skills:errors.not_found": `Skill "${params?.name}" not found in ${params?.source}${params?.modeInfo}`,
@@ -1327,6 +1328,22 @@ Instructions`)
 			)
 		})
 
+		it("rejects createSkillFromContent when SKILL.md frontmatter is missing required fields", async () => {
+			mockDirectoryExists.mockResolvedValue(false)
+			mockFileExists.mockResolvedValue(false)
+
+			await expect(
+				skillsManager.createSkillFromContent(
+					"workflow-read-file-search-files",
+					"project",
+					"Use when read_file and search_files succeed repeatedly.",
+					"# Workflow\n\nUse it.",
+					["code"],
+				),
+			).rejects.toThrow("Invalid SKILL.md structure")
+			expect(mockWriteFile).not.toHaveBeenCalled()
+		})
+
 		it("should push a live skills created message to the webview after creating a skill", async () => {
 			const newSkillDir = p(globalSkillsDir, "new-skill")
 			const newSkillMd = p(newSkillDir, "SKILL.md")
@@ -1398,6 +1415,31 @@ Instructions`)
 				skillsManager.updateSkillContent("test-skill", "global", updatedContent),
 			).resolves.toBeUndefined()
 			expect(mockWriteFile).toHaveBeenCalledWith(testSkillMd, updatedContent, "utf-8")
+		})
+
+		it("rejects updateSkillContent when SKILL.md frontmatter becomes invalid", async () => {
+			const testSkillDir = p(globalSkillsDir, "test-skill")
+			const testSkillMd = p(testSkillDir, "SKILL.md")
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === globalSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === globalSkillsDir ? ["test-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === testSkillDir) {
+					return { isDirectory: () => true }
+				}
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === testSkillMd)
+			mockReadFile.mockResolvedValue(`---\nname: test-skill\ndescription: A test skill\n---\n\nOriginal content`)
+			mockWriteFile.mockResolvedValue(undefined)
+
+			await skillsManager.discoverSkills()
+
+			await expect(skillsManager.updateSkillContent("test-skill", "global", "# Broken content")).rejects.toThrow(
+				"Invalid SKILL.md structure",
+			)
+			expect(mockWriteFile).not.toHaveBeenCalled()
 		})
 
 		it("updates a multi-mode skill when addressed by a secondary mode slug", async () => {
