@@ -173,7 +173,7 @@ export class LearningStore {
 	}
 
 	/**
-	 * Persist the full state to disk atomically.
+	 * Persist the full state to disk with state.json committed last.
 	 */
 	async persist(): Promise<void> {
 		if (!this.initialized) {
@@ -183,12 +183,10 @@ export class LearningStore {
 		try {
 			this.enforceBounds()
 
-			await Promise.all([
-				safeWriteJson(path.join(this.baseDir, STATE_FILE), this.state, { prettyPrint: true }),
-				this.persistPatternFiles(this.patternsDir, this.state.patterns),
-				this.persistPatternFiles(this.archiveDir, this.state.archivedPatterns),
-				this.writePatternIndex(),
-			])
+			await this.persistPatternFiles(this.patternsDir, this.state.patterns)
+			await this.persistPatternFiles(this.archiveDir, this.state.archivedPatterns)
+			await this.writePatternIndex()
+			await safeWriteJson(path.join(this.baseDir, STATE_FILE), this.state, { prettyPrint: true })
 		} catch (error) {
 			this.logger.appendLine(
 				`[LearningStore] Persist error: ${error instanceof Error ? error.message : String(error)}`,

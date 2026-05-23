@@ -61,6 +61,54 @@ describe("LearningStore", () => {
 		expect(store2.getRecentEvents()).toHaveLength(1)
 	})
 
+	it("does not commit state.json when earlier pattern persistence fails", async () => {
+		const store = new LearningStore(testDir, logger)
+		await store.initialize()
+
+		store.addEvent({
+			id: "baseline-event",
+			signal: "TASK_SUCCESS",
+			timestamp: 1,
+			context: {},
+			outcome: { success: true },
+		})
+		await store.persist()
+
+		const statePath = path.join(testDir, "self-improving", "state.json")
+		const baselineState = await fs.readFile(statePath, "utf-8")
+
+		store.addPattern({
+			id: "pattern-1",
+			patternType: "prompt",
+			state: "active",
+			summary: "Pattern 1",
+			confidenceScore: 0.8,
+			frequency: 1,
+			successRate: 1,
+			firstSeenAt: 1,
+			lastSeenAt: 1,
+			sourceSignals: ["TASK_SUCCESS"],
+			context: {},
+		})
+		store.addEvent({
+			id: "new-event",
+			signal: "TASK_SUCCESS",
+			timestamp: 2,
+			context: {},
+			outcome: { success: true },
+		})
+
+		vi.spyOn(store as any, "persistPatternFiles").mockImplementation(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 50))
+			throw new Error("pattern persist failed")
+		})
+
+		await store.persist()
+
+		const stateAfterFailedPersist = await fs.readFile(statePath, "utf-8")
+		expect(stateAfterFailedPersist).toBe(baselineState)
+	})
+
 	it("should enforce max patterns bound", async () => {
 		const store = new LearningStore(testDir, logger)
 		await store.initialize()
