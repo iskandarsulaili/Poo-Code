@@ -1941,8 +1941,8 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
-	private getGlobalStateSafe<T = unknown>(key: string): T | undefined {
-		return (this.contextProxy as any).getGlobalState?.(key)
+	private getGlobalStateSafe<K extends keyof GlobalState>(key: K): GlobalState[K] | undefined {
+		return this.contextProxy.getGlobalState(key)
 	}
 
 	async refreshWorkspace() {
