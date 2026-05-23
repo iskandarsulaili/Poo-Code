@@ -99,4 +99,18 @@ describe("ImprovementApplier", () => {
 		expect(actions.some((action) => action.actionType === "SKILL_CREATE")).toBe(true)
 		expect(actions.some((action) => action.actionType === "SKILL_UPDATE")).toBe(false)
 	})
+
+	it("defaults to source-aware skill existence checks when only getSkillNames is provided", () => {
+		const applier = new ImprovementApplier({
+			getSkillNames: () => ["workflow-read-file-search-files"],
+			getSkillProvenance: () => "agent",
+			isAutoSkillsEnabled: () => true,
+			getAutoSkillsScope: () => "global",
+		})
+
+		const actions = applier.generateActions([createToolPattern()])
+
+		expect(actions.some((action) => action.actionType === "SKILL_CREATE")).toBe(true)
+		expect(actions.some((action) => action.actionType === "SKILL_UPDATE")).toBe(false)
+	})
 })

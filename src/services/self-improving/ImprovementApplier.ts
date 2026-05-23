@@ -37,7 +37,10 @@ export class ImprovementApplier {
 		this.getSkillProvenance = options.getSkillProvenance ?? (() => "unknown")
 		this.getSkillProvenanceForSource =
 			options.getSkillProvenanceForSource ?? ((name: string) => this.getSkillProvenance(name))
-		this.hasSkill = options.hasSkill ?? ((name: string) => this.getSkillNames().includes(name))
+		this.hasSkill =
+			options.hasSkill ??
+			((name: string, source: "global" | "project") =>
+				source === "project" && this.getSkillNames().includes(name))
 		this.isAutoSkillsEnabled = options.isAutoSkillsEnabled ?? (() => false)
 		this.getAutoSkillsScope = options.getAutoSkillsScope ?? (() => "workspace")
 	}
