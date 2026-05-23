@@ -6,6 +6,7 @@ export const EXPERIMENT_IDS = {
 	RUN_SLASH_COMMAND: "runSlashCommand",
 	CUSTOM_TOOLS: "customTools",
 	SELF_IMPROVING: "selfImproving",
+	SELF_IMPROVING_AUTO_SKILLS: "selfImprovingAutoSkills",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -22,6 +23,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	RUN_SLASH_COMMAND: { enabled: false },
 	CUSTOM_TOOLS: { enabled: false },
 	SELF_IMPROVING: { enabled: false },
+	SELF_IMPROVING_AUTO_SKILLS: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

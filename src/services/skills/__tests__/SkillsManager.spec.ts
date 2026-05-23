@@ -1297,6 +1297,61 @@ Instructions`)
 				"already exists",
 			)
 		})
+
+		it("should create a skill from provided full content", async () => {
+			mockDirectoryExists.mockResolvedValue(false)
+			mockRealpath.mockImplementation(async (p: string) => p)
+			mockReaddir.mockResolvedValue([])
+			mockFileExists.mockResolvedValue(false)
+			mockMkdir.mockResolvedValue(undefined)
+			mockWriteFile.mockResolvedValue(undefined)
+
+			const content = `---\nname: workflow-read-file-search-files\ndescription: Use when read_file and search_files succeed repeatedly.\n---\n\n# Workflow\n\nUse it.`
+
+			const createdPath = await skillsManager.createSkillFromContent(
+				"workflow-read-file-search-files",
+				"project",
+				"Use when read_file and search_files succeed repeatedly.",
+				content,
+				["code"],
+			)
+
+			expect(createdPath).toBe(p(PROJECT_DIR, ".roo", "skills", "workflow-read-file-search-files", "SKILL.md"))
+			expect(mockWriteFile).toHaveBeenCalledWith(
+				p(PROJECT_DIR, ".roo", "skills", "workflow-read-file-search-files", "SKILL.md"),
+				content,
+				"utf-8",
+			)
+		})
+	})
+
+	describe("updateSkillContent", () => {
+		it("should update an existing skill with new content", async () => {
+			const testSkillDir = p(globalSkillsDir, "test-skill")
+			const testSkillMd = p(testSkillDir, "SKILL.md")
+
+			mockDirectoryExists.mockImplementation(async (dir: string) => dir === globalSkillsDir)
+			mockRealpath.mockImplementation(async (pathArg: string) => pathArg)
+			mockReaddir.mockImplementation(async (dir: string) => (dir === globalSkillsDir ? ["test-skill"] : []))
+			mockStat.mockImplementation(async (pathArg: string) => {
+				if (pathArg === testSkillDir) {
+					return { isDirectory: () => true }
+				}
+				throw new Error("Not found")
+			})
+			mockFileExists.mockImplementation(async (file: string) => file === testSkillMd)
+			mockReadFile.mockResolvedValue(`---\nname: test-skill\ndescription: A test skill\n---\n\nOriginal content`)
+			mockWriteFile.mockResolvedValue(undefined)
+
+			await skillsManager.discoverSkills()
+
+			const updatedContent = `---\nname: test-skill\ndescription: Updated test skill\n---\n\nUpdated content`
+
+			await expect(
+				skillsManager.updateSkillContent("test-skill", "global", updatedContent),
+			).resolves.toBeUndefined()
+			expect(mockWriteFile).toHaveBeenCalledWith(testSkillMd, updatedContent, "utf-8")
+		})
 	})
 
 	describe("deleteSkill", () => {

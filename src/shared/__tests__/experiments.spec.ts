@@ -23,6 +23,15 @@ describe("experiments", () => {
 		})
 	})
 
+	describe("SELF_IMPROVING_AUTO_SKILLS", () => {
+		it("is configured correctly", () => {
+			expect(EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS).toBe("selfImprovingAutoSkills")
+			expect(experimentConfigsMap.SELF_IMPROVING_AUTO_SKILLS).toMatchObject({
+				enabled: false,
+			})
+		})
+	})
+
 	describe("isEnabled", () => {
 		it("returns false when experiment is not enabled", () => {
 			const experiments: Record<ExperimentId, boolean> = {
@@ -31,6 +40,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				selfImproving: false,
+				selfImprovingAutoSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -42,6 +52,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				selfImproving: false,
+				selfImprovingAutoSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -53,6 +64,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				selfImproving: false,
+				selfImprovingAutoSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -64,6 +76,7 @@ describe("experiments", () => {
 				runSlashCommand: false,
 				customTools: false,
 				selfImproving: false,
+				selfImprovingAutoSkills: false,
 			}
 
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.SELF_IMPROVING)).toBe(false)
