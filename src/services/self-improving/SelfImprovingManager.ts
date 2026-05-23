@@ -1,4 +1,5 @@
 import type {
+	CodeIndexInfo,
 	Experiments,
 	ImprovementAction,
 	LearnedPattern,
@@ -239,7 +240,7 @@ export class SelfImprovingManager {
 		}
 	}
 
-	async recordCodeIndexEvent(taskId?: string): Promise<void> {
+	async recordCodeIndexEvent(taskId?: string, codeIndexInfo?: CodeIndexInfo): Promise<void> {
 		if (!SelfImprovingManager.isExperimentEnabled(this.getExperiments())) {
 			return
 		}
@@ -253,8 +254,8 @@ export class SelfImprovingManager {
 				return
 			}
 
-			const codeIndexInfo = this.runtime.codeIndexAdapter.getInfo()
-			const event = this.runtime.feedbackCollector.createCodeIndexEvent(codeIndexInfo, taskId)
+			const resolvedCodeIndexInfo = codeIndexInfo ?? this.runtime.codeIndexAdapter.getInfo()
+			const event = this.runtime.feedbackCollector.createCodeIndexEvent(resolvedCodeIndexInfo, taskId)
 			this.runtime.store.addEvent(event)
 			this.lastUserActivityAt = event.timestamp
 		} catch (error) {

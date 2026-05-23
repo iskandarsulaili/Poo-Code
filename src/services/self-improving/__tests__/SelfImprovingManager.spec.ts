@@ -440,4 +440,31 @@ describe("SelfImprovingManager", () => {
 		expect(mockState.stores[0].updateTelemetry).toHaveBeenCalledWith({ lastCuratorRunAt: 123 })
 		expect(result).toEqual(report)
 	})
+
+	it("records code index events with explicit search hit details", async () => {
+		experiments = { selfImproving: true }
+		const manager = createManager()
+		await manager.initialize()
+
+		const store = mockState.stores[0]
+		const collector = mockState.collectors[0]
+		store.getConfig.mockReturnValue({
+			reviewOnTurnCount: 10,
+			reviewOnToolIterationCount: 2,
+			maxPromptPatterns: 5,
+			curatorEnabled: true,
+			curatorIntervalMs: 5_000,
+			staleAfterDays: 14,
+			archiveAfterDays: 60,
+			codeIndexCorrelationEnabled: true,
+		})
+
+		await manager.recordCodeIndexEvent("task-1", { available: true, hits: 4, topScore: 0.91 })
+
+		expect(collector.createCodeIndexEvent).toHaveBeenCalledWith(
+			{ available: true, hits: 4, topScore: 0.91 },
+			"task-1",
+		)
+		expect(store.addEvent).toHaveBeenCalledWith(expect.objectContaining({ signal: "CODE_INDEX_HIT" }))
+	})
 })
