@@ -1485,6 +1485,30 @@ describe("Cline", () => {
 				// Restore console.error
 				consoleErrorSpy.mockRestore()
 			})
+
+			it("records a user correction when replying to an interactive ask", async () => {
+				const recordUserCorrection = vi.fn().mockResolvedValue(undefined)
+				mockProvider.getSelfImprovingManager = vi.fn().mockReturnValue({ recordUserCorrection })
+
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "initial task",
+					startTask: false,
+				})
+
+				const handleResponseSpy = vi.spyOn(task, "handleWebviewAskResponse")
+				;(task as any).interactiveAsk = { type: "ask", text: "Need clarification" }
+
+				await task.submitUserMessage("here is the correction")
+
+				expect(recordUserCorrection).toHaveBeenCalledWith({
+					taskId: task.taskId,
+					success: false,
+					corrected: true,
+				})
+				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "here is the correction", [])
+			})
 		})
 	})
 

@@ -1451,6 +1451,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 
 			const provider = this.providerRef.deref()
+			const shouldRecordCorrection = !!this.taskAsk
 
 			if (provider) {
 				if (mode) {
@@ -1466,6 +1467,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					if (newState?.apiConfiguration) {
 						this.updateApiConfiguration(newState.apiConfiguration)
 					}
+				}
+
+				if (shouldRecordCorrection) {
+					await provider
+						.getSelfImprovingManager?.()
+						?.recordUserCorrection({
+							taskId: this.taskId,
+							success: false,
+							corrected: true,
+						})
+						.catch((error: unknown) => {
+							console.error("[Task#submitUserMessage] Failed to record user correction:", error)
+						})
 				}
 
 				this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
