@@ -265,6 +265,17 @@ describe("SelfImprovingManager", () => {
 		vi.useRealTimers()
 	})
 
+	it("requires self-improving to be enabled before auto-skills activates", () => {
+		expect(SelfImprovingManager.isAutoSkillsEnabled(undefined)).toBe(false)
+		expect(SelfImprovingManager.isAutoSkillsEnabled({ selfImprovingAutoSkills: true } as any)).toBe(false)
+		expect(
+			SelfImprovingManager.isAutoSkillsEnabled({ selfImproving: true, selfImprovingAutoSkills: false } as any),
+		).toBe(false)
+		expect(
+			SelfImprovingManager.isAutoSkillsEnabled({ selfImproving: true, selfImprovingAutoSkills: true } as any),
+		).toBe(true)
+	})
+
 	it("has zero runtime overhead when disabled", async () => {
 		const manager = createManager()
 
