@@ -234,9 +234,12 @@ export class ClineProvider
 			logger: {
 				appendLine: (message: string) => this.log(message),
 			},
-			getExperiments: () => this.contextProxy.getGlobalState("experiments"),
-			getMemoryBackend: () => this.contextProxy.getGlobalState("memoryBackend"),
-			getAgentMemoryUrl: () => this.contextProxy.getGlobalState("agentMemoryUrl"),
+			getExperiments: () => this.getGlobalStateSafe("experiments"),
+			getMemoryBackend: () => this.getGlobalStateSafe("memoryBackend"),
+			getAgentMemoryUrl: () => this.getGlobalStateSafe("agentMemoryUrl"),
+			getSelfImprovingScope: () => this.getGlobalStateSafe("selfImprovingScope"),
+			getAutoSkillsScope: () => this.getGlobalStateSafe("selfImprovingAutoSkillsScope"),
+			getWorkspacePath: () => this.currentWorkspacePath,
 			skillsManager: this.skillsManager,
 			getCodeIndexInfo: () => {
 				const manager = this.codeIndexManager
@@ -1938,8 +1941,18 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	private getGlobalStateSafe<T = unknown>(key: string): T | undefined {
+		return (this.contextProxy as any).getGlobalState?.(key)
+	}
+
 	async refreshWorkspace() {
+		const previousWorkspacePath = this.currentWorkspacePath
 		this.currentWorkspacePath = getWorkspacePath()
+
+		if (previousWorkspacePath !== this.currentWorkspacePath) {
+			await this.selfImprovingManager.onSettingsChanged(this.getGlobalStateSafe("experiments"))
+		}
+
 		await this.postStateToWebview()
 	}
 
@@ -2170,6 +2183,8 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel,
 			memoryBackend,
 			agentMemoryUrl,
+			selfImprovingScope,
+			selfImprovingAutoSkillsScope,
 			lockApiConfigAcrossModes,
 		} = await this.getState()
 
@@ -2351,6 +2366,8 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel,
 			memoryBackend,
 			agentMemoryUrl,
+			selfImprovingScope,
+			selfImprovingAutoSkillsScope,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -2549,6 +2566,8 @@ export class ClineProvider
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
 			memoryBackend: stateValues.memoryBackend,
 			agentMemoryUrl: stateValues.agentMemoryUrl,
+			selfImprovingScope: stateValues.selfImprovingScope,
+			selfImprovingAutoSkillsScope: stateValues.selfImprovingAutoSkillsScope,
 		}
 	}
 

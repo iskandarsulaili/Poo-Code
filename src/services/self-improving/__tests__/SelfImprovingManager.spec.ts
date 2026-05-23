@@ -1,15 +1,20 @@
 const mockState = vi.hoisted(() => ({
 	stores: [] as any[],
+	storeBaseDirs: [] as string[],
 	collectors: [] as any[],
 	analyzers: [] as any[],
 	appliers: [] as any[],
 	adapters: [] as any[],
 	memoryStores: [] as any[],
+	memoryStoreBaseDirs: [] as string[],
 	skillUsageStores: [] as any[],
+	skillUsageStoreBaseDirs: [] as string[],
 	actionExecutors: [] as any[],
 	curatorServices: [] as any[],
+	curatorBaseDirs: [] as string[],
 	reviewPromptFactories: [] as any[],
 	transcriptRecalls: [] as any[],
+	transcriptRecallBaseDirs: [] as string[],
 }))
 
 const DEFAULT_CURATOR_STATUS = {
@@ -117,8 +122,9 @@ function createTranscriptRecallMock() {
 }
 
 vi.mock("../LearningStore", () => ({
-	LearningStore: vi.fn().mockImplementation(() => {
+	LearningStore: vi.fn().mockImplementation((baseDir: string) => {
 		const store = createStoreMock()
+		mockState.storeBaseDirs.push(baseDir)
 		mockState.stores.push(store)
 		return store
 	}),
@@ -183,15 +189,17 @@ vi.mock("../CodeIndexAdapter", () => ({
 }))
 
 vi.mock("../MemoryStore", () => ({
-	MemoryStore: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+	MemoryStore: vi.fn().mockImplementation(function (this: Record<string, unknown>, baseDir: string) {
 		Object.assign(this, createMemoryStoreMock())
+		mockState.memoryStoreBaseDirs.push(baseDir)
 		mockState.memoryStores.push(this)
 	}),
 }))
 
 vi.mock("../SkillUsageStore", () => ({
-	SkillUsageStore: vi.fn().mockImplementation(() => {
+	SkillUsageStore: vi.fn().mockImplementation((baseDir: string) => {
 		const store = createSkillUsageStoreMock()
+		mockState.skillUsageStoreBaseDirs.push(baseDir)
 		mockState.skillUsageStores.push(store)
 		return store
 	}),
@@ -206,8 +214,9 @@ vi.mock("../ActionExecutor", () => ({
 }))
 
 vi.mock("../CuratorService", () => ({
-	CuratorService: vi.fn().mockImplementation(() => {
+	CuratorService: vi.fn().mockImplementation((baseDir: string) => {
 		const service = createCuratorServiceMock()
+		mockState.curatorBaseDirs.push(baseDir)
 		mockState.curatorServices.push(service)
 		return service
 	}),
@@ -222,8 +231,9 @@ vi.mock("../ReviewPromptFactory", () => ({
 }))
 
 vi.mock("../TranscriptRecall", () => ({
-	TranscriptRecall: vi.fn().mockImplementation(() => {
+	TranscriptRecall: vi.fn().mockImplementation((baseDir: string) => {
 		const store = createTranscriptRecallMock()
+		mockState.transcriptRecallBaseDirs.push(baseDir)
 		mockState.transcriptRecalls.push(store)
 		return store
 	}),
@@ -235,6 +245,9 @@ describe("SelfImprovingManager", () => {
 	let experiments: Record<string, boolean> | undefined
 	let memoryBackend: "builtin" | "agentmemory" | undefined
 	let agentMemoryUrl: string | undefined
+	let selfImprovingScope: "workspace" | "global" | undefined
+	let selfImprovingAutoSkillsScope: "workspace" | "global" | undefined
+	let workspacePath: string | undefined
 	let logger: { appendLine: ReturnType<typeof vi.fn> }
 
 	const createManager = () =>
@@ -244,6 +257,9 @@ describe("SelfImprovingManager", () => {
 			getExperiments: () => experiments,
 			getMemoryBackend: () => memoryBackend,
 			getAgentMemoryUrl: () => agentMemoryUrl,
+			getSelfImprovingScope: () => selfImprovingScope,
+			getAutoSkillsScope: () => selfImprovingAutoSkillsScope,
+			getWorkspacePath: () => workspacePath,
 			getCodeIndexInfo: () => ({ available: true, hits: 2, topScore: 0.8 }),
 		})
 
@@ -251,19 +267,27 @@ describe("SelfImprovingManager", () => {
 		vi.clearAllMocks()
 		vi.useFakeTimers()
 		mockState.stores.length = 0
+		mockState.storeBaseDirs.length = 0
 		mockState.collectors.length = 0
 		mockState.analyzers.length = 0
 		mockState.appliers.length = 0
 		mockState.adapters.length = 0
 		mockState.memoryStores.length = 0
+		mockState.memoryStoreBaseDirs.length = 0
 		mockState.skillUsageStores.length = 0
+		mockState.skillUsageStoreBaseDirs.length = 0
 		mockState.actionExecutors.length = 0
 		mockState.curatorServices.length = 0
+		mockState.curatorBaseDirs.length = 0
 		mockState.reviewPromptFactories.length = 0
 		mockState.transcriptRecalls.length = 0
+		mockState.transcriptRecallBaseDirs.length = 0
 		experiments = undefined
 		memoryBackend = undefined
 		agentMemoryUrl = undefined
+		selfImprovingScope = undefined
+		selfImprovingAutoSkillsScope = undefined
+		workspacePath = "/tmp/workspace-one"
 		logger = { appendLine: vi.fn() }
 	})
 
@@ -435,10 +459,30 @@ describe("SelfImprovingManager", () => {
 
 		expect(originalStore.takeSnapshot).toHaveBeenCalledTimes(1)
 		expect(originalStore.dispose).toHaveBeenCalledTimes(1)
-		expect(manager.memoryStore.backendType).toBe("agentmemory")
+		expect((manager.memoryStore as any).backendType).toBe("agentmemory")
 		expect(logger.appendLine).toHaveBeenCalledWith(
 			"[SelfImprovingManager] Memory backend configured: agentmemory (http://agentmemory.internal:4001)",
 		)
+	})
+
+	it("rebuilds self-improving stores when scope changes to workspace", async () => {
+		experiments = { selfImproving: true }
+		const manager = createManager()
+		await manager.initialize()
+
+		selfImprovingScope = "workspace"
+		selfImprovingAutoSkillsScope = "global"
+		workspacePath = "/tmp/workspace-two"
+
+		await manager.onSettingsChanged(experiments as any)
+
+		expect(mockState.storeBaseDirs.at(-1)).toContain("workspace-scopes")
+		expect(mockState.memoryStoreBaseDirs.at(-1)).toContain("workspace-scopes")
+		expect(mockState.skillUsageStoreBaseDirs.at(-1)).toContain("workspace-scopes")
+		expect(mockState.curatorBaseDirs.at(-1)).toContain("workspace-scopes")
+		expect(mockState.transcriptRecallBaseDirs.at(-1)).toContain("workspace-scopes")
+		expect(mockState.stores.length).toBeGreaterThanOrEqual(2)
+		expect(mockState.memoryStores.length).toBeGreaterThanOrEqual(2)
 	})
 
 	it("runs curator cycles through the curator service", async () => {

@@ -64,4 +64,39 @@ describe("ImprovementApplier", () => {
 		expect(actions.some((action) => action.actionType === "SKILL_CREATE")).toBe(false)
 		expect(actions.some((action) => action.actionType === "SKILL_UPDATE")).toBe(false)
 	})
+
+	it("creates global skills when auto-skills scope is global", () => {
+		const applier = new ImprovementApplier({
+			getSkillNames: () => [],
+			getSkillProvenance: () => "unknown",
+			isAutoSkillsEnabled: () => true,
+			getAutoSkillsScope: () => "global",
+		})
+
+		const actions = applier.generateActions([createToolPattern()])
+		const skillAction = actions.find((action) => action.actionType === "SKILL_CREATE")
+
+		expect(skillAction?.payload.source).toBe("global")
+		expect(skillAction?.payload.skillId).toBe("skill:global:workflow-read-file-search-files")
+	})
+
+	it("creates a global skill when only a project-scoped skill with the same name exists", () => {
+		const applier = new ImprovementApplier({
+			getSkillNames: () => ["workflow-read-file-search-files"],
+			getSkillProvenance: () => "agent",
+			isAutoSkillsEnabled: () => true,
+			getAutoSkillsScope: () => "global",
+			...({
+				hasSkill: (name: string, source: "global" | "project") =>
+					name === "workflow-read-file-search-files" && source === "project",
+				getSkillProvenanceForSource: (_name: string, source: "global" | "project") =>
+					source === "project" ? "agent" : "unknown",
+			} as any),
+		} as any)
+
+		const actions = applier.generateActions([createToolPattern()])
+
+		expect(actions.some((action) => action.actionType === "SKILL_CREATE")).toBe(true)
+		expect(actions.some((action) => action.actionType === "SKILL_UPDATE")).toBe(false)
+	})
 })

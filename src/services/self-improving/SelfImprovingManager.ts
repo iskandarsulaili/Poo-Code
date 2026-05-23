@@ -1,3 +1,6 @@
+import path from "path"
+import crypto from "crypto"
+
 import type {
 	CodeIndexInfo,
 	Experiments,
@@ -7,6 +10,7 @@ import type {
 	Logger,
 	PromptContext,
 	SelfImprovingManagerOptions,
+	SelfImprovingScope,
 	TaskEventInfo,
 } from "./types"
 import { LearningStore } from "./LearningStore"
@@ -42,15 +46,20 @@ export class SelfImprovingManager {
 	private readonly getCodeIndexInfo: SelfImprovingManagerOptions["getCodeIndexInfo"]
 	private readonly getMemoryBackend: SelfImprovingManagerOptions["getMemoryBackend"]
 	private readonly getAgentMemoryUrl: SelfImprovingManagerOptions["getAgentMemoryUrl"]
+	private readonly getSelfImprovingScope: SelfImprovingManagerOptions["getSelfImprovingScope"]
+	private readonly getAutoSkillsScope: SelfImprovingManagerOptions["getAutoSkillsScope"]
+	private readonly getWorkspacePath: SelfImprovingManagerOptions["getWorkspacePath"]
+	private readonly curatorConfig: SelfImprovingManagerOptions["curatorConfig"]
 	private readonly skillsManager: SelfImprovingManagerOptions["skillsManager"]
 	public memoryStore: MemoryBackend
-	public readonly skillUsageStore: SkillUsageStore
-	public readonly curatorService: CuratorService
+	public skillUsageStore: SkillUsageStore
+	public curatorService: CuratorService
 	public readonly reviewPromptFactory: ReviewPromptFactory
-	public readonly transcriptRecall: TranscriptRecall
+	public transcriptRecall: TranscriptRecall
 	private actionExecutor: ActionExecutor
 	private memoryBackendType: "builtin" | "agentmemory"
 	private agentMemoryUrl: string | undefined
+	private storageBasePath: string
 
 	private runtime: Runtime | undefined
 	private started = false
@@ -68,20 +77,20 @@ export class SelfImprovingManager {
 		this.getCodeIndexInfo = options.getCodeIndexInfo
 		this.getMemoryBackend = options.getMemoryBackend
 		this.getAgentMemoryUrl = options.getAgentMemoryUrl
+		this.getSelfImprovingScope = options.getSelfImprovingScope
+		this.getAutoSkillsScope = options.getAutoSkillsScope
+		this.getWorkspacePath = options.getWorkspacePath
+		this.curatorConfig = options.curatorConfig
 		this.skillsManager = options.skillsManager
 		this.memoryBackendType = this.resolveMemoryBackend(options.memoryBackend)
 		this.agentMemoryUrl = this.resolveAgentMemoryUrl(options.agentMemoryUrl)
+		this.storageBasePath = this.resolveStorageBasePath()
 		this.memoryStore = this.createMemoryStore()
-		this.skillUsageStore = new SkillUsageStore(options.globalStoragePath, options.logger)
+		this.skillUsageStore = this.createSkillUsageStore()
 		this.actionExecutor = this.createActionExecutor()
-		this.curatorService = new CuratorService(
-			options.globalStoragePath,
-			this.skillUsageStore,
-			options.logger,
-			options.curatorConfig,
-		)
+		this.curatorService = this.createCuratorService()
 		this.reviewPromptFactory = new ReviewPromptFactory()
-		this.transcriptRecall = new TranscriptRecall(options.globalStoragePath, options.logger)
+		this.transcriptRecall = this.createTranscriptRecall()
 	}
 
 	static isExperimentEnabled(experiments: Experiments | undefined): boolean {
@@ -151,7 +160,7 @@ export class SelfImprovingManager {
 	 * This enables/disables the module at runtime.
 	 */
 	async onSettingsChanged(_experiments: Experiments | undefined): Promise<void> {
-		await this.reconfigureMemoryBackendIfNeeded()
+		await this.reconfigureIfNeeded()
 		await this.handleExperimentChange()
 	}
 
@@ -504,13 +513,18 @@ export class SelfImprovingManager {
 	private getOrCreateRuntime(): Runtime {
 		if (!this.runtime) {
 			this.runtime = {
-				store: new LearningStore(this.globalStoragePath, this.logger),
+				store: new LearningStore(this.storageBasePath, this.logger),
 				feedbackCollector: new FeedbackCollector(),
 				patternAnalyzer: new PatternAnalyzer(),
 				improvementApplier: new ImprovementApplier({
 					getSkillNames: () => this.skillsManager?.getSkillNames() ?? [],
 					getSkillProvenance: (name: string) => this.resolveSkillProvenance(name),
+					getSkillProvenanceForSource: (name: string, source: "global" | "project") =>
+						this.resolveSkillProvenance(name, source),
+					hasSkill: (name: string, source: "global" | "project") =>
+						this.skillsManager?.hasSkill?.(name, source) ?? false,
 					isAutoSkillsEnabled: () => SelfImprovingManager.isAutoSkillsEnabled(this.getExperiments()),
+					getAutoSkillsScope: () => this.resolveAutoSkillsScope(),
 				}),
 				codeIndexAdapter: new CodeIndexAdapter(this.logger, this.getCodeIndexInfo),
 			}
@@ -527,48 +541,98 @@ export class SelfImprovingManager {
 		return this.getAgentMemoryUrl?.() ?? fallback
 	}
 
+	private resolveSelfImprovingScope(): SelfImprovingScope {
+		return this.getSelfImprovingScope?.() ?? "global"
+	}
+
+	private resolveAutoSkillsScope(): SelfImprovingScope {
+		return this.getAutoSkillsScope?.() ?? "workspace"
+	}
+
+	private resolveStorageBasePath(): string {
+		if (this.resolveSelfImprovingScope() !== "workspace") {
+			return this.globalStoragePath
+		}
+
+		const workspacePath = this.getWorkspacePath?.()
+		if (!workspacePath) {
+			return path.join(this.globalStoragePath, "workspace-scopes", "no-workspace")
+		}
+
+		const workspaceHash = crypto.createHash("sha256").update(workspacePath).digest("hex").slice(0, 16)
+		return path.join(this.globalStoragePath, "workspace-scopes", workspaceHash)
+	}
+
 	private createMemoryStore(): MemoryBackend {
 		return MemoryBackendFactory.create(
 			this.memoryBackendType,
-			this.globalStoragePath,
+			this.storageBasePath,
 			this.logger,
 			this.agentMemoryUrl,
 		)
+	}
+
+	private createSkillUsageStore(): SkillUsageStore {
+		return new SkillUsageStore(this.storageBasePath, this.logger)
+	}
+
+	private createCuratorService(
+		config: SelfImprovingManagerOptions["curatorConfig"] = this.curatorConfig,
+	): CuratorService {
+		return new CuratorService(this.storageBasePath, this.skillUsageStore, this.logger, config)
+	}
+
+	private createTranscriptRecall(): TranscriptRecall {
+		return new TranscriptRecall(this.storageBasePath, this.logger)
 	}
 
 	private createActionExecutor(): ActionExecutor {
 		return new ActionExecutor(this.memoryStore, this.skillUsageStore, this.logger, this.skillsManager)
 	}
 
-	private async reconfigureMemoryBackendIfNeeded(): Promise<void> {
+	private async reconfigureIfNeeded(): Promise<void> {
 		const nextBackend = this.resolveMemoryBackend(this.memoryBackendType)
 		const nextUrl = this.resolveAgentMemoryUrl(this.agentMemoryUrl)
+		const nextStorageBasePath = this.resolveStorageBasePath()
+		const backendChanged = nextBackend !== this.memoryBackendType || nextUrl !== this.agentMemoryUrl
+		const storageChanged = nextStorageBasePath !== this.storageBasePath
 
-		if (nextBackend === this.memoryBackendType && nextUrl === this.agentMemoryUrl) {
+		if (!backendChanged && !storageChanged) {
 			return
 		}
 
-		const wasStarted = this.started
-		const previousStore = this.memoryStore
-
-		if (wasStarted && previousStore instanceof MemoryStore) {
-			previousStore.takeSnapshot()
+		const shouldRestart = this.started && SelfImprovingManager.isExperimentEnabled(this.getExperiments())
+		if (shouldRestart) {
+			this.stopTimers()
+			await this.runtime?.store.persist()
+			if (this.memoryStore instanceof MemoryStore) {
+				this.memoryStore.takeSnapshot()
+			}
 		}
 
-		await previousStore.dispose()
+		await this.memoryStore.dispose()
+		this.started = false
+		this.runtime = undefined
+		this.promptRevision = 0
 
 		this.memoryBackendType = nextBackend
 		this.agentMemoryUrl = nextUrl
+		this.storageBasePath = nextStorageBasePath
 		this.memoryStore = this.createMemoryStore()
+		this.skillUsageStore = this.createSkillUsageStore()
 		this.actionExecutor = this.createActionExecutor()
+		this.curatorService = this.createCuratorService()
+		this.transcriptRecall = this.createTranscriptRecall()
 
-		if (wasStarted && SelfImprovingManager.isExperimentEnabled(this.getExperiments())) {
-			await this.memoryStore.initialize()
+		if (shouldRestart) {
+			await this.initialize()
 		}
 
-		this.logger.appendLine(
-			`[SelfImprovingManager] Memory backend configured: ${this.memoryBackendType}${this.agentMemoryUrl ? ` (${this.agentMemoryUrl})` : ""}`,
-		)
+		if (backendChanged) {
+			this.logger.appendLine(
+				`[SelfImprovingManager] Memory backend configured: ${this.memoryBackendType}${this.agentMemoryUrl ? ` (${this.agentMemoryUrl})` : ""}`,
+			)
+		}
 	}
 
 	private startTimers(store: LearningStore): void {
@@ -636,15 +700,31 @@ export class SelfImprovingManager {
 		})
 	}
 
-	private resolveSkillProvenance(name: string): string {
-		const agentRecord = this.skillUsageStore
-			.getAll()
-			.find((record) => record.skillName === name && record.createdBy === "agent")
+	private resolveSkillProvenance(name: string, source?: "global" | "project"): string {
+		const agentRecord = this.skillUsageStore.getAll().find((record) => {
+			if (record.createdBy !== "agent" || record.skillName !== name) {
+				return false
+			}
+
+			if (!source) {
+				return true
+			}
+
+			return record.skillId === this.buildSkillId(name, source)
+		})
 		if (agentRecord) {
 			return agentRecord.createdBy
 		}
 
+		if (source) {
+			return this.skillsManager?.getSkillProvenanceForSource?.(name, source) ?? "unknown"
+		}
+
 		return this.skillsManager?.getSkillProvenance(name) ?? "unknown"
+	}
+
+	private buildSkillId(name: string, source: "global" | "project"): string {
+		return `skill:${source}:${name}`
 	}
 
 	private logError(context: string, error: unknown): void {

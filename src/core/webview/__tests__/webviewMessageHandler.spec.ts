@@ -870,15 +870,19 @@ describe("webviewMessageHandler - self-improving memory settings", () => {
 		vi.mocked(mockClineProvider.contextProxy.getGlobalState).mockReturnValue(undefined)
 	})
 
-	it("persists memory backend settings and refreshes self-improving runtime", async () => {
+	it("persists self-improving scope and memory backend settings and refreshes self-improving runtime", async () => {
 		await webviewMessageHandler(mockClineProvider, {
 			type: "updateSettings",
 			updatedSettings: {
+				selfImprovingScope: "workspace",
+				selfImprovingAutoSkillsScope: "global",
 				memoryBackend: "agentmemory",
 				agentMemoryUrl: "http://agentmemory.internal:4001",
 			} as any,
 		})
 
+		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith("selfImprovingScope", "workspace")
+		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith("selfImprovingAutoSkillsScope", "global")
 		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith("memoryBackend", "agentmemory")
 		expect(mockClineProvider.contextProxy.setValue).toHaveBeenCalledWith(
 			"agentMemoryUrl",

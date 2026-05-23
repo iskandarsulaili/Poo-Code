@@ -265,6 +265,16 @@ describe("ContextProxy", () => {
 			expect(globalSettings.memoryBackend).toBe("agentmemory")
 			expect(globalSettings.agentMemoryUrl).toBe("http://agentmemory.internal:4001")
 		})
+
+		it("should persist self-improving scope settings in global settings", async () => {
+			await proxy.setValue("selfImprovingScope" as any, "workspace" as any)
+			await proxy.setValue("selfImprovingAutoSkillsScope" as any, "global" as any)
+
+			const globalSettings = proxy.getGlobalSettings() as any
+
+			expect(globalSettings.selfImprovingScope).toBe("workspace")
+			expect(globalSettings.selfImprovingAutoSkillsScope).toBe("global")
+		})
 	})
 
 	describe("setValues", () => {

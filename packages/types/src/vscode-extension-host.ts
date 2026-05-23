@@ -292,6 +292,8 @@ export type ExtensionState = Pick<
 	| "imageGenerationProvider"
 	| "memoryBackend"
 	| "agentMemoryUrl"
+	| "selfImprovingScope"
+	| "selfImprovingAutoSkillsScope"
 	| "openRouterImageGenerationSelectedModel"
 	| "includeTaskHistoryInEnhance"
 	| "reasoningBlockCollapsed"
@@ -364,6 +366,8 @@ export type ExtensionState = Pick<
 	openRouterImageApiKey?: string
 	memoryBackend?: "builtin" | "agentmemory"
 	agentMemoryUrl?: string
+	selfImprovingScope?: "workspace" | "global"
+	selfImprovingAutoSkillsScope?: "workspace" | "global"
 	messageQueue?: QueuedMessage[]
 	selfImprovingStatus?: {
 		enabled: boolean

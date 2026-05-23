@@ -526,6 +526,12 @@ describe("SettingsView - Experimental Settings", () => {
 		fireEvent.click(autoSkillsCheckbox)
 		expect(autoSkillsCheckbox).toBeChecked()
 
+		const selfImprovingScopeSelect = within(content).getByTestId("self-improving-scope-select")
+		fireEvent.change(selfImprovingScopeSelect, { target: { value: "workspace" } })
+
+		const autoSkillsScopeSelect = within(content).getByTestId("self-improving-auto-skills-scope-select")
+		fireEvent.change(autoSkillsScopeSelect, { target: { value: "global" } })
+
 		const saveButton = screen.getByTestId("save-button")
 		fireEvent.click(saveButton)
 
@@ -533,6 +539,8 @@ describe("SettingsView - Experimental Settings", () => {
 			expect.objectContaining({
 				type: "updateSettings",
 				updatedSettings: expect.objectContaining({
+					selfImprovingScope: "workspace",
+					selfImprovingAutoSkillsScope: "global",
 					experiments: expect.objectContaining({
 						selfImproving: true,
 						selfImprovingAutoSkills: true,
@@ -552,6 +560,9 @@ describe("SettingsView - Experimental Settings", () => {
 		fireEvent.click(selfImprovingCheckbox)
 		expect(selfImprovingCheckbox).toBeChecked()
 
+		const selfImprovingScopeSelect = within(content).getByTestId("self-improving-scope-select")
+		fireEvent.change(selfImprovingScopeSelect, { target: { value: "global" } })
+
 		const backendSelect = within(content).getByTestId("self-improving-memory-backend-select")
 		fireEvent.change(backendSelect, { target: { value: "agentmemory" } })
 
@@ -566,6 +577,7 @@ describe("SettingsView - Experimental Settings", () => {
 			expect.objectContaining({
 				type: "updateSettings",
 				updatedSettings: expect.objectContaining({
+					selfImprovingScope: "global",
 					memoryBackend: "agentmemory",
 					agentMemoryUrl: "http://agentmemory.internal:4001",
 				}),

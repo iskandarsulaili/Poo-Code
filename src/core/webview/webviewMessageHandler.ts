@@ -748,7 +748,12 @@ export const webviewMessageHandler = async (
 							...(getGlobalState("experiments") ?? experimentDefault),
 							...(value as Record<ExperimentId, boolean>),
 						}
-					} else if (key === "memoryBackend" || key === "agentMemoryUrl") {
+					} else if (
+						key === "memoryBackend" ||
+						key === "agentMemoryUrl" ||
+						key === "selfImprovingScope" ||
+						key === "selfImprovingAutoSkillsScope"
+					) {
 						selfImprovingSettingsUpdated = true
 					} else if (key === "customSupportPrompts") {
 						if (!value) {

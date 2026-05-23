@@ -12,6 +12,7 @@ import {
 	type LearningTelemetry,
 	type PatternState,
 	type PatternType,
+	type SelfImprovingScope,
 } from "@roo-code/types"
 
 // Re-export shared types for convenience
@@ -27,6 +28,7 @@ export type {
 	LearningTelemetry,
 	PatternState,
 	PatternType,
+	SelfImprovingScope,
 }
 
 /**
@@ -83,6 +85,9 @@ export interface SelfImprovingManagerOptions {
 	getCodeIndexInfo?: () => CodeIndexInfo
 	getMemoryBackend?: () => "builtin" | "agentmemory" | undefined
 	getAgentMemoryUrl?: () => string | undefined
+	getSelfImprovingScope?: () => SelfImprovingScope | undefined
+	getAutoSkillsScope?: () => SelfImprovingScope | undefined
+	getWorkspacePath?: () => string | undefined
 	/** Memory backend type: "builtin" (default) or "agentmemory" */
 	memoryBackend?: "builtin" | "agentmemory"
 	/** agentmemory server URL (default: http://localhost:3111) */
@@ -101,6 +106,8 @@ export interface SelfImprovingManagerOptions {
 	skillsManager?: {
 		getSkillNames(): string[]
 		getSkillProvenance(name: string): string
+		getSkillProvenanceForSource?(name: string, source: "global" | "project"): string
+		hasSkill?(name: string, source: "global" | "project"): boolean
 		createSkillFromContent(
 			name: string,
 			source: "global" | "project",

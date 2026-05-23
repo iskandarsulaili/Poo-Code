@@ -306,6 +306,14 @@ export class SkillsManager {
 		return this.getAllSkills().some((skill) => skill.name === name) ? "user" : "unknown"
 	}
 
+	getSkillProvenanceForSource(name: string, source: "global" | "project"): "user" | "bundled" | "hub" | "unknown" {
+		return this.findSkillByNameAndSource(name, source) ? "user" : "unknown"
+	}
+
+	hasSkill(name: string, source: "global" | "project"): boolean {
+		return this.findSkillByNameAndSource(name, source) !== undefined
+	}
+
 	/**
 	 * Get a skill by name, source, and optionally mode
 	 */

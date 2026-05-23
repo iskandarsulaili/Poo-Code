@@ -26,11 +26,15 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	openRouterImageGenerationSelectedModel?: string
 	memoryBackend?: "builtin" | "agentmemory"
 	agentMemoryUrl?: string
+	selfImprovingScope?: "workspace" | "global"
+	selfImprovingAutoSkillsScope?: "workspace" | "global"
 	setImageGenerationProvider?: (provider: ImageGenerationProvider) => void
 	setOpenRouterImageApiKey?: (apiKey: string) => void
 	setImageGenerationSelectedModel?: (model: string) => void
 	setMemoryBackend?: (backend: "builtin" | "agentmemory") => void
 	setAgentMemoryUrl?: (url: string) => void
+	setSelfImprovingScope?: (scope: "workspace" | "global") => void
+	setSelfImprovingAutoSkillsScope?: (scope: "workspace" | "global") => void
 }
 
 export const ExperimentalSettings = ({
@@ -43,17 +47,24 @@ export const ExperimentalSettings = ({
 	openRouterImageGenerationSelectedModel,
 	memoryBackend,
 	agentMemoryUrl,
+	selfImprovingScope,
+	selfImprovingAutoSkillsScope,
 	setImageGenerationProvider,
 	setOpenRouterImageApiKey,
 	setImageGenerationSelectedModel,
 	setMemoryBackend,
 	setAgentMemoryUrl,
+	setSelfImprovingScope,
+	setSelfImprovingAutoSkillsScope,
 	className,
 	...props
 }: ExperimentalSettingsProps) => {
 	const { t } = useAppTranslation()
 	const autoSkillsVisible = experiments[EXPERIMENT_IDS.SELF_IMPROVING] ?? false
+	const autoSkillsEnabled = experiments[EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS] ?? false
 	const currentMemoryBackend = memoryBackend ?? "builtin"
+	const currentSelfImprovingScope = selfImprovingScope ?? "global"
+	const currentAutoSkillsScope = selfImprovingAutoSkillsScope ?? "workspace"
 
 	return (
 		<div className={cn("flex flex-col gap-2", className)} {...props}>
@@ -127,11 +138,34 @@ export const ExperimentalSettings = ({
 										/>
 										{autoSkillsVisible && (
 											<div className="ml-6 space-y-3 border-l border-vscode-panel-border pl-4">
+												{setSelfImprovingScope && (
+													<div className="space-y-2">
+														<label className="block font-medium">
+															{t("settings:experimental.SELF_IMPROVING.scopeLabel", {
+																defaultValue: "Self-learning scope",
+															})}
+														</label>
+														<Select
+															value={currentSelfImprovingScope}
+															onValueChange={(value) =>
+																setSelfImprovingScope(value as "workspace" | "global")
+															}
+															data-testid="self-improving-scope-select">
+															<SelectTrigger className="w-full">
+																<SelectValue
+																	placeholder={t("settings:common.select")}
+																/>
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="workspace">Workspace</SelectItem>
+																<SelectItem value="global">Global</SelectItem>
+															</SelectContent>
+														</Select>
+													</div>
+												)}
 												<ExperimentalFeature
 													experimentKey="SELF_IMPROVING_AUTO_SKILLS"
-													enabled={
-														experiments[EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS] ?? false
-													}
+													enabled={autoSkillsEnabled}
 													onChange={(enabled) =>
 														setExperimentEnabled(
 															EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS,
@@ -140,6 +174,36 @@ export const ExperimentalSettings = ({
 													}
 													checkboxTestId="experimental-self-improving-auto-skills-checkbox"
 												/>
+												{autoSkillsEnabled && setSelfImprovingAutoSkillsScope && (
+													<div className="space-y-2">
+														<label className="block font-medium">
+															{t(
+																"settings:experimental.SELF_IMPROVING.autoSkillsScopeLabel",
+																{
+																	defaultValue: "Auto-create/update skills scope",
+																},
+															)}
+														</label>
+														<Select
+															value={currentAutoSkillsScope}
+															onValueChange={(value) =>
+																setSelfImprovingAutoSkillsScope(
+																	value as "workspace" | "global",
+																)
+															}
+															data-testid="self-improving-auto-skills-scope-select">
+															<SelectTrigger className="w-full">
+																<SelectValue
+																	placeholder={t("settings:common.select")}
+																/>
+															</SelectTrigger>
+															<SelectContent>
+																<SelectItem value="workspace">Workspace</SelectItem>
+																<SelectItem value="global">Global</SelectItem>
+															</SelectContent>
+														</Select>
+													</div>
+												)}
 												{setMemoryBackend && (
 													<div className="space-y-2">
 														<label className="block font-medium">

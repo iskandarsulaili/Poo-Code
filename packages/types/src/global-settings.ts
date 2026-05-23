@@ -78,6 +78,10 @@ export const DEFAULT_CHECKPOINT_TIMEOUT_SECONDS = 15
  * GlobalSettings
  */
 
+export const selfImprovingScopeSchema = z.enum(["workspace", "global"])
+
+export type SelfImprovingScope = z.infer<typeof selfImprovingScopeSchema>
+
 export const globalSettingsSchema = z.object({
 	currentApiConfigName: z.string().optional(),
 	listApiConfigMeta: z.array(providerSettingsEntrySchema).optional(),
@@ -94,6 +98,8 @@ export const globalSettingsSchema = z.object({
 	openRouterImageGenerationSelectedModel: z.string().optional(),
 	memoryBackend: z.enum(["builtin", "agentmemory"]).optional(),
 	agentMemoryUrl: z.string().optional(),
+	selfImprovingScope: selfImprovingScopeSchema.optional(),
+	selfImprovingAutoSkillsScope: selfImprovingScopeSchema.optional(),
 
 	customCondensingPrompt: z.string().optional(),
 

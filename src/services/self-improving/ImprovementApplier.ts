@@ -6,7 +6,10 @@ import type { ImprovementAction, LearnedPattern, PromptContext } from "./types"
 interface ImprovementApplierOptions {
 	getSkillNames?: () => string[]
 	getSkillProvenance?: (name: string) => SkillProvenance | string
+	getSkillProvenanceForSource?: (name: string, source: "global" | "project") => SkillProvenance | string
+	hasSkill?: (name: string, source: "global" | "project") => boolean
 	isAutoSkillsEnabled?: () => boolean
+	getAutoSkillsScope?: () => "workspace" | "global"
 }
 
 /**
@@ -21,12 +24,22 @@ interface ImprovementApplierOptions {
 export class ImprovementApplier {
 	private readonly getSkillNames: () => string[]
 	private readonly getSkillProvenance: (name: string) => SkillProvenance | string
+	private readonly getSkillProvenanceForSource: (
+		name: string,
+		source: "global" | "project",
+	) => SkillProvenance | string
+	private readonly hasSkill: (name: string, source: "global" | "project") => boolean
 	private readonly isAutoSkillsEnabled: () => boolean
+	private readonly getAutoSkillsScope: () => "workspace" | "global"
 
 	constructor(options: ImprovementApplierOptions = {}) {
 		this.getSkillNames = options.getSkillNames ?? (() => [])
 		this.getSkillProvenance = options.getSkillProvenance ?? (() => "unknown")
+		this.getSkillProvenanceForSource =
+			options.getSkillProvenanceForSource ?? ((name: string) => this.getSkillProvenance(name))
+		this.hasSkill = options.hasSkill ?? ((name: string) => this.getSkillNames().includes(name))
 		this.isAutoSkillsEnabled = options.isAutoSkillsEnabled ?? (() => false)
+		this.getAutoSkillsScope = options.getAutoSkillsScope ?? (() => "workspace")
 	}
 
 	/**
@@ -169,12 +182,14 @@ export class ImprovementApplier {
 		const content = this.buildSkillContent(skillName, description, toolNames)
 		const modeSlugs =
 			pattern.context.modes && pattern.context.modes.length > 0 ? [...new Set(pattern.context.modes)] : undefined
-		const source = "project"
-		const existingSkillNames = new Set(this.getSkillNames())
-		const skillExists = existingSkillNames.has(skillName)
+		const source = this.getAutoSkillsScope() === "global" ? "global" : "project"
+		const skillExists = this.hasSkill(skillName, source)
 		const skillId = this.buildSkillId(skillName, source)
 
-		if (skillExists && this.normalizeSkillProvenance(this.getSkillProvenance(skillName)) === "agent") {
+		if (
+			skillExists &&
+			this.normalizeSkillProvenance(this.getSkillProvenanceForSource(skillName, source)) === "agent"
+		) {
 			return {
 				id: crypto.randomUUID(),
 				actionType: "SKILL_UPDATE",
