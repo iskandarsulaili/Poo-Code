@@ -262,6 +262,18 @@ describe("extension.ts", () => {
 		expect(dotenvx.config).toHaveBeenCalledTimes(1)
 	})
 
+	test("initializes self-improving through the provider during activation", async () => {
+		vi.resetModules()
+		vi.clearAllMocks()
+
+		const { ClineProvider } = await import("../core/webview/ClineProvider")
+		const { activate } = await import("../extension")
+		await activate(mockContext)
+
+		const provider = (ClineProvider as any).getVisibleInstance()
+		expect(provider.initializeSelfImproving).toHaveBeenCalledTimes(1)
+	})
+
 	describe("cloud auth state handling", () => {
 		beforeEach(() => {
 			vi.resetModules()
