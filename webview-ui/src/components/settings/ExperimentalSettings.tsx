@@ -15,6 +15,7 @@ import { SearchableSetting } from "./SearchableSetting"
 import { ExperimentalFeature } from "./ExperimentalFeature"
 import { ImageGenerationSettings } from "./ImageGenerationSettings"
 import { CustomToolsSettings } from "./CustomToolsSettings"
+import { SelfImprovingStatus } from "./SelfImprovingStatus"
 
 type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	experiments: Experiments
@@ -267,31 +268,31 @@ export const ExperimentalSettings = ({
 														</Select>
 													</div>
 												)}
-												{currentMemoryBackend === "agentmemory" && setAgentMemoryUrl && (
-													<div className="space-y-2">
-														<label className="block font-medium">
-															{t(
-																"settings:experimental.SELF_IMPROVING.agentMemoryUrlLabel",
-																{
-																	defaultValue: "agentmemory URL",
-																},
-															)}
-														</label>
-														<Input
-															value={agentMemoryUrl ?? "http://localhost:3111"}
-															onChange={(event) => setAgentMemoryUrl(event.target.value)}
-															placeholder="http://localhost:3111"
-															data-testid="self-improving-agent-memory-url-input"
-														/>
-													</div>
-												)}
-											</div>
-										)}
+								{currentMemoryBackend === "agentmemory" && setAgentMemoryUrl && (
+									<div className="space-y-2">
+										<label className="block font-medium">
+											{t(
+												"settings:experimental.SELF_IMPROVING.agentMemoryUrlLabel",
+												{
+													defaultValue: "agentmemory URL",
+												},
+											)}
+										</label>
+										<Input
+											value={agentMemoryUrl ?? "http://localhost:3111"}
+											onChange={(event) => setAgentMemoryUrl(event.target.value)}
+											placeholder="http://localhost:3111"
+											data-testid="self-improving-agent-memory-url-input"
+										/>
 									</div>
-								</SearchableSetting>
-							)
-						}
-						return (
+								)}
+								<SelfImprovingStatus />
+							</div>
+						)}
+						</SearchableSetting>
+					)
+				}
+				return (
 							<SearchableSetting
 								key={config[0]}
 								settingId={`experimental-${config[0].toLowerCase()}`}
