@@ -268,31 +268,32 @@ export const ExperimentalSettings = ({
 														</Select>
 													</div>
 												)}
-								{currentMemoryBackend === "agentmemory" && setAgentMemoryUrl && (
-									<div className="space-y-2">
-										<label className="block font-medium">
-											{t(
-												"settings:experimental.SELF_IMPROVING.agentMemoryUrlLabel",
-												{
-													defaultValue: "agentmemory URL",
-												},
-											)}
-										</label>
-										<Input
-											value={agentMemoryUrl ?? "http://localhost:3111"}
-											onChange={(event) => setAgentMemoryUrl(event.target.value)}
-											placeholder="http://localhost:3111"
-											data-testid="self-improving-agent-memory-url-input"
-										/>
+												{currentMemoryBackend === "agentmemory" && setAgentMemoryUrl && (
+													<div className="space-y-2">
+														<label className="block font-medium">
+															{t(
+																"settings:experimental.SELF_IMPROVING.agentMemoryUrlLabel",
+																{
+																	defaultValue: "agentmemory URL",
+																},
+															)}
+														</label>
+														<Input
+															value={agentMemoryUrl ?? "http://localhost:3111"}
+															onChange={(event) => setAgentMemoryUrl(event.target.value)}
+															placeholder="http://localhost:3111"
+															data-testid="self-improving-agent-memory-url-input"
+														/>
+													</div>
+												)}
+												<SelfImprovingStatus />
+											</div>
+										)}
 									</div>
-								)}
-								<SelfImprovingStatus />
-							</div>
-						)}
-						</SearchableSetting>
-					)
-				}
-				return (
+								</SearchableSetting>
+							)
+						}
+						return (
 							<SearchableSetting
 								key={config[0]}
 								settingId={`experimental-${config[0].toLowerCase()}`}
