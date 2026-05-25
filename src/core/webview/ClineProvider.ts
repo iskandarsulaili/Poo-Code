@@ -271,11 +271,7 @@ export class ClineProvider
 							mode,
 							workspacePath: this.currentWorkspacePath,
 							success,
-							...(success
-								? {
-										toolNames: instance.toolUsage ? Object.keys(instance.toolUsage) : undefined,
-									}
-								: {}),
+							toolNames: instance.toolUsage ? Object.keys(instance.toolUsage) : undefined,
 						}),
 					)
 					.catch((error) => {

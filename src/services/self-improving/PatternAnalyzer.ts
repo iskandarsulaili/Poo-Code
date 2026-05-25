@@ -103,7 +103,7 @@ export class PatternAnalyzer {
 		const patterns: LearnedPattern[] = []
 		const successEvents = events.filter((event) => event.signal === "TASK_SUCCESS")
 
-		if (successEvents.length < 3) {
+		if (successEvents.length < 2) {
 			return patterns
 		}
 
@@ -133,7 +133,7 @@ export class PatternAnalyzer {
 					confidenceScore: Math.min(1, existing.confidenceScore + frequency * 0.03),
 					successRate: Math.min(1, existing.successRate + frequency * 0.02),
 				})
-			} else if (frequency >= 3) {
+			} else if (frequency >= 2) {
 				patterns.push({
 					id: crypto.randomUUID(),
 					patternType: "tool",
@@ -141,7 +141,7 @@ export class PatternAnalyzer {
 					summary: `Effective tool combination: ${toolKey}`,
 					confidenceScore: Math.min(0.6, frequency * 0.1),
 					frequency,
-					successRate: 0.7,
+					successRate: 0.6,
 					firstSeenAt: now,
 					lastSeenAt: now,
 					sourceSignals: ["TASK_SUCCESS"],

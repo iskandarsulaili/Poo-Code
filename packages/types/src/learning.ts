@@ -19,8 +19,8 @@ export type FeedbackSignal = z.infer<typeof feedbackSignalSchema>
  */
 export const learningConfigSchema = z.object({
 	enabled: z.boolean().default(false),
-	reviewOnTurnCount: z.number().int().min(1).default(10),
-	reviewOnToolIterationCount: z.number().int().min(1).default(50),
+	reviewOnTurnCount: z.number().int().min(1).default(5),
+	reviewOnToolIterationCount: z.number().int().min(1).default(20),
 	maxStoredPatterns: z.number().int().min(1).default(100),
 	maxStoredEvents: z.number().int().min(1).default(500),
 	maxPromptPatterns: z.number().int().min(1).default(5),
