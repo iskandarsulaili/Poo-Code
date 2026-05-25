@@ -363,8 +363,74 @@ export class CuratorService {
 		return record.pinned || record.createdBy !== "agent"
 	}
 
-	private async runCuratorReview(_report: CuratorReport): Promise<void> {
-		// Reserved for future rubric-driven LLM curator review.
+	private async runCuratorReview(report: CuratorReport): Promise<void> {
+		try {
+			const candidates = this.skillUsageStore.getAgentCreatedForReview()
+			if (candidates.length === 0) {
+				return
+			}
+
+			const pinned = this.skillUsageStore.getAgentCreatedPinned()
+			const candidateTable = this.renderCandidateList(candidates, pinned)
+			this.logger.appendLine(
+				`[CuratorService] LLM review: ${candidates.length} agent-created candidates, ${pinned.length} pinned`,
+			)
+
+			// Reserved for future rubric-driven LLM curator review pass.
+			// When implemented, this will:
+			// 1. Pre-run tar.gz backup via snapshot
+			// 2. Render candidate list as markdown table
+			// 3. Spawn an LLM sub-session with CURATOR_REVIEW_PROMPT
+			// 4. Parse structured yaml output from LLM response
+			// 5. Reconcile absorbed_into declarations vs yaml vs tool-call audit
+			// 6. Write consolidation report
+
+			// For now, log the candidate landscape so it's visible in output
+			this.logger.appendLine(`[CuratorService] Review candidates:\n${candidateTable}`)
+		} catch (error) {
+			this.logger.appendLine(
+				`[CuratorService] Review error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * Render a candidate list for LLM review, showing agent-created skills
+	 * and separately listing pinned skills that are excluded from mutations.
+	 * Format mirrors Hermes' _render_candidate_list().
+	 */
+	private renderCandidateList(candidates: SkillTelemetryRecord[], pinned: SkillTelemetryRecord[]): string {
+		const lines: string[] = []
+		const now = Date.now()
+
+		lines.push("## Agent-Created Skills (candidates for review)")
+		lines.push("")
+		lines.push("| name | state | pinned | frequency | use | view | patch | last_activity |")
+		lines.push("|------|-------|--------|-----------|-----|------|-------|---------------|")
+
+		for (const skill of candidates) {
+			const lastActivity = skill.lastActivityAt > 0
+				? `${Math.round((now - skill.lastActivityAt) / (24 * 60 * 60 * 1000))}d ago`
+				: "never"
+			lines.push(
+				`| ${skill.skillName} | ${skill.state} | ${skill.pinned ? "yes" : "no"} | ` +
+				`${skill.useCount} | ${skill.useCount} | ${skill.viewCount} | ${skill.patchCount} | ${lastActivity} |`,
+			)
+		}
+
+		lines.push("")
+		lines.push(`## Pinned Agent-Created Skills (excluded from mutations)`)
+		lines.push("")
+
+		if (pinned.length > 0) {
+			for (const skill of pinned) {
+				lines.push(`- ${skill.skillName} (${skill.state})`)
+			}
+		} else {
+			lines.push("(none)")
+		}
+
+		return lines.join("\n")
 	}
 
 	private async writeReport(report: CuratorReport): Promise<void> {

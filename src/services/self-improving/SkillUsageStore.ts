@@ -404,6 +404,7 @@ export class SkillUsageStore {
 		archived: number
 		pinned: number
 		agentCreated: number
+		pinnedAgentCreated: number
 	} {
 		const records = Array.from(this.records.values())
 		return {
@@ -413,7 +414,56 @@ export class SkillUsageStore {
 			archived: records.filter((record) => record.state === "archived").length,
 			pinned: records.filter((record) => record.pinned).length,
 			agentCreated: records.filter((record) => record.createdBy === "agent").length,
+			pinnedAgentCreated: records.filter((record) => record.createdBy === "agent" && record.pinned).length,
 		}
+	}
+	/**
+	 * Get agent-created skills for curator review (excludes pinned and non-agent).
+	 */
+	getAgentCreatedForReview(): SkillTelemetryRecord[] {
+		return this.getAll().filter(
+			(record) => record.createdBy === "agent" && !record.pinned,
+		)
+	}
+
+	/**
+	 * Get agent-created pinned skills.
+	 */
+	getAgentCreatedPinned(): SkillTelemetryRecord[] {
+		return this.getAll().filter(
+			(record) => record.createdBy === "agent" && record.pinned,
+		)
+	}
+
+	/**
+	 * Move a skill record to archived state.
+	 * Sets archivedAt timestamp and transitions state.
+	 */
+	async archive(skillId: string): Promise<void> {
+		const record = this.getRecord(skillId)
+		if (!record) {
+			return
+		}
+
+		record.state = "archived"
+		record.archivedAt = Date.now()
+		record.lastActivityAt = Date.now()
+		await this.persist()
+	}
+
+	/**
+	 * Restore an archived skill back to active.
+	 */
+	async restore(skillId: string): Promise<void> {
+		const record = this.getRecord(skillId)
+		if (!record) {
+			return
+		}
+
+		record.state = "active"
+		record.archivedAt = undefined
+		record.lastActivityAt = Date.now()
+		await this.persist()
 	}
 
 	/**

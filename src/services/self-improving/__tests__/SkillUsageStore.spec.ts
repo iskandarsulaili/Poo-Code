@@ -97,6 +97,7 @@ describe("SkillUsageStore", () => {
 			archived: 0,
 			pinned: 0,
 			agentCreated: 0,
+			pinnedAgentCreated: 0,
 		})
 	})
 })
