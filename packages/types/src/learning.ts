@@ -38,6 +38,7 @@ export const DEFAULT_LEARNING_CONFIG: LearningConfig = {
 	enabled: true,
 	reviewOnTurnCount: 3,
 	reviewOnToolIterationCount: 10,
+	reviewOnEveryTurn: false,
 	maxStoredPatterns: 100,
 	maxStoredEvents: 500,
 	maxPromptPatterns: 5,

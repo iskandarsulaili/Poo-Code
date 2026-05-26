@@ -541,7 +541,11 @@ export class SelfImprovingManager {
 						this.resolveSkillProvenance(name, source),
 					hasSkill: (name: string, source: "global" | "project") =>
 						this.skillsManager?.hasSkill?.(name, source) ?? false,
-					isAutoSkillsEnabled: () => SelfImprovingManager.isAutoSkillsEnabled(this.getExperiments()),
+					isAutoSkillsEnabled: () =>
+						SelfImprovingManager.isAutoSkillsEnabled(
+							this.getExperiments(),
+							this.runtime?.store.getConfig().enabled,
+						),
 					getAutoSkillsScope: () => this.resolveAutoSkillsScope(),
 				}),
 				codeIndexAdapter: new CodeIndexAdapter(this.logger, this.getCodeIndexInfo),
