@@ -669,6 +669,7 @@ export class SelfImprovingManager {
 		const counters = store.getCounters()
 		const config = store.getConfig()
 		if (
+			config.reviewOnEveryTurn ||
 			counters.userTurnsSinceReview >= config.reviewOnTurnCount ||
 			counters.toolIterationsSinceReview >= config.reviewOnToolIterationCount
 		) {

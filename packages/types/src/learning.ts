@@ -21,6 +21,7 @@ export const learningConfigSchema = z.object({
 	enabled: z.boolean().default(false),
 	reviewOnTurnCount: z.number().int().min(1).default(5),
 	reviewOnToolIterationCount: z.number().int().min(1).default(20),
+	reviewOnEveryTurn: z.boolean().default(false),
 	maxStoredPatterns: z.number().int().min(1).default(100),
 	maxStoredEvents: z.number().int().min(1).default(500),
 	maxPromptPatterns: z.number().int().min(1).default(5),
@@ -37,6 +38,7 @@ export const DEFAULT_LEARNING_CONFIG: LearningConfig = {
 	enabled: false,
 	reviewOnTurnCount: 10,
 	reviewOnToolIterationCount: 50,
+	reviewOnEveryTurn: false,
 	maxStoredPatterns: 100,
 	maxStoredEvents: 500,
 	maxPromptPatterns: 5,
@@ -130,6 +132,7 @@ export const actionTypeSchema = z.enum([
 	"SKILL_SUGGESTION",
 	"SKILL_CREATE",
 	"SKILL_UPDATE",
+	"SKILL_MERGE",
 ])
 
 export type ActionType = z.infer<typeof actionTypeSchema>

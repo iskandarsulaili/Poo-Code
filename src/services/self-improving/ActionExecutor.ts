@@ -74,6 +74,9 @@ export class ActionExecutor {
 				case "SKILL_UPDATE":
 					executed = await this.executeSkillUpdate(action)
 					break
+				case "SKILL_MERGE":
+					executed = await this.executeSkillMerge(action)
+					break
 				default:
 					this.logger.appendLine(`[ActionExecutor] Unknown action type: ${action.actionType}`)
 					return false
@@ -218,6 +221,59 @@ export class ActionExecutor {
 		this.skillUsageStore.getOrCreate(skillId, skillName, "agent")
 		await this.skillUsageStore.bumpPatch(skillId)
 		this.logger.appendLine(`[ActionExecutor] Skill updated: ${skillName}`)
+		return true
+	}
+
+	private async executeSkillMerge(action: ImprovementAction): Promise<boolean> {
+		const umbrellaName = this.readStringPayload(action.payload.umbrellaName)
+		const absorbNamesRaw = action.payload.absorbNames
+		const absorbNames: string[] = Array.isArray(absorbNamesRaw)
+			? absorbNamesRaw.filter((n): n is string => typeof n === "string" && n.trim().length > 0)
+			: []
+		const newContent = this.readStringPayload(action.payload.content)
+
+		if (!umbrellaName || absorbNames.length === 0) {
+			return false
+		}
+
+		// 1. Create or update the umbrella skill
+		if (newContent) {
+			const source = this.readSkillSource(action.payload.source) ?? "global"
+			const skillId = `skill:${source}:${umbrellaName}`
+			const description =
+				this.readStringPayload(action.payload.description) ?? `Umbrella skill merging ${absorbNames.join(", ")}`
+			const modeSlugs = this.readStringArrayPayload(action.payload.modeSlugs)
+
+			if (this.skillsManager) {
+				const existing = this.skillUsageStore.get(skillId)
+				if (existing) {
+					await this.skillsManager.updateSkillContent(umbrellaName, source, newContent, modeSlugs[0])
+					await this.skillUsageStore.bumpPatch(skillId)
+				} else {
+					await this.skillsManager.createSkillFromContent(
+						umbrellaName,
+						source,
+						description,
+						newContent,
+						modeSlugs,
+					)
+					this.skillUsageStore.getOrCreate(skillId, umbrellaName, "agent")
+				}
+			} else {
+				this.skillUsageStore.getOrCreate(skillId, umbrellaName, "agent")
+			}
+		}
+
+		// 2. Mark each absorbed skill
+		for (const absorbName of absorbNames) {
+			const source = this.readSkillSource(action.payload.source) ?? "global"
+			const absorbId = `skill:${source}:${absorbName}`
+			this.skillUsageStore.setAbsorbedInto(absorbId, umbrellaName)
+			await this.skillUsageStore.transitionState(absorbId, "archived")
+			this.logger.appendLine(`[ActionExecutor] Merged ${absorbName} into ${umbrellaName}`)
+		}
+
+		this.logger.appendLine(`[ActionExecutor] Merge complete: ${absorbNames.length} skills → ${umbrellaName}`)
 		return true
 	}
 

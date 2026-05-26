@@ -42,6 +42,8 @@ export interface SkillTelemetryRecord {
 	archivedAt?: number
 	/** Tags for categorization */
 	tags?: string[]
+	/** Name of umbrella skill this was absorbed into (set by curator merge) */
+	absorbedInto?: string
 }
 
 const SKILL_PROVENANCE_VALUES: ReadonlySet<SkillProvenance> = new Set(["agent", "user", "bundled", "hub", "unknown"])
@@ -175,6 +177,10 @@ export class SkillUsageStore {
 			lastActivityAt,
 			archivedAt: typeof candidate.archivedAt === "number" ? candidate.archivedAt : undefined,
 			tags: this.normalizeTags(candidate.tags),
+			absorbedInto:
+				typeof candidate.absorbedInto === "string" && candidate.absorbedInto.trim().length > 0
+					? candidate.absorbedInto
+					: undefined,
 		}
 	}
 
@@ -421,18 +427,14 @@ export class SkillUsageStore {
 	 * Get agent-created skills for curator review (excludes pinned and non-agent).
 	 */
 	getAgentCreatedForReview(): SkillTelemetryRecord[] {
-		return this.getAll().filter(
-			(record) => record.createdBy === "agent" && !record.pinned,
-		)
+		return this.getAll().filter((record) => record.createdBy === "agent" && !record.pinned)
 	}
 
 	/**
 	 * Get agent-created pinned skills.
 	 */
 	getAgentCreatedPinned(): SkillTelemetryRecord[] {
-		return this.getAll().filter(
-			(record) => record.createdBy === "agent" && record.pinned,
-		)
+		return this.getAll().filter((record) => record.createdBy === "agent" && record.pinned)
 	}
 
 	/**
@@ -463,6 +465,20 @@ export class SkillUsageStore {
 		record.state = "active"
 		record.archivedAt = undefined
 		record.lastActivityAt = Date.now()
+		await this.persist()
+	}
+
+	/**
+	 * Set the absorbedInto field on a skill record.
+	 * Used by curator merge actions to mark skills as absorbed into an umbrella.
+	 */
+	async setAbsorbedInto(skillId: string, umbrellaName: string): Promise<void> {
+		const record = this.getRecord(skillId)
+		if (!record) {
+			return
+		}
+
+		record.absorbedInto = umbrellaName
 		await this.persist()
 	}
 
