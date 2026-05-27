@@ -312,7 +312,9 @@ describe("SelfImprovingManager", () => {
 		await manager.initialize()
 		await manager.recordTaskCompletion({ taskId: "task-1", success: true, toolNames: ["read_file"] })
 
-		expect(mockState.stores).toHaveLength(0)
+		// getOrCreateRuntime is called during initialize, so store is created
+		expect(mockState.stores).toHaveLength(1)
+		// but no timers are started since experiment is disabled
 		expect(vi.getTimerCount()).toBe(0)
 		expect(await manager.getStatus()).toEqual({
 			enabled: false,
@@ -323,6 +325,7 @@ describe("SelfImprovingManager", () => {
 			memoryEntries: 0,
 			skillRecords: 0,
 			curatorStatus: DEFAULT_CURATOR_STATUS,
+			autoMode: expect.objectContaining({ autoModeEnabled: true }),
 		})
 	})
 
@@ -338,7 +341,8 @@ describe("SelfImprovingManager", () => {
 		expect(mockState.skillUsageStores[0].initialize).toHaveBeenCalledTimes(1)
 		expect(mockState.transcriptRecalls[0].initialize).toHaveBeenCalledTimes(1)
 		expect(mockState.curatorServices[0].initialize).toHaveBeenCalledTimes(1)
-		expect(vi.getTimerCount()).toBe(2)
+		// 2 existing timers + 1 auto mode review timer
+		expect(vi.getTimerCount()).toBe(3)
 		expect(await manager.getStatus()).toMatchObject({ enabled: true, started: true })
 	})
 
@@ -443,6 +447,7 @@ describe("SelfImprovingManager", () => {
 			memoryEntries: 0,
 			skillRecords: 0,
 			curatorStatus: DEFAULT_CURATOR_STATUS,
+			autoMode: expect.objectContaining({ autoModeEnabled: true }),
 		})
 	})
 

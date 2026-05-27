@@ -18,7 +18,7 @@ describe("experiments", () => {
 		it("is configured correctly", () => {
 			expect(EXPERIMENT_IDS.SELF_IMPROVING).toBe("selfImproving")
 			expect(experimentConfigsMap.SELF_IMPROVING).toMatchObject({
-				enabled: false,
+				enabled: true,
 			})
 		})
 	})
@@ -27,7 +27,7 @@ describe("experiments", () => {
 		it("is configured correctly", () => {
 			expect(EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS).toBe("selfImprovingAutoSkills")
 			expect(experimentConfigsMap.SELF_IMPROVING_AUTO_SKILLS).toMatchObject({
-				enabled: false,
+				enabled: true,
 			})
 		})
 	})
@@ -41,6 +41,7 @@ describe("experiments", () => {
 				customTools: false,
 				selfImproving: false,
 				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -53,6 +54,7 @@ describe("experiments", () => {
 				customTools: false,
 				selfImproving: false,
 				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -65,6 +67,7 @@ describe("experiments", () => {
 				customTools: false,
 				selfImproving: false,
 				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -77,6 +80,7 @@ describe("experiments", () => {
 				customTools: false,
 				selfImproving: false,
 				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
 			}
 
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.SELF_IMPROVING)).toBe(false)

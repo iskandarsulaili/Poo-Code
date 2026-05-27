@@ -272,6 +272,13 @@ export class ClineProvider
 							workspacePath: this.currentWorkspacePath,
 							success,
 							toolNames: instance.toolUsage ? Object.keys(instance.toolUsage) : undefined,
+							errorKey: !success && instance.abortReason ? instance.abortReason : undefined,
+							toolIterationCount: instance.toolUsage
+								? Object.values(instance.toolUsage).reduce(
+										(sum, toolStat) => sum + toolStat.attempts,
+										0,
+									)
+								: undefined,
 						}),
 					)
 					.catch((error) => {

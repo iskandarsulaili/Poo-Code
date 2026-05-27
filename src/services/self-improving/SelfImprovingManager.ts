@@ -28,6 +28,9 @@ import type { CuratorReport } from "./CuratorService"
 import { ReviewPromptFactory } from "./ReviewPromptFactory"
 import { TranscriptRecall } from "./TranscriptRecall"
 import { InsightsEngine } from "./InsightsEngine"
+import { AutoModeOrchestrator } from "./AutoModeOrchestrator"
+import type { AutoModeConfig } from "./AutoModeOrchestrator"
+import { ModeFactoryService } from "./ModeFactoryService"
 import type { InsightsReport } from "./InsightsEngine"
 
 const SELF_IMPROVING_EXPERIMENT_ID = "selfImproving"
@@ -63,6 +66,8 @@ export class SelfImprovingManager {
 	private memoryBackendType: "builtin" | "agentmemory"
 	private agentMemoryUrl: string | undefined
 	private storageBasePath: string
+	private autoModeOrchestrator: AutoModeOrchestrator
+	private modeFactory: ModeFactoryService
 
 	private runtime: Runtime | undefined
 	private started = false
@@ -95,6 +100,12 @@ export class SelfImprovingManager {
 		this.reviewPromptFactory = new ReviewPromptFactory()
 		this.transcriptRecall = this.createTranscriptRecall()
 		this.insightsEngine = new InsightsEngine(this.globalStoragePath)
+		this.modeFactory = new ModeFactoryService(this.logger)
+		this.autoModeOrchestrator = new AutoModeOrchestrator(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
+			reviewIntervalMs: 30000,
+		})
+		this.autoModeOrchestrator.setModeFactory(this.modeFactory)
 	}
 
 	static isExperimentEnabled(experiments: Experiments | undefined, persistedEnabled?: boolean): boolean {
@@ -153,6 +164,12 @@ export class SelfImprovingManager {
 			await this.insightsEngine.initialize()
 			this.started = true
 			this.startTimers(runtime.store)
+
+			// Wire up auto mode orchestrator with pattern analyzer and pattern provider
+			this.autoModeOrchestrator.setPatternAnalyzer(runtime.patternAnalyzer)
+			this.autoModeOrchestrator.setPatternProvider(() => runtime.store.getPatterns() as any[])
+			await this.autoModeOrchestrator.start()
+
 			this.logger.appendLine(
 				"[SelfImprovingManager] Initialized: " +
 					`${runtime.store.getPatterns().length} patterns, ` +
@@ -199,6 +216,7 @@ export class SelfImprovingManager {
 		}
 
 		this.stopTimers()
+		this.autoModeOrchestrator.stop()
 
 		try {
 			if (this.started) {
@@ -250,6 +268,7 @@ export class SelfImprovingManager {
 				Math.max(1, info.toolIterationCount ?? info.toolNames?.length ?? 1),
 			)
 			await this.checkReviewTriggers(this.runtime.store)
+			await this.autoModeOrchestrator.onTaskCompleted(info.success ?? false)
 		} catch (error) {
 			this.logError("recordTaskCompletion error", error)
 		}
@@ -483,6 +502,7 @@ export class SelfImprovingManager {
 		curatorStatus: ReturnType<CuratorService["getStatus"]>
 		lastReviewAt?: number
 		lastCuratorRunAt?: number
+		autoMode: Record<string, unknown>
 	}> {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
 		const curatorStatus = this.curatorService.getStatus()
@@ -496,6 +516,7 @@ export class SelfImprovingManager {
 				memoryEntries: 0,
 				skillRecords: 0,
 				curatorStatus,
+				autoMode: this.autoModeOrchestrator.getStatus(),
 			}
 		}
 
@@ -509,6 +530,7 @@ export class SelfImprovingManager {
 				memoryEntries: 0,
 				skillRecords: 0,
 				curatorStatus,
+				autoMode: this.autoModeOrchestrator.getStatus(),
 			}
 		}
 
@@ -528,6 +550,7 @@ export class SelfImprovingManager {
 				curatorStatus,
 				lastReviewAt: telemetry.lastReviewAt,
 				lastCuratorRunAt: telemetry.lastCuratorRunAt,
+				autoMode: this.autoModeOrchestrator.getStatus(),
 			}
 		} catch {
 			return {
@@ -539,6 +562,7 @@ export class SelfImprovingManager {
 				memoryEntries: 0,
 				skillRecords: 0,
 				curatorStatus,
+				autoMode: this.autoModeOrchestrator.getStatus(),
 			}
 		}
 	}

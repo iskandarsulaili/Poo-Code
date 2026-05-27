@@ -1,76 +1,8 @@
 import * as fs from "fs/promises"
-import * as fsSync from "fs"
 import * as path from "path"
 
 import { safeWriteJson } from "../../utils/safeWriteJson"
 import type { Logger } from "./types"
-
-/**
- * FileLock - simple file-based locking mechanism for concurrent write protection.
- *
- * Uses atomic `openSync` with the `wx` flag to create a lock file.
- * Handles stale locks (older than 10 seconds) automatically.
- * Mirrors Hermes' fcntl/msvcrt-based file locking pattern for skill usage telemetry.
- */
-class FileLock {
-	private lockFilePath: string
-	private lockFd: number | null = null
-	private retryDelay = 50 // ms between retries
-	private maxRetries = 20 // max retry attempts
-
-	constructor(lockFilePath: string) {
-		this.lockFilePath = lockFilePath
-	}
-
-	/**
-	 * Acquire the file lock. Retries with delay if lock is held by another process.
-	 * Detects and cleans up stale locks older than 10 seconds.
-	 */
-	async acquire(): Promise<void> {
-		for (let attempt = 0; attempt < this.maxRetries; attempt++) {
-			try {
-				this.lockFd = fsSync.openSync(this.lockFilePath, "wx")
-				fsSync.writeSync(this.lockFd, `${process.pid}\n`)
-				return
-			} catch (err: any) {
-				if (err.code !== "EEXIST") throw err
-				// Check if lock is stale (older than 10 seconds)
-				try {
-					const stat = fsSync.statSync(this.lockFilePath)
-					const age = Date.now() - stat.mtimeMs
-					if (age > 10000) {
-						// Stale lock - remove and retry
-						fsSync.unlinkSync(this.lockFilePath)
-						continue
-					}
-				} catch {
-					// Lock file disappeared - retry
-				}
-				await new Promise((resolve) => setTimeout(resolve, this.retryDelay))
-			}
-		}
-		throw new Error(`Could not acquire lock after ${this.maxRetries} retries: ${this.lockFilePath}`)
-	}
-
-	/**
-	 * Release the file lock. Closes the file descriptor and removes the lock file.
-	 */
-	release(): void {
-		if (this.lockFd !== null) {
-			try {
-				fsSync.closeSync(this.lockFd)
-			} catch {
-				// Ignore close errors
-			}
-			this.lockFd = null
-		}
-		try {
-			fsSync.unlinkSync(this.lockFilePath)
-		} catch {
-			// Ignore unlink errors
-		}
-	}
-}
 
 /**
  * Skill provenance - who created the skill
@@ -139,13 +71,6 @@ export class SkillUsageStore {
 	}
 
 	/**
-	 * Get the lock file path (data file path + ".lock").
-	 */
-	private get lockFilePath(): string {
-		return this.filePath + ".lock"
-	}
-
-	/**
 	 * Initialize the store - load persisted telemetry from disk.
 	 */
 	async initialize(): Promise<void> {
@@ -198,16 +123,12 @@ export class SkillUsageStore {
 	 * Persist telemetry to disk atomically with file-locking for concurrent write protection.
 	 */
 	private async persist(): Promise<void> {
-		const lock = new FileLock(this.lockFilePath)
 		try {
-			await lock.acquire()
 			await safeWriteJson(this.filePath, Array.from(this.records.values()), { prettyPrint: true })
 		} catch (error) {
 			this.logger.appendLine(
 				`[SkillUsageStore] Persist error: ${error instanceof Error ? error.message : String(error)}`,
 			)
-		} finally {
-			lock.release()
 		}
 	}
 
