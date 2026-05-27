@@ -326,6 +326,13 @@ describe("SelfImprovingManager", () => {
 			skillRecords: 0,
 			curatorStatus: DEFAULT_CURATOR_STATUS,
 			autoMode: expect.objectContaining({ autoModeEnabled: true }),
+			reviewTeam: {
+				enabled: true,
+				innovatorWeight: 0.3,
+				contrarianWeight: 0.3,
+				devilsAdvocateWeight: 0.3,
+				deciderThreshold: 0.6,
+			},
 		})
 	})
 
@@ -448,6 +455,13 @@ describe("SelfImprovingManager", () => {
 			skillRecords: 0,
 			curatorStatus: DEFAULT_CURATOR_STATUS,
 			autoMode: expect.objectContaining({ autoModeEnabled: true }),
+			reviewTeam: {
+				enabled: true,
+				innovatorWeight: 0.3,
+				contrarianWeight: 0.3,
+				devilsAdvocateWeight: 0.3,
+				deciderThreshold: 0.6,
+			},
 		})
 	})
 

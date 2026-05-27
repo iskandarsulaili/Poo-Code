@@ -76,6 +76,7 @@ import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import { SelfImprovingManager } from "../../services/self-improving"
+import { TrustService } from "../../services/self-improving/TrustService"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 
 import { fileExistsAtPath } from "../../utils/fs"
@@ -165,6 +166,7 @@ export class ClineProvider
 	public readonly providerSettingsManager: ProviderSettingsManager
 	public readonly customModesManager: CustomModesManager
 	public readonly selfImprovingManager: SelfImprovingManager
+	public readonly trustService: TrustService
 
 	constructor(
 		readonly context: vscode.ExtensionContext,
@@ -253,6 +255,16 @@ export class ClineProvider
 				}
 			},
 		})
+
+		// Initialize TrustService for auto-approval (experiment-gated)
+		this.trustService = new TrustService(
+			{
+				appendLine: (message: string) => this.log(message),
+			},
+			{
+				enabled: this.getGlobalStateSafe("experiments")?.selfImprovingFullTrust ?? false,
+			},
+		)
 
 		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)
 

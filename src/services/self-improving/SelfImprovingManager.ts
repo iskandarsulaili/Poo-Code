@@ -32,6 +32,8 @@ import { AutoModeOrchestrator } from "./AutoModeOrchestrator"
 import type { AutoModeConfig } from "./AutoModeOrchestrator"
 import { ModeFactoryService } from "./ModeFactoryService"
 import type { InsightsReport } from "./InsightsEngine"
+import { ReviewTeamService } from "./ReviewTeamService"
+import type { ReviewTeamConfig } from "./ReviewTeamService"
 
 const SELF_IMPROVING_EXPERIMENT_ID = "selfImproving"
 const REVIEW_CHECK_INTERVAL_MS = 60_000
@@ -68,6 +70,7 @@ export class SelfImprovingManager {
 	private storageBasePath: string
 	private autoModeOrchestrator: AutoModeOrchestrator
 	private modeFactory: ModeFactoryService
+	private reviewTeam: ReviewTeamService
 
 	private runtime: Runtime | undefined
 	private started = false
@@ -106,6 +109,9 @@ export class SelfImprovingManager {
 			reviewIntervalMs: 30000,
 		})
 		this.autoModeOrchestrator.setModeFactory(this.modeFactory)
+		this.reviewTeam = new ReviewTeamService(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingReviewTeam ?? true,
+		})
 	}
 
 	static isExperimentEnabled(experiments: Experiments | undefined, persistedEnabled?: boolean): boolean {
@@ -361,11 +367,27 @@ export class SelfImprovingManager {
 				this.runtime.store.addPattern(pattern)
 			}
 
+			// Review patterns through multi-agent team
+			const { approved: approvedPatterns, rejected: rejectedPatterns } =
+				await this.reviewTeam.reviewPatterns(newPatterns)
+
+			if (rejectedPatterns.length > 0) {
+				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedPatterns.length} patterns`)
+			}
+
 			const actions = this.runtime.improvementApplier.generateActions([
 				...this.runtime.store.getPatterns(),
 			] as LearnedPattern[])
 			for (const action of actions) {
 				this.runtime.store.addAction(action)
+			}
+
+			// Review actions through multi-agent team
+			const { approved: approvedActions, rejected: rejectedActions } =
+				await this.reviewTeam.reviewActions(actions)
+
+			if (rejectedActions.length > 0) {
+				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedActions.length} actions`)
 			}
 
 			const pendingActions = [...this.runtime.store.getPendingActions()] as ImprovementAction[]
@@ -503,9 +525,17 @@ export class SelfImprovingManager {
 		lastReviewAt?: number
 		lastCuratorRunAt?: number
 		autoMode: Record<string, unknown>
+		reviewTeam: Record<string, unknown>
 	}> {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
 		const curatorStatus = this.curatorService.getStatus()
+		const reviewTeamStatus = {
+			enabled: this.reviewTeam.getConfig().enabled,
+			innovatorWeight: this.reviewTeam.getConfig().innovatorWeight,
+			contrarianWeight: this.reviewTeam.getConfig().contrarianWeight,
+			devilsAdvocateWeight: this.reviewTeam.getConfig().devilsAdvocateWeight,
+			deciderThreshold: this.reviewTeam.getConfig().deciderThreshold,
+		}
 		if (!enabled) {
 			return {
 				enabled: false,
@@ -517,6 +547,7 @@ export class SelfImprovingManager {
 				skillRecords: 0,
 				curatorStatus,
 				autoMode: this.autoModeOrchestrator.getStatus(),
+				reviewTeam: reviewTeamStatus,
 			}
 		}
 
@@ -531,6 +562,7 @@ export class SelfImprovingManager {
 				skillRecords: 0,
 				curatorStatus,
 				autoMode: this.autoModeOrchestrator.getStatus(),
+				reviewTeam: reviewTeamStatus,
 			}
 		}
 
@@ -551,6 +583,7 @@ export class SelfImprovingManager {
 				lastReviewAt: telemetry.lastReviewAt,
 				lastCuratorRunAt: telemetry.lastCuratorRunAt,
 				autoMode: this.autoModeOrchestrator.getStatus(),
+				reviewTeam: reviewTeamStatus,
 			}
 		} catch {
 			return {
@@ -563,6 +596,7 @@ export class SelfImprovingManager {
 				skillRecords: 0,
 				curatorStatus,
 				autoMode: this.autoModeOrchestrator.getStatus(),
+				reviewTeam: reviewTeamStatus,
 			}
 		}
 	}
