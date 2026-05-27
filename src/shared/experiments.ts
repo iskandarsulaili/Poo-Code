@@ -22,7 +22,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	IMAGE_GENERATION: { enabled: false },
 	RUN_SLASH_COMMAND: { enabled: false },
 	CUSTOM_TOOLS: { enabled: false },
-	SELF_IMPROVING: { enabled: false },
+	SELF_IMPROVING: { enabled: true },
 	SELF_IMPROVING_AUTO_SKILLS: { enabled: false },
 }
 

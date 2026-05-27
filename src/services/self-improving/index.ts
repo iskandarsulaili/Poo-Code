@@ -22,6 +22,7 @@ export { ActionExecutor } from "./ActionExecutor"
 export { CuratorService } from "./CuratorService"
 export { ReviewPromptFactory } from "./ReviewPromptFactory"
 export { TranscriptRecall } from "./TranscriptRecall"
+export { InsightsEngine } from "./InsightsEngine"
 
 export type { CodeIndexInfo, Logger, PromptContext, SelfImprovingManagerOptions, TaskEventInfo } from "./types"
 export type { MemoryBackend, MemoryBackendType } from "./MemoryBackend"
@@ -30,5 +31,6 @@ export type { SkillTelemetryRecord, SkillProvenance, SkillLifecycleState } from 
 export type { CuratorConfig, CuratorReport } from "./CuratorService"
 export type { ReviewType, ReviewPrompt } from "./ReviewPromptFactory"
 export type { TranscriptEntry } from "./TranscriptRecall"
+export type { InsightsReport } from "./InsightsEngine"
 
 export { DEFAULT_CONFIG, EMPTY_STATE } from "./types"

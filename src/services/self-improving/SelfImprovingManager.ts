@@ -27,6 +27,8 @@ import { CuratorService } from "./CuratorService"
 import type { CuratorReport } from "./CuratorService"
 import { ReviewPromptFactory } from "./ReviewPromptFactory"
 import { TranscriptRecall } from "./TranscriptRecall"
+import { InsightsEngine } from "./InsightsEngine"
+import type { InsightsReport } from "./InsightsEngine"
 
 const SELF_IMPROVING_EXPERIMENT_ID = "selfImproving"
 const REVIEW_CHECK_INTERVAL_MS = 60_000
@@ -56,6 +58,7 @@ export class SelfImprovingManager {
 	public curatorService: CuratorService
 	public readonly reviewPromptFactory: ReviewPromptFactory
 	public transcriptRecall: TranscriptRecall
+	public readonly insightsEngine: InsightsEngine
 	private actionExecutor: ActionExecutor
 	private memoryBackendType: "builtin" | "agentmemory"
 	private agentMemoryUrl: string | undefined
@@ -91,6 +94,7 @@ export class SelfImprovingManager {
 		this.curatorService = this.createCuratorService()
 		this.reviewPromptFactory = new ReviewPromptFactory()
 		this.transcriptRecall = this.createTranscriptRecall()
+		this.insightsEngine = new InsightsEngine(this.globalStoragePath)
 	}
 
 	static isExperimentEnabled(experiments: Experiments | undefined, persistedEnabled?: boolean): boolean {
@@ -141,6 +145,7 @@ export class SelfImprovingManager {
 			await this.skillUsageStore.initialize()
 			await this.transcriptRecall.initialize()
 			await this.curatorService.initialize()
+			await this.insightsEngine.initialize()
 			this.started = true
 			this.startTimers(runtime.store)
 			this.logger.appendLine(
@@ -199,6 +204,7 @@ export class SelfImprovingManager {
 			}
 
 			await this.memoryStore.dispose()
+			this.insightsEngine.dispose()
 		} catch (error) {
 			this.logError("Persist on dispose error", error)
 		} finally {
@@ -354,14 +360,36 @@ export class SelfImprovingManager {
 			this.promptRevision += 1
 			this.runtime.store.resetCounters()
 			await this.runtime.store.persist()
+
+			// Refresh the memory snapshot so newly learned patterns are visible in prompts
+			if (this.memoryStore instanceof MemoryStore) {
+				await this.memoryStore.takeSnapshot()
+			}
 			this.logger.appendLine(
 				`[SelfImprovingManager] Review cycle: ${newPatterns.length} patterns, ${actions.length} actions`,
 			)
+			this.logger.appendLine("[SelfImprovingManager] Memory snapshot refreshed after review cycle")
 		} catch (error) {
 			this.logError("Review cycle error", error)
 		} finally {
 			this.reviewInFlight = false
 		}
+	}
+
+	/**
+	 * Immediately trigger a review cycle, bypassing the timer wait.
+	 * Safe to call multiple times - runReviewCycle() has its own gating.
+	 */
+	public async triggerReview(): Promise<void> {
+		if (!SelfImprovingManager.isExperimentEnabled(this.getExperiments())) {
+			return
+		}
+
+		if (!this.started || !this.runtime) {
+			return
+		}
+
+		await this.runReviewCycle()
 	}
 
 	async runCuratorCycle(): Promise<CuratorReport | undefined> {
@@ -508,6 +536,14 @@ export class SelfImprovingManager {
 				curatorStatus,
 			}
 		}
+	}
+
+	/**
+	 * Returns the current insights report with session analysis data.
+	 * Includes token usage, tool usage patterns, error rates, and performance metrics.
+	 */
+	getInsightsReport(): InsightsReport {
+		return this.insightsEngine.generateReport()
 	}
 
 	async reset(): Promise<void> {
@@ -724,6 +760,7 @@ export class SelfImprovingManager {
 	}
 
 	private resolveSkillProvenance(name: string, source?: "global" | "project"): string {
+		// 1. Check explicit provenance from SkillUsageStore (agent-created records)
 		const agentRecord = this.skillUsageStore.getAll().find((record) => {
 			if (record.createdBy !== "agent" || record.skillName !== name) {
 				return false
@@ -739,11 +776,30 @@ export class SelfImprovingManager {
 			return agentRecord.createdBy
 		}
 
-		if (source) {
-			return this.skillsManager?.getSkillProvenanceForSource?.(name, source) ?? "unknown"
+		// 2. Check SkillsManager for known user skills
+		const managerProvenance = source
+			? this.skillsManager?.getSkillProvenanceForSource?.(name, source)
+			: this.skillsManager?.getSkillProvenance(name)
+
+		if (managerProvenance && managerProvenance !== "unknown") {
+			return managerProvenance
 		}
 
-		return this.skillsManager?.getSkillProvenance(name) ?? "unknown"
+		// 3. Heuristic: Check if skill name matches known bundled patterns
+		if (this.isKnownBundledSkill(name)) {
+			return "bundled"
+		}
+
+		return "unknown"
+	}
+
+	/**
+	 * Heuristic check: determine if a skill name matches known bundled/hub patterns.
+	 * This serves as a fallback when explicit provenance records are unavailable.
+	 */
+	private isKnownBundledSkill(skillId: string): boolean {
+		const bundledPatterns = [/^built-in-/i, /^core-/i, /^default-/i]
+		return bundledPatterns.some((pattern) => pattern.test(skillId))
 	}
 
 	private buildSkillId(name: string, source: "global" | "project"): string {

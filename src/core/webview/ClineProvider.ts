@@ -295,6 +295,11 @@ export class ClineProvider
 						`[SelfImproving] recordUserTurn error: ${error instanceof Error ? error.message : String(error)}`,
 					)
 				})
+				this.selfImprovingManager.triggerReview().catch((error) => {
+					this.log(
+						`[SelfImproving] triggerReview error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
 			}
 			const onTaskAborted = async () => {
 				this.emit(RooCodeEventName.TaskAborted, instance.taskId)

@@ -2120,6 +2120,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const tokenUsage = this.getTokenUsage()
 		this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 		this.debouncedEmitTokenUsage.flush()
+
+		// Record token usage in insights engine for session analysis
+		if (tokenUsage) {
+			const totalTokens = (tokenUsage.totalTokensIn ?? 0) + (tokenUsage.totalTokensOut ?? 0)
+			const cost = tokenUsage.totalCost ?? 0
+			this.providerRef
+				.deref()
+				?.getSelfImprovingManager?.()
+				?.insightsEngine?.recordTokenUsage(totalTokens, cost, "session")
+		}
 	}
 
 	public async abortTask(isAbandoned = false) {
@@ -4520,6 +4530,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.toolUsage[toolName].attempts++
+
+		// Record tool usage in insights engine for session analysis
+		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordToolUsage(toolName)
 	}
 
 	public recordToolError(toolName: ToolName, error?: string) {
@@ -4532,6 +4545,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (error) {
 			this.emit(RooCodeEventName.TaskToolFailed, this.taskId, toolName, error)
 		}
+
+		// Record tool error in insights engine for session analysis
+		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordError(toolName, error)
 	}
 
 	// Getters

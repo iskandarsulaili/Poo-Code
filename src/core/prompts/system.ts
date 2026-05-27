@@ -10,7 +10,7 @@ import { isEmpty } from "../../utils/object"
 import { McpHub } from "../../services/mcp/McpHub"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
-import { SelfImprovingManager } from "../../services/self-improving"
+import { SelfImprovingManager, type PromptContext } from "../../services/self-improving"
 
 import type { SystemPromptSettings } from "./types"
 import {
@@ -37,6 +37,31 @@ export function getPromptComponent(
 		return undefined
 	}
 	return component
+}
+
+/**
+ * Format structured PromptContext entries into a markdown string for prompt injection.
+ * Groups entries by their pattern type (prompt enrichment, error avoidance, tool preference).
+ */
+function buildPatternContextString(ctx: PromptContext): string {
+	const sections: string[] = []
+
+	const enrichedInstructions = ctx.entries.filter((e) => e.type === "prompt").map((e) => `- ${e.summary}`)
+	if (enrichedInstructions.length > 0) {
+		sections.push("## Learned Guidance\n" + enrichedInstructions.join("\n"))
+	}
+
+	const errorAvoidanceRules = ctx.entries.filter((e) => e.type === "error").map((e) => `- ${e.summary}`)
+	if (errorAvoidanceRules.length > 0) {
+		sections.push("## Error Avoidance\n" + errorAvoidanceRules.join("\n"))
+	}
+
+	const toolPreferences = ctx.entries.filter((e) => e.type === "tool").map((e) => `- ${e.summary}`)
+	if (toolPreferences.length > 0) {
+		sections.push("## Tool Preferences\n" + toolPreferences.join("\n"))
+	}
+
+	return sections.length > 0 ? sections.join("\n\n") : ""
 }
 
 async function generatePrompt(
@@ -83,6 +108,9 @@ async function generatePrompt(
 
 	// Inject learned guidance from self-improving system (experiment-gated)
 	const learningContext = selfImprovingManager?.getPromptContextString() || ""
+	const promptContext = selfImprovingManager?.getPromptContext()
+	const patternContext = promptContext ? buildPatternContextString(promptContext) : ""
+	const combinedLearningContext = [learningContext, patternContext].filter(Boolean).join("\n\n")
 
 	// Tools catalog is not included in the system prompt.
 	const toolsCatalog = ""
@@ -98,7 +126,7 @@ ${getSharedToolUseSection()}${toolsCatalog}
 ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 
 ${modesSection}
-${skillsSection ? `\n${skillsSection}` : ""}${learningContext}
+${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}

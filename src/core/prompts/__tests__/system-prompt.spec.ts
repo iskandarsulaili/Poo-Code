@@ -276,6 +276,7 @@ describe("SYSTEM_PROMPT", () => {
 	it("should include learned guidance before rules when available", async () => {
 		const selfImprovingManager = {
 			getPromptContextString: () => "\n## Learned Guidance\n- [prompt] Search relevant code before editing\n",
+			getPromptContext: () => undefined,
 		} as unknown as SelfImprovingManager
 
 		const prompt = await SYSTEM_PROMPT(

@@ -42,7 +42,7 @@ export const DEFAULT_CURATOR_CONFIG: CuratorConfig = {
 	archiveAfterDays: 60,
 	backupsEnabled: true,
 	maxBackups: 5,
-	llmReviewEnabled: false,
+	llmReviewEnabled: true,
 }
 
 /**
@@ -54,6 +54,24 @@ export type CuratorAction =
 	| { action: "pin"; name: string }
 	| { action: "unpin"; name: string }
 	| { action: "restore"; name: string }
+	| {
+			action: "demote"
+			name: string
+			demoteTarget: "reference" | "template" | "script"
+			umbrellaSkillId: string
+			umbrellaSkillName: string
+	  }
+
+/**
+ * Reference to a cron job file that references a skill.
+ */
+type CronJobReference = {
+	jobId: string
+	jobName: string
+	skillId: string
+	skillName: string
+	filePath: string
+}
 
 /**
  * Curator run report
@@ -88,6 +106,37 @@ export interface CuratorReport {
 		skillName: string
 		absorbedInto: string
 	}>
+	/** Three-tier classifications for archived skills */
+	classifications?: Array<{
+		skillId: string
+		skillName: string
+		tier: ClassificationTier
+		absorbedInto: string | null
+		summary: string
+		confidence: "high" | "medium" | "low"
+	}>
+	/** Cron job files that had skill references rewritten after consolidation */
+	cronReferencesUpdated?: Array<{
+		jobName: string
+		oldSkillId: string
+		newSkillId: string
+	}>
+}
+
+/**
+ * Three-tier classification for archived skills.
+ * Mirrors Hermes-agent's classification system:
+ * 1. declared — model-declared absorbed_into at delete time
+ * 2. yaml_block — model's structured YAML summary block in SKILL.md
+ * 3. heuristic — tool-call heuristic audit as fallback
+ */
+type ClassificationTier = "declared" | "yaml_block" | "heuristic" | "unclassified"
+
+type ClassificationResult = {
+	tier: ClassificationTier
+	absorbedInto: string | null
+	summary: string
+	confidence: "high" | "medium" | "low"
 }
 
 type CuratorStatus = {
@@ -150,12 +199,19 @@ Return ONLY valid YAML with a top-level "actions" key. Each action must be one o
 5. **restore** — bring an archived skill back to active
    {action: restore, name: "skill-w"}
 
+6. **demote** — move a narrow/specific skill under an umbrella as a reference, template, or script
+   {action: demote, name: "skill-v", demoteTarget: "reference", umbrellaSkillId: "umbrella-id", umbrellaSkillName: "umbrella-name"}
+   demoteTarget must be one of: "reference", "template", "script"
+
 Rules:
 - Only recommend merges for skills with clear overlap in purpose or domain.
 - The "target" of a merge is the umbrella skill name (existing or new).
 - Skills listed in "absorb" will be marked as absorbed_into the target.
 - Prefer pinning high-value skills that should not be mutated.
 - Archive skills that are stale, unused, or superseded.
+- Use **demote** for narrow skills that are a subset of an umbrella's domain.
+  The skill's content is moved into a subdirectory (references/, templates/, or scripts/)
+  under the umbrella skill directory, and the original skill is marked as absorbed.
 
 Now review the following candidate table:
 `
@@ -275,7 +331,11 @@ export class CuratorService {
 
 			this.assignStats(report)
 			report.preConsolidationCount = report.stats.totalSkills
-			report.transitions = await this.applyDeterministicTransitions()
+			const { transitions, classifications } = await this.applyDeterministicTransitions()
+			report.transitions = transitions
+			if (classifications.length > 0) {
+				report.classifications = classifications
+			}
 			await this.runCuratorReview(report)
 			report.stats.transitionsApplied = report.transitions.length + (report.llmActions?.length ?? 0)
 			this.assignStats(report)
@@ -575,8 +635,12 @@ export class CuratorService {
 		report.stats.pinnedSkills = stats.pinned
 	}
 
-	private async applyDeterministicTransitions(): Promise<CuratorReport["transitions"]> {
+	private async applyDeterministicTransitions(): Promise<{
+		transitions: CuratorReport["transitions"]
+		classifications: NonNullable<CuratorReport["classifications"]>
+	}> {
 		const transitions: CuratorReport["transitions"] = []
+		const classifications: NonNullable<CuratorReport["classifications"]> = []
 
 		for (const candidate of this.skillUsageStore.getStaleCandidates(this.config.staleAfterDays)) {
 			if (this.isProtected(candidate)) {
@@ -599,6 +663,18 @@ export class CuratorService {
 			}
 
 			await this.skillUsageStore.transitionState(candidate.skillId, "archived")
+
+			// Classify the archived skill using three-tier classification
+			const skillDir = this.config.skillsDir
+				? path.join(this.config.skillsDir, candidate.skillId)
+				: path.join(this.baseDir, "skills", candidate.skillId)
+			const classification = await this.classifyArchivedSkill(candidate.skillId, candidate.skillName, skillDir)
+			classifications.push({
+				skillId: candidate.skillId,
+				skillName: candidate.skillName,
+				...classification,
+			})
+
 			transitions.push({
 				skillId: candidate.skillId,
 				skillName: candidate.skillName,
@@ -608,11 +684,79 @@ export class CuratorService {
 			})
 		}
 
-		return transitions
+		return { transitions, classifications }
 	}
 
 	private isProtected(record: SkillTelemetryRecord): boolean {
 		return record.pinned || record.createdBy !== "agent"
+	}
+
+	/**
+	 * Three-tier classification for an archived skill.
+	 *
+	 * Tier 1 (declared): Check for absorbed_into declaration in the skill usage store
+	 *   (set by skill_manage delete or curator merge/demote actions).
+	 *
+	 * Tier 2 (yaml_block): Parse YAML front matter from the skill's SKILL.md for
+	 *   an absorbed_into field.
+	 *
+	 * Tier 3 (heuristic): Fallback heuristic audit — check if the skill name
+	 *   suggests it may be an umbrella candidate.
+	 */
+	private async classifyArchivedSkill(
+		skillId: string,
+		skillName: string,
+		skillDir: string,
+	): Promise<ClassificationResult> {
+		// Tier 1: Check for absorbed_into declaration (from skill_manage delete / curator merge)
+		const record = this.skillUsageStore.get(skillId)
+		if (record?.absorbedInto) {
+			return {
+				tier: "declared",
+				absorbedInto: record.absorbedInto,
+				summary: `Explicitly absorbed into "${record.absorbedInto}"`,
+				confidence: "high",
+			}
+		}
+
+		// Tier 2: Check for structured YAML summary block in SKILL.md
+		const skillMdPath = path.join(skillDir, "SKILL.md")
+		try {
+			const content = await fs.readFile(skillMdPath, "utf-8")
+			const yamlMatch = content.match(/^---\n([\s\S]*?)\n---/)
+			if (yamlMatch) {
+				const yamlBlock = yamlMatch[1]
+				const absorbedMatch = yamlBlock.match(/absorbed_into:\s*["']?(.+?)["']?\s*$/)
+				if (absorbedMatch) {
+					return {
+						tier: "yaml_block",
+						absorbedInto: absorbedMatch[1].trim(),
+						summary: `YAML front matter declares absorption into "${absorbedMatch[1].trim()}"`,
+						confidence: "medium",
+					}
+				}
+			}
+		} catch {
+			// SKILL.md doesn't exist or can't be read — fall through to heuristic
+		}
+
+		// Tier 3: Heuristic audit — check for umbrella skill references in name
+		const umbrellaMatch = skillName.match(/^(umb|parent|umbrella)[-_]/i)
+		if (umbrellaMatch) {
+			return {
+				tier: "heuristic",
+				absorbedInto: null,
+				summary: `Skill name suggests it may be an umbrella candidate: "${skillName}"`,
+				confidence: "low",
+			}
+		}
+
+		return {
+			tier: "unclassified",
+			absorbedInto: null,
+			summary: "No classification data available",
+			confidence: "low",
+		}
 	}
 
 	/**
@@ -646,6 +790,7 @@ export class CuratorService {
 
 			report.llmActions = actions
 			const absorbedSkills: CuratorReport["absorbedSkills"] = []
+			const llmClassifications: NonNullable<CuratorReport["classifications"]> = []
 
 			for (const action of actions) {
 				switch (action.action) {
@@ -671,6 +816,21 @@ export class CuratorService {
 								absorbedInto: action.target,
 							})
 
+							// Classify the merged skill
+							const skillDir = this.config.skillsDir
+								? path.join(this.config.skillsDir, record.skillId)
+								: path.join(this.baseDir, "skills", record.skillId)
+							const classification = await this.classifyArchivedSkill(
+								record.skillId,
+								record.skillName,
+								skillDir,
+							)
+							llmClassifications.push({
+								skillId: record.skillId,
+								skillName: record.skillName,
+								...classification,
+							})
+
 							report.transitions.push({
 								skillId: record.skillId,
 								skillName: record.skillName,
@@ -678,6 +838,23 @@ export class CuratorService {
 								toState: "archived",
 								reason: `Absorbed into umbrella skill "${action.target}"`,
 							})
+						}
+
+						// Rewrite cron references for each absorbed skill
+						const cronRefs: NonNullable<CuratorReport["cronReferencesUpdated"]> = []
+						for (const skillName of action.absorb) {
+							const absorbedRecord = this.findRecordBySkillName(skillName)
+							if (absorbedRecord) {
+								const refs = await this.rewriteSkillRefs(
+									absorbedRecord.skillId,
+									action.target,
+									action.target,
+								)
+								cronRefs.push(...refs)
+							}
+						}
+						if (cronRefs.length > 0) {
+							report.cronReferencesUpdated = [...(report.cronReferencesUpdated ?? []), ...cronRefs]
 						}
 						break
 					}
@@ -691,6 +868,22 @@ export class CuratorService {
 							continue
 						}
 						await this.skillUsageStore.transitionState(record.skillId, "archived")
+
+						// Classify the LLM-archived skill
+						const skillDir = this.config.skillsDir
+							? path.join(this.config.skillsDir, record.skillId)
+							: path.join(this.baseDir, "skills", record.skillId)
+						const classification = await this.classifyArchivedSkill(
+							record.skillId,
+							record.skillName,
+							skillDir,
+						)
+						llmClassifications.push({
+							skillId: record.skillId,
+							skillName: record.skillName,
+							...classification,
+						})
+
 						report.transitions.push({
 							skillId: record.skillId,
 							skillName: record.skillName,
@@ -737,6 +930,60 @@ export class CuratorService {
 						})
 						break
 					}
+
+					case "demote": {
+						const record = this.findRecordBySkillName(action.name)
+						if (!record || record.pinned) {
+							this.logger.appendLine(
+								`[CuratorService] Demote: cannot demote "${action.name}" — not found or pinned`,
+							)
+							continue
+						}
+						const prevState = record.state
+						await this.executeDemotion(action)
+						// Archive the skill in the store and mark as absorbed
+						await this.skillUsageStore.archive(record.skillId)
+						await this.skillUsageStore.setAbsorbedInto(record.skillId, action.umbrellaSkillName)
+
+						absorbedSkills.push({
+							skillName: record.skillName,
+							absorbedInto: action.umbrellaSkillName,
+						})
+
+						// Classify the demoted skill
+						const skillDir = this.config.skillsDir
+							? path.join(this.config.skillsDir, record.skillId)
+							: path.join(this.baseDir, "skills", record.skillId)
+						const classification = await this.classifyArchivedSkill(
+							record.skillId,
+							record.skillName,
+							skillDir,
+						)
+						llmClassifications.push({
+							skillId: record.skillId,
+							skillName: record.skillName,
+							...classification,
+						})
+
+						report.transitions.push({
+							skillId: record.skillId,
+							skillName: record.skillName,
+							fromState: prevState,
+							toState: "archived",
+							reason: `Demoted to ${action.demoteTarget} under umbrella "${action.umbrellaSkillName}"`,
+						})
+
+						// Rewrite cron references for the demoted skill
+						const demoteRefs = await this.rewriteSkillRefs(
+							record.skillId,
+							action.umbrellaSkillId,
+							action.umbrellaSkillName,
+						)
+						if (demoteRefs.length > 0) {
+							report.cronReferencesUpdated = [...(report.cronReferencesUpdated ?? []), ...demoteRefs]
+						}
+						break
+					}
 				}
 			}
 
@@ -744,8 +991,17 @@ export class CuratorService {
 				report.absorbedSkills = absorbedSkills
 			}
 
+			// Merge LLM review classifications into report
+			if (llmClassifications.length > 0) {
+				if (report.classifications) {
+					report.classifications.push(...llmClassifications)
+				} else {
+					report.classifications = llmClassifications
+				}
+			}
+
 			this.logger.appendLine(
-				`[CuratorService] LLM review applied: ${actions.length} actions (${absorbedSkills.length} absorbed)`,
+				`[CuratorService] LLM review applied: ${actions.length} actions (${absorbedSkills.length} absorbed, ${llmClassifications.length} classified)`,
 			)
 		} catch (error) {
 			this.logger.appendLine(
@@ -760,6 +1016,156 @@ export class CuratorService {
 	private findRecordBySkillName(skillName: string): SkillTelemetryRecord | undefined {
 		const all = this.skillUsageStore.getAll()
 		return all.find((r) => r.skillName === skillName)
+	}
+
+	/**
+	 * Find cron job files that reference a given skill ID.
+	 * Scans for a "cron" directory adjacent to the skills directory
+	 * and checks JSON/YAML/YML files for the skill ID or name.
+	 */
+	private async findCronReferences(skillId: string): Promise<CronJobReference[]> {
+		const references: CronJobReference[] = []
+
+		// Check for cron directory in the workspace (adjacent to skillsDir)
+		const cronDir = path.join(this.config.skillsDir ?? this.baseDir, "..", "cron")
+		try {
+			await fs.access(cronDir)
+		} catch {
+			return references // No cron directory exists
+		}
+
+		// Scan cron job files for skill references
+		const entries = await fs.readdir(cronDir, { withFileTypes: true })
+		for (const entry of entries) {
+			if (
+				!entry.isFile() ||
+				(!entry.name.endsWith(".json") && !entry.name.endsWith(".yaml") && !entry.name.endsWith(".yml"))
+			) {
+				continue
+			}
+
+			const filePath = path.join(cronDir, entry.name)
+			try {
+				const content = await fs.readFile(filePath, "utf-8")
+				if (content.includes(skillId) || content.includes(skillId.replace(/[_-]/g, " "))) {
+					references.push({
+						jobId: entry.name.replace(/\.(json|yaml|yml)$/, ""),
+						jobName: entry.name,
+						skillId,
+						skillName: skillId,
+						filePath,
+					})
+				}
+			} catch {
+				continue
+			}
+		}
+
+		return references
+	}
+
+	/**
+	 * Rewrite skill references in cron job files after consolidation.
+	 * Surgically updates all cron files that reference the old skill ID/name
+	 * to point to the new skill ID/name.
+	 */
+	private async rewriteSkillRefs(
+		oldSkillId: string,
+		newSkillId: string,
+		newSkillName: string,
+	): Promise<Array<{ jobName: string; oldSkillId: string; newSkillId: string }>> {
+		const references = await this.findCronReferences(oldSkillId)
+		if (references.length === 0) return []
+
+		this.logger.appendLine(
+			`[CuratorService] Rewriting ${references.length} cron reference(s) for skill "${oldSkillId}" → "${newSkillId}"`,
+		)
+
+		const updatedRefs: Array<{ jobName: string; oldSkillId: string; newSkillId: string }> = []
+
+		for (const ref of references) {
+			try {
+				let content = await fs.readFile(ref.filePath, "utf-8")
+
+				// Replace skill references — escape regex special chars in IDs
+				const escapedOldId = oldSkillId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+				content = content.replace(new RegExp(escapedOldId, "g"), newSkillId)
+
+				// Also replace name variants with flexible separators
+				const namePattern = oldSkillId.replace(/[_-]/g, "[ _-]?")
+				content = content.replace(new RegExp(namePattern, "g"), newSkillName)
+
+				await fs.writeFile(ref.filePath, content, "utf-8")
+				this.logger.appendLine(`  ✓ Updated cron reference in "${ref.jobName}"`)
+
+				updatedRefs.push({
+					jobName: ref.jobName,
+					oldSkillId,
+					newSkillId,
+				})
+			} catch (err) {
+				this.logger.appendLine(
+					`  ✗ Failed to update cron reference in "${ref.jobName}": ${err instanceof Error ? err.message : String(err)}`,
+				)
+			}
+		}
+
+		return updatedRefs
+	}
+
+	/**
+	 * Execute a demotion action: move skill content into a subdirectory
+	 * (references/, templates/, or scripts/) under the umbrella skill directory,
+	 * remove the original skill directory, and mark the skill as absorbed.
+	 */
+	private async executeDemotion(action: CuratorAction): Promise<void> {
+		if (action.action !== "demote") return
+
+		const { name, demoteTarget, umbrellaSkillId, umbrellaSkillName } = action
+		if (!demoteTarget || !umbrellaSkillId) return
+
+		const skillsDir = this.config.skillsDir
+		if (!skillsDir) {
+			this.logger.appendLine("[CuratorService] executeDemotion: no skillsDir configured")
+			return
+		}
+
+		// Find the skill record to get its skillId for the source directory
+		const record = this.findRecordBySkillName(name)
+		if (!record) {
+			this.logger.appendLine(`[CuratorService] executeDemotion: skill "${name}" not found`)
+			return
+		}
+
+		const sourcePath = path.join(skillsDir, record.skillId)
+		const umbrellaPath = path.join(skillsDir, umbrellaSkillId)
+		const targetDir = path.join(umbrellaPath, `${demoteTarget}s`)
+
+		try {
+			// Create target subdirectory under umbrella
+			await fs.mkdir(targetDir, { recursive: true })
+
+			// Move skill content to target subdirectory, prefixing files with skill name
+			const files = await fs.readdir(sourcePath)
+			for (const file of files) {
+				const filePath = path.join(sourcePath, file)
+				const stat = await fs.stat(filePath)
+				if (stat.isFile()) {
+					await fs.rename(filePath, path.join(targetDir, `${name}-${file}`))
+				}
+			}
+
+			// Remove original skill directory
+			await fs.rm(sourcePath, { recursive: true, force: true })
+
+			this.logger.appendLine(
+				`Demoted skill "${name}" to ${demoteTarget} under "${umbrellaSkillName || umbrellaSkillId}"`,
+			)
+		} catch (error) {
+			this.logger.appendLine(
+				`[CuratorService] Demotion error for "${name}": ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
 	}
 
 	/**
@@ -883,6 +1289,11 @@ export class CuratorService {
 					case "restore":
 						lines.push(`- **Restore**: \`${action.name}\``)
 						break
+					case "demote":
+						lines.push(
+							`- **Demote**: \`${action.name}\` → ${action.demoteTarget} under \`${action.umbrellaSkillName}\``,
+						)
+						break
 				}
 			}
 			lines.push("")
@@ -905,6 +1316,33 @@ export class CuratorService {
 					"of an umbrella skill. They have been archived and marked as absorbed into their respective " +
 					"umbrella target.",
 			)
+			lines.push("")
+		}
+
+		// ── Archived Skill Classifications ──
+		if (report.classifications && report.classifications.length > 0) {
+			lines.push("## Archived Skill Classifications")
+			lines.push("")
+			lines.push("| Skill | Tier | Absorbed Into | Confidence | Summary |")
+			lines.push("|-------|------|---------------|------------|---------|")
+			for (const classification of report.classifications) {
+				const absorbedDisplay = classification.absorbedInto ?? "—"
+				lines.push(
+					`| ${classification.skillName} | ${classification.tier} | ${absorbedDisplay} | ${classification.confidence} | ${classification.summary} |`,
+				)
+			}
+			lines.push("")
+		}
+
+		// ── Cron References Updated ──
+		if (report.cronReferencesUpdated && report.cronReferencesUpdated.length > 0) {
+			lines.push("## Cron References Updated")
+			lines.push("")
+			lines.push("| Job File | Old Skill | New Skill |")
+			lines.push("|----------|-----------|-----------|")
+			for (const ref of report.cronReferencesUpdated) {
+				lines.push(`| ${ref.jobName} | ${ref.oldSkillId} | ${ref.newSkillId} |`)
+			}
 			lines.push("")
 		}
 
