@@ -9,7 +9,25 @@ describe("experiments", () => {
 		it("is configured correctly", () => {
 			expect(EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION).toBe("preventFocusDisruption")
 			expect(experimentConfigsMap.PREVENT_FOCUS_DISRUPTION).toMatchObject({
-				enabled: false,
+				enabled: true,
+			})
+		})
+	})
+
+	describe("SELF_IMPROVING", () => {
+		it("is configured correctly", () => {
+			expect(EXPERIMENT_IDS.SELF_IMPROVING).toBe("selfImproving")
+			expect(experimentConfigsMap.SELF_IMPROVING).toMatchObject({
+				enabled: true,
+			})
+		})
+	})
+
+	describe("SELF_IMPROVING_AUTO_SKILLS", () => {
+		it("is configured correctly", () => {
+			expect(EXPERIMENT_IDS.SELF_IMPROVING_AUTO_SKILLS).toBe("selfImprovingAutoSkills")
+			expect(experimentConfigsMap.SELF_IMPROVING_AUTO_SKILLS).toMatchObject({
+				enabled: true,
 			})
 		})
 	})
@@ -21,6 +39,12 @@ describe("experiments", () => {
 				imageGeneration: false,
 				runSlashCommand: false,
 				customTools: false,
+				selfImproving: false,
+				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
+				selfImprovingReviewTeam: false,
+				selfImprovingFullTrust: false,
+				selfImprovingQuestionEvaluation: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -31,6 +55,12 @@ describe("experiments", () => {
 				imageGeneration: false,
 				runSlashCommand: false,
 				customTools: false,
+				selfImproving: false,
+				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
+				selfImprovingReviewTeam: false,
+				selfImprovingFullTrust: false,
+				selfImprovingQuestionEvaluation: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -41,8 +71,31 @@ describe("experiments", () => {
 				imageGeneration: false,
 				runSlashCommand: false,
 				customTools: false,
+				selfImproving: false,
+				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
+				selfImprovingReviewTeam: false,
+				selfImprovingFullTrust: false,
+				selfImprovingQuestionEvaluation: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
+		})
+
+		it("returns false when self improving is explicitly disabled", () => {
+			const experiments: Record<ExperimentId, boolean> = {
+				preventFocusDisruption: false,
+				imageGeneration: false,
+				runSlashCommand: false,
+				customTools: false,
+				selfImproving: false,
+				selfImprovingAutoSkills: false,
+				selfImprovingAutoMode: false,
+				selfImprovingReviewTeam: false,
+				selfImprovingFullTrust: false,
+				selfImprovingQuestionEvaluation: false,
+			}
+
+			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.SELF_IMPROVING)).toBe(false)
 		})
 	})
 })

@@ -98,6 +98,7 @@ export interface ExtensionMessage {
 		| "branchWorktreeIncludeResult"
 		| "folderSelected"
 		| "skills"
+		| "skillsUpdated"
 		| "fileContent"
 	text?: string
 	/** For fileContent: { path, content, error? } */
@@ -290,6 +291,10 @@ export type ExtensionState = Pick<
 	| "includeDiagnosticMessages"
 	| "maxDiagnosticMessages"
 	| "imageGenerationProvider"
+	| "memoryBackend"
+	| "agentMemoryUrl"
+	| "selfImprovingScope"
+	| "selfImprovingAutoSkillsScope"
 	| "openRouterImageGenerationSelectedModel"
 	| "includeTaskHistoryInEnhance"
 	| "reasoningBlockCollapsed"
@@ -360,7 +365,36 @@ export type ExtensionState = Pick<
 	profileThresholds: Record<string, number>
 	hasOpenedModeSelector: boolean
 	openRouterImageApiKey?: string
+	memoryBackend?: "builtin" | "agentmemory"
+	agentMemoryUrl?: string
+	selfImprovingScope?: "workspace" | "global"
+	selfImprovingAutoSkillsScope?: "workspace" | "global"
 	messageQueue?: QueuedMessage[]
+	selfImprovingStatus?: {
+		enabled: boolean
+		started: boolean
+		patternCount: number
+		eventCount: number
+		actionCount: number
+		memoryEntries: number
+		memoryBackend?: string
+		skillRecords: number
+		curatorStatus: {
+			lastRunAt: number
+			firstRunDone: boolean
+			config: {
+				intervalMs: number
+				minIdleMs: number
+				firstRunDeferred: boolean
+				staleAfterDays: number
+				archiveAfterDays: number
+				backupsEnabled: boolean
+				maxBackups: number
+			}
+		}
+		lastReviewAt?: number
+		lastCuratorRunAt?: number
+	}
 	lastShownAnnouncementId?: string
 	apiModelId?: string
 	mcpServers?: McpServer[]

@@ -377,6 +377,8 @@
 		"getOpenRouterApiKey": "Get OpenRouter API Key",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API Key",
 		"getVercelAiGatewayApiKey": "Get Vercel AI Gateway API Key",
+		"opencodeGoApiKey": "Opencode Go API Key",
+		"getOpencodeGoApiKey": "Get Opencode Go API Key",
 		"apiKeyStorageNotice": "API keys are stored securely in VSCode's Secret Storage",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -879,6 +881,33 @@
 		"RUN_SLASH_COMMAND": {
 			"name": "Enable model-initiated slash commands",
 			"description": "When enabled, Zoo can run your slash commands to execute workflows."
+		},
+		"SELF_IMPROVING": {
+			"name": "Self-Improving",
+			"description": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time",
+			"scopeWorkspace": "Workspace",
+			"scopeGlobal": "Global",
+			"memoryBackendBuiltin": "Built-in"
+		},
+		"SELF_IMPROVING_AUTO_SKILLS": {
+			"name": "Auto-create and update skills from learned workflows",
+			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+		},
+		"SELF_IMPROVING_AUTO_MODE": {
+			"name": "Full Auto Mode",
+			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+		},
+		"SELF_IMPROVING_REVIEW_TEAM": {
+			"name": "Full Team",
+			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+		},
+		"SELF_IMPROVING_FULL_TRUST": {
+			"name": "Full Trust",
+			"description": "Enable auto-approve for commands without user confirmation"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Question Evaluation",
+			"description": "Enable evaluation of user questions to improve response quality and relevance"
 		},
 		"CUSTOM_TOOLS": {
 			"name": "Enable custom tools",

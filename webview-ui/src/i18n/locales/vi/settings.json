@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "Lấy khóa API OpenRouter",
 		"vercelAiGatewayApiKey": "Khóa API Vercel AI Gateway",
 		"getVercelAiGatewayApiKey": "Lấy khóa API Vercel AI Gateway",
+		"opencodeGoApiKey": "Khóa API Opencode Go",
+		"getOpencodeGoApiKey": "Lấy khóa API Opencode Go",
 		"apiKeyStorageNotice": "Khóa API được lưu trữ an toàn trong Bộ lưu trữ bí mật của VSCode",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "Làm mới công cụ thành công",
 			"refreshError": "Không thể làm mới công cụ",
 			"toolParameters": "Thông số"
+		},
+		"SELF_IMPROVING": {
+			"name": "Tự cải thiện",
+			"description": "Bật khả năng học nền từ kết quả tác vụ để cải thiện hướng dẫn prompt, tùy chọn công cụ và khả năng tránh lỗi theo thời gian"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Đánh Giá Câu Hỏi",
+			"description": "Bật đánh giá câu hỏi của người dùng để cải thiện chất lượng và mức độ liên quan của phản hồi"
 		}
 	},
 	"promptCaching": {

@@ -36,9 +36,34 @@ interface DelegationProvider {
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
+	/**
+	 * Tracks the last result text per task to guard against duplicate completions.
+	 * Unlike a permanent boolean flag, this allows new attempt_completion calls
+	 * with different result content (e.g., after user feedback or a new task cycle).
+	 * Only exact duplicate result text is blocked.
+	 */
+	private static lastResults = new Map<string, string>()
+
+	/**
+	 * Resets the completion tracking state. Used in tests to prevent
+	 * cross-test contamination from the static Map.
+	 */
+	static reset(): void {
+		AttemptCompletionTool.lastResults.clear()
+	}
+
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
 		const { result } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
+
+		// Guard: block only duplicate result text, not ALL future completions
+		const lastResult = AttemptCompletionTool.lastResults.get(task.taskId)
+		if (lastResult !== undefined && lastResult === result) {
+			pushToolResult(
+				formatResponse.toolResult("Task already completed with the same result. No further action needed."),
+			)
+			return
+		}
 
 		// Prevent attempt_completion if any tool failed in the current turn
 		if (task.didToolFailInCurrentTurn) {
@@ -105,7 +130,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								pushToolResult,
 							)
 							if (delegation === "delegated") {
-								this.emitTaskCompleted(task)
+								this.emitTaskCompleted(task, result)
 							}
 							if (delegation !== "continue") return
 						} else {
@@ -132,8 +157,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
-				this.emitTaskCompleted(task)
+				this.emitTaskCompleted(task, result)
 				return
+			}
+
+			// User provided feedback - reset completion tracking so subsequent
+			// attempt_completion calls are not blocked by stale guard state.
+			AttemptCompletionTool.lastResults.delete(task.taskId)
+			const provider = task.providerRef.deref()
+			if (provider?.trustService) {
+				provider.trustService.taskCompleted = false
 			}
 
 			// User provided feedback - push tool result to continue the conversation
@@ -196,7 +229,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 	}
 
-	private emitTaskCompleted(task: Task): void {
+	private emitTaskCompleted(task: Task, result: string): void {
+		// Store the result text to guard against duplicate completions
+		AttemptCompletionTool.lastResults.set(task.taskId, result)
+
+		// Notify TrustService that task has completed to block auto-approval of subsequent attempt_completion
+		const provider = task.providerRef.deref()
+		if (provider?.trustService) {
+			provider.trustService.taskCompleted = true
+		}
+
 		// Force final token usage update before emitting TaskCompleted.
 		// This ensures the latest stats are captured regardless of throttle timer.
 		task.emitFinalTokenUsageUpdate()

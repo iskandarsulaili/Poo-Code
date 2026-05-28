@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "Получить OpenRouter API-ключ",
 		"vercelAiGatewayApiKey": "Ключ API Vercel AI Gateway",
 		"getVercelAiGatewayApiKey": "Получить ключ API Vercel AI Gateway",
+		"opencodeGoApiKey": "Ключ API Opencode Go",
+		"getOpencodeGoApiKey": "Получить ключ API Opencode Go",
 		"apiKeyStorageNotice": "API-ключи хранятся безопасно в Secret Storage VSCode",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "Инструменты успешно обновлены",
 			"refreshError": "Не удалось обновить инструменты",
 			"toolParameters": "Параметры"
+		},
+		"SELF_IMPROVING": {
+			"name": "Самоулучшение",
+			"description": "Включить фоновое обучение на основе результатов задач, чтобы со временем улучшать рекомендации по промптам, предпочтения инструментов и предотвращение ошибок"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Оценка Вопросов",
+			"description": "Включить оценку вопросов пользователя для улучшения качества и релевантности ответов"
 		}
 	},
 	"promptCaching": {

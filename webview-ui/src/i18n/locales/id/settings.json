@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "Dapatkan OpenRouter API Key",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API Key",
 		"getVercelAiGatewayApiKey": "Dapatkan Vercel AI Gateway API Key",
+		"opencodeGoApiKey": "Opencode Go API Key",
+		"getOpencodeGoApiKey": "Dapatkan Opencode Go API Key",
 		"apiKeyStorageNotice": "API key disimpan dengan aman di Secret Storage VSCode",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "Tool berhasil direfresh",
 			"refreshError": "Gagal merefresh tool",
 			"toolParameters": "Parameter"
+		},
+		"SELF_IMPROVING": {
+			"name": "Peningkatan Diri",
+			"description": "Aktifkan pembelajaran latar belakang dari hasil tugas untuk meningkatkan panduan prompt, preferensi alat, dan penghindaran kesalahan seiring waktu"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Evaluasi Pertanyaan",
+			"description": "Aktifkan evaluasi pertanyaan pengguna untuk meningkatkan kualitas dan relevansi respons"
 		}
 	},
 	"promptCaching": {

@@ -198,6 +198,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		imageGenerationProvider,
 		openRouterImageApiKey,
 		openRouterImageGenerationSelectedModel,
+		memoryBackend,
+		agentMemoryUrl,
+		selfImprovingScope,
+		selfImprovingAutoSkillsScope,
 		reasoningBlockCollapsed,
 		enterBehavior,
 		includeCurrentTime,
@@ -342,6 +346,50 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		})
 	}, [])
 
+	const setMemoryBackend = useCallback((backend: "builtin" | "agentmemory") => {
+		setCachedState((prevState) => {
+			if (prevState.memoryBackend === backend) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, memoryBackend: backend }
+		})
+	}, [])
+
+	const setAgentMemoryUrl = useCallback((url: string) => {
+		setCachedState((prevState) => {
+			if (prevState.agentMemoryUrl === url) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, agentMemoryUrl: url }
+		})
+	}, [])
+
+	const setSelfImprovingScope = useCallback((scope: "workspace" | "global") => {
+		setCachedState((prevState) => {
+			if (prevState.selfImprovingScope === scope) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, selfImprovingScope: scope }
+		})
+	}, [])
+
+	const setSelfImprovingAutoSkillsScope = useCallback((scope: "workspace" | "global") => {
+		setCachedState((prevState) => {
+			if (prevState.selfImprovingAutoSkillsScope === scope) {
+				return prevState
+			}
+
+			setChangeDetected(true)
+			return { ...prevState, selfImprovingAutoSkillsScope: scope }
+		})
+	}, [])
+
 	const setCustomSupportPromptsField = useCallback((prompts: Record<string, string | undefined>) => {
 		setCachedState((prevState) => {
 			const previousStr = JSON.stringify(prevState.customSupportPrompts)
@@ -420,6 +468,10 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					imageGenerationProvider,
 					openRouterImageApiKey,
 					openRouterImageGenerationSelectedModel,
+					memoryBackend,
+					agentMemoryUrl: agentMemoryUrl || "http://localhost:3111",
+					selfImprovingScope: selfImprovingScope ?? "global",
+					selfImprovingAutoSkillsScope: selfImprovingAutoSkillsScope ?? "workspace",
 					experiments,
 					customSupportPrompts,
 				},
@@ -904,13 +956,19 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								apiConfiguration={apiConfiguration}
 								setApiConfigurationField={setApiConfigurationField}
 								imageGenerationProvider={imageGenerationProvider}
-								openRouterImageApiKey={openRouterImageApiKey as string | undefined}
-								openRouterImageGenerationSelectedModel={
-									openRouterImageGenerationSelectedModel as string | undefined
-								}
+								openRouterImageApiKey={openRouterImageApiKey}
+								openRouterImageGenerationSelectedModel={openRouterImageGenerationSelectedModel}
+								memoryBackend={memoryBackend}
+								agentMemoryUrl={agentMemoryUrl}
+								selfImprovingScope={selfImprovingScope}
+								selfImprovingAutoSkillsScope={selfImprovingAutoSkillsScope}
 								setImageGenerationProvider={setImageGenerationProvider}
 								setOpenRouterImageApiKey={setOpenRouterImageApiKey}
 								setImageGenerationSelectedModel={setImageGenerationSelectedModel}
+								setMemoryBackend={setMemoryBackend}
+								setAgentMemoryUrl={setAgentMemoryUrl}
+								setSelfImprovingScope={setSelfImprovingScope}
+								setSelfImprovingAutoSkillsScope={setSelfImprovingAutoSkillsScope}
 							/>
 						)}
 

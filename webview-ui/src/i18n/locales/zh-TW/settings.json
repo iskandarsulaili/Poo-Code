@@ -324,6 +324,8 @@
 		"getOpenRouterApiKey": "取得 OpenRouter API 金鑰",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API 金鑰",
 		"getVercelAiGatewayApiKey": "取得 Vercel AI Gateway API 金鑰",
+		"opencodeGoApiKey": "Opencode Go API 金鑰",
+		"getOpencodeGoApiKey": "取得 Opencode Go API 金鑰",
 		"apiKeyStorageNotice": "API 金鑰會安全地儲存在 VS Code 的 Secret Storage 中",
 		"openAiCodexRateLimits": {
 			"title": "Codex 用量限制{{planLabel}}",
@@ -837,6 +839,14 @@
 			"refreshSuccess": "工具重新整理成功",
 			"refreshError": "工具重新整理失敗",
 			"toolParameters": "參數"
+		},
+		"SELF_IMPROVING": {
+			"name": "自我改進",
+			"description": "啟用根據任務結果進行的後台學習，以便隨著時間改善提示詞引導、工具偏好和錯誤避免"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "問題評估",
+			"description": "啟用用戶問題評估以提高回應品質和相關性"
 		}
 	},
 	"promptCaching": {

@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "OpenRouter API Anahtarı Al",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API Anahtarı",
 		"getVercelAiGatewayApiKey": "Vercel AI Gateway API Anahtarı Al",
+		"opencodeGoApiKey": "Opencode Go API Anahtarı",
+		"getOpencodeGoApiKey": "Opencode Go API Anahtarı Al",
 		"apiKeyStorageNotice": "API anahtarları VSCode'un Gizli Depolamasında güvenli bir şekilde saklanır",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "Araçlar başarıyla yenilendi",
 			"refreshError": "Araçlar yenilenemedi",
 			"toolParameters": "Parametreler"
+		},
+		"SELF_IMPROVING": {
+			"name": "Kendini Geliştirme",
+			"description": "Görev sonuçlarından arka planda öğrenmeyi etkinleştirerek zaman içinde istem yönlendirmesini, araç tercihlerini ve hata önlemeyi iyileştirin"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Soru Değerlendirme",
+			"description": "Yanıt kalitesini ve alaka düzeyini iyileştirmek için kullanıcı sorularının değerlendirmesini etkinleştirin"
 		}
 	},
 	"promptCaching": {

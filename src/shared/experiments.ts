@@ -5,6 +5,12 @@ export const EXPERIMENT_IDS = {
 	IMAGE_GENERATION: "imageGeneration",
 	RUN_SLASH_COMMAND: "runSlashCommand",
 	CUSTOM_TOOLS: "customTools",
+	SELF_IMPROVING: "selfImproving",
+	SELF_IMPROVING_AUTO_SKILLS: "selfImprovingAutoSkills",
+	SELF_IMPROVING_AUTO_MODE: "selfImprovingAutoMode",
+	SELF_IMPROVING_REVIEW_TEAM: "selfImprovingReviewTeam",
+	SELF_IMPROVING_FULL_TRUST: "selfImprovingFullTrust",
+	SELF_IMPROVING_QUESTION_EVALUATION: "selfImprovingQuestionEvaluation",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -16,10 +22,16 @@ interface ExperimentConfig {
 }
 
 export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
-	PREVENT_FOCUS_DISRUPTION: { enabled: false },
-	IMAGE_GENERATION: { enabled: false },
-	RUN_SLASH_COMMAND: { enabled: false },
-	CUSTOM_TOOLS: { enabled: false },
+	PREVENT_FOCUS_DISRUPTION: { enabled: true },
+	IMAGE_GENERATION: { enabled: true },
+	RUN_SLASH_COMMAND: { enabled: true },
+	CUSTOM_TOOLS: { enabled: true },
+	SELF_IMPROVING: { enabled: true },
+	SELF_IMPROVING_AUTO_SKILLS: { enabled: true },
+	SELF_IMPROVING_AUTO_MODE: { enabled: true },
+	SELF_IMPROVING_REVIEW_TEAM: { enabled: true },
+	SELF_IMPROVING_FULL_TRUST: { enabled: true },
+	SELF_IMPROVING_QUESTION_EVALUATION: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

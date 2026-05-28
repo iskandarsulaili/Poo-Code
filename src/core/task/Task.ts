@@ -128,6 +128,9 @@ import {
 import { processUserContentMentions } from "../mentions/processUserContentMentions"
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense"
 import { MessageQueueService } from "../message-queue/MessageQueueService"
+import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
+import { ToolErrorHealer } from "../../services/self-improving/ToolErrorHealer"
+import { ResilienceService } from "../../services/self-improving/ResilienceService"
 import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
@@ -286,6 +289,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	api: ApiHandler
 	private static lastGlobalApiRequestTime?: number
 	private autoApprovalHandler: AutoApprovalHandler
+	questionEvaluator: QuestionEvaluatorService | undefined
+	toolErrorHealer: ToolErrorHealer | undefined
+	resilienceService: ResilienceService | undefined
 
 	/**
 	 * Reset the global API request timestamp. This should only be used for testing.
@@ -1217,7 +1223,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Automatically approve if the ask according to the user's settings.
 		const provider = this.providerRef.deref()
 		const state = provider ? await provider.getState() : undefined
-		const approval = await checkAutoApproval({ state, ask: type, text, isProtected })
+		const approval = await checkAutoApproval({
+			state,
+			ask: type,
+			text,
+			isProtected,
+			trustService: provider?.trustService,
+		})
 
 		if (approval.decision === "approve") {
 			this.approveAsk()
@@ -1225,9 +1237,38 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			this.denyAsk()
 		} else if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
-			this.autoApprovalTimeoutRef = setTimeout(() => {
-				const { askResponse, text, images } = approval.fn()
-				this.handleWebviewAskResponse(askResponse, text, images)
+			this.autoApprovalTimeoutRef = setTimeout(async () => {
+				// Use QuestionEvaluatorService to pick the best choice when available
+				if (
+					this.questionEvaluator &&
+					this.questionEvaluator.getConfig().enabled &&
+					type === "followup" &&
+					text
+				) {
+					try {
+						const followUpData = JSON.parse(text) as {
+							question?: string
+							suggest?: Array<{ answer: string; mode?: string }>
+						}
+						if (followUpData.suggest && followUpData.suggest.length > 0) {
+							const evaluation = await this.questionEvaluator.evaluateBestChoice(
+								followUpData.question ?? "",
+								followUpData.suggest.map((s) => ({ text: s.answer, mode: s.mode ?? null })),
+							)
+							console.error(
+								`[Task] Question evaluated: chose #${evaluation.selectedIndex + 1} via ${evaluation.evaluatedBy}: "${evaluation.selectedText.substring(0, 60)}..."`,
+							)
+							this.handleWebviewAskResponse("messageResponse", evaluation.selectedText)
+							this.autoApprovalTimeoutRef = undefined
+							return
+						}
+					} catch (error) {
+						console.error(`[Task] Question evaluation failed, falling back to first choice: ${error}`)
+					}
+				}
+				// Fallback: first choice
+				const { askResponse, text: responseText, images } = approval.fn()
+				this.handleWebviewAskResponse(askResponse, responseText, images)
 				this.autoApprovalTimeoutRef = undefined
 			}, approval.timeout)
 			timeouts.push(this.autoApprovalTimeoutRef)
@@ -1451,6 +1492,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			}
 
 			const provider = this.providerRef.deref()
+			const shouldRecordCorrection = !!this.taskAsk
 
 			if (provider) {
 				if (mode) {
@@ -1466,6 +1508,26 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 					if (newState?.apiConfiguration) {
 						this.updateApiConfiguration(newState.apiConfiguration)
 					}
+				}
+
+				if (shouldRecordCorrection) {
+					void provider
+						.getSelfImprovingManager?.()
+						?.recordUserCorrection({
+							taskId: this.taskId,
+							success: false,
+							corrected: true,
+						})
+						.catch((error: unknown) => {
+							console.error("[Task#submitUserMessage] Failed to record user correction:", error)
+						})
+				}
+
+				// Reset TrustService taskCompleted latch when user sends a new message.
+				// This allows subsequent attempt_completion calls to be auto-approved
+				// after the user provides follow-up feedback on a completed task.
+				if (provider.trustService?.taskCompleted) {
+					provider.trustService.taskCompleted = false
 				}
 
 				this.emit(RooCodeEventName.TaskUserMessage, this.taskId)
@@ -1721,13 +1783,24 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	async sayAndCreateMissingParamError(toolName: ToolName, paramName: string, relPath?: string) {
+		// Consult ToolErrorHealer for fix suggestion first so we can include it in both say and tool result
+		const fix = this.toolErrorHealer?.handleToolError(toolName, paramName)
+		const fixSuffix = fix ? ` Suggestion: ${fix.fix}` : ""
+
 		await this.say(
 			"error",
 			`Roo tried to use ${toolName}${
 				relPath ? ` for '${relPath.toPosix()}'` : ""
-			} without value for required parameter '${paramName}'. Retrying...`,
+			} without value for required parameter '${paramName}'. Retrying...${fixSuffix}`,
 		)
-		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
+
+		const baseError = formatResponse.missingToolParameterError(paramName)
+		if (fix) {
+			const fixHint = fix.autoCorrectable ? `\n\n[Fix suggestion: ${fix.fix}]` : `\n\n[Hint: ${fix.fix}]`
+			return formatResponse.toolError(baseError + fixHint)
+		}
+
+		return formatResponse.toolError(baseError)
 	}
 
 	// Lifecycle
@@ -2106,6 +2179,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		const tokenUsage = this.getTokenUsage()
 		this.debouncedEmitTokenUsage(tokenUsage, this.toolUsage)
 		this.debouncedEmitTokenUsage.flush()
+
+		// Record token usage in insights engine for session analysis
+		if (tokenUsage) {
+			const totalTokens = (tokenUsage.totalTokensIn ?? 0) + (tokenUsage.totalTokensOut ?? 0)
+			const cost = tokenUsage.totalCost ?? 0
+			this.providerRef
+				.deref()
+				?.getSelfImprovingManager?.()
+				?.insightsEngine?.recordTokenUsage(totalTokens, cost, "session")
+		}
 	}
 
 	public async abortTask(isAbandoned = false) {
@@ -3153,8 +3236,29 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								`[Task#${this.taskId}.${this.instanceId}] Stream failed, will retry: ${streamingFailedMessage}`,
 							)
 
-							// Apply exponential backoff similar to first-chunk errors when auto-resubmit is enabled
-							const stateForBackoff = await this.providerRef.deref()?.getState()
+							// Consult ResilienceService for backoff and recovery guidance
+							const backoffDelay = this.resilienceService?.onStreamingFailure() ?? -1
+
+							if (backoffDelay < 0) {
+								// Max retries exceeded — enter recovery mode
+								console.error(
+									`[Task#${this.taskId}.${this.instanceId}] Max streaming retries exceeded. Entering recovery mode.`,
+								)
+								const recoverySuggestion = this.resilienceService?.getRecoverySuggestion()
+								if (recoverySuggestion) {
+									await this.say("error", `[Recovery] ${recoverySuggestion}`)
+								}
+								// Fall through to abort the task
+								this.abortReason = "streaming_failed"
+								await this.abortTask()
+								break
+							}
+
+							// Apply exponential backoff from resilience service
+							await delay(backoffDelay)
+
+							// Also apply existing backoff for auto-approval mode
+							const stateForBackoff = await provider?.getState()
 							if (stateForBackoff?.autoApprovalEnabled) {
 								await this.backoffAndAnnounce(currentItem.retryAttempt ?? 0, error)
 
@@ -3699,6 +3803,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				undefined, // todoList
 				this.api.getModel().id,
 				provider.getSkillsManager(),
+				provider.getSelfImprovingManager(),
 			)
 		})()
 	}
@@ -4505,6 +4610,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		}
 
 		this.toolUsage[toolName].attempts++
+
+		// Record tool usage in insights engine for session analysis
+		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordToolUsage(toolName)
 	}
 
 	public recordToolError(toolName: ToolName, error?: string) {
@@ -4517,6 +4625,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		if (error) {
 			this.emit(RooCodeEventName.TaskToolFailed, this.taskId, toolName, error)
 		}
+
+		// Record tool error in insights engine for session analysis
+		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordError(toolName, error)
 	}
 
 	// Getters

@@ -75,6 +75,9 @@ import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckp
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
+import { SelfImprovingManager } from "../../services/self-improving"
+import { TrustService } from "../../services/self-improving/TrustService"
+import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 
 import { fileExistsAtPath } from "../../utils/fs"
@@ -163,6 +166,8 @@ export class ClineProvider
 	public readonly latestAnnouncementId = "may-2026-v3.55.0-mimo-handoff-stability" // v3.55.0 Xiaomi MiMo, upstream handoff updates, stability fixes
 	public readonly providerSettingsManager: ProviderSettingsManager
 	public readonly customModesManager: CustomModesManager
+	public readonly selfImprovingManager: SelfImprovingManager
+	public readonly trustService: TrustService
 
 	constructor(
 		readonly context: vscode.ExtensionContext,
@@ -226,6 +231,45 @@ export class ClineProvider
 			this.log(`Failed to initialize Skills Manager: ${error}`)
 		})
 
+		// Initialize Self-Improving Manager (experiment-gated, zero overhead when disabled)
+		this.selfImprovingManager = new SelfImprovingManager({
+			globalStoragePath: this.contextProxy.globalStorageUri.fsPath,
+			logger: {
+				appendLine: (message: string) => this.log(message),
+			},
+			getExperiments: () => this.getGlobalStateSafe("experiments"),
+			getMemoryBackend: () => this.getGlobalStateSafe("memoryBackend"),
+			getAgentMemoryUrl: () => this.getGlobalStateSafe("agentMemoryUrl"),
+			getSelfImprovingScope: () => this.getGlobalStateSafe("selfImprovingScope"),
+			getAutoSkillsScope: () => this.getGlobalStateSafe("selfImprovingAutoSkillsScope"),
+			getWorkspacePath: () => this.currentWorkspacePath,
+			skillsManager: this.skillsManager,
+			getCodeIndexInfo: () => {
+				const manager = this.codeIndexManager
+				if (!manager) {
+					return { available: false, hits: 0 }
+				}
+
+				return {
+					available: true,
+					hits: 0, // Simplified - actual hit count would come from code index events
+				}
+			},
+		})
+
+		// Wire CustomModesManager into ModeFactoryService for auto mode creation
+		this.selfImprovingManager.setCustomModesManager(this.customModesManager)
+
+		// Initialize TrustService for auto-approval (experiment-gated)
+		this.trustService = new TrustService(
+			{
+				appendLine: (message: string) => this.log(message),
+			},
+			{
+				enabled: this.getGlobalStateSafe("experiments")?.selfImprovingFullTrust ?? false,
+			},
+		)
+
 		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)
 
 		// Forward <most> task events to the provider.
@@ -233,10 +277,60 @@ export class ClineProvider
 		this.taskCreationCallback = (instance: Task) => {
 			this.emit(RooCodeEventName.TaskCreated, instance)
 
+			const recordTaskCompletionForLearning = (success: boolean) => {
+				void instance
+					.getTaskMode()
+					.catch(() => defaultModeSlug)
+					.then((mode) =>
+						this.selfImprovingManager.recordTaskCompletion({
+							taskId: instance.taskId,
+							mode,
+							workspacePath: this.currentWorkspacePath,
+							success,
+							toolNames: instance.toolUsage ? Object.keys(instance.toolUsage) : undefined,
+							errorKey: !success && instance.abortReason ? instance.abortReason : undefined,
+							toolIterationCount: instance.toolUsage
+								? Object.values(instance.toolUsage).reduce(
+										(sum, toolStat) => sum + toolStat.attempts,
+										0,
+									)
+								: undefined,
+						}),
+					)
+					.catch((error) => {
+						this.log(
+							`[SelfImproving] recordTaskCompletion error: ${error instanceof Error ? error.message : String(error)}`,
+						)
+					})
+			}
+
 			// Create named listener functions so we can remove them later.
 			const onTaskStarted = () => this.emit(RooCodeEventName.TaskStarted, instance.taskId)
 			const onTaskCompleted = (taskId: string, tokenUsage: TokenUsage, toolUsage: ToolUsage) => {
 				this.emit(RooCodeEventName.TaskCompleted, taskId, tokenUsage, toolUsage)
+
+				// Feed task completion into self-improving system
+				recordTaskCompletionForLearning(true)
+				this.selfImprovingManager.triggerReview().catch((error) => {
+					this.log(
+						`[SelfImproving] triggerReview error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
+
+				// Notify resilience service of task success to reset recovery state
+				this.selfImprovingManager.resilienceService.onTaskSuccess()
+			}
+			const onTaskUserMessageForLearning = (_taskId: string) => {
+				this.selfImprovingManager.recordUserTurn().catch((error) => {
+					this.log(
+						`[SelfImproving] recordUserTurn error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
+				this.selfImprovingManager.triggerReview().catch((error) => {
+					this.log(
+						`[SelfImproving] triggerReview error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				})
 			}
 			const onTaskAborted = async () => {
 				this.emit(RooCodeEventName.TaskAborted, instance.taskId)
@@ -266,6 +360,19 @@ export class ClineProvider
 						}`,
 					)
 				}
+
+				// Feed task abortion into self-improving system
+				recordTaskCompletionForLearning(false)
+
+				// Only trigger review on genuine streaming failures, not user-initiated cancels
+				// (user may resume an aborted task, making the failure signal premature)
+				if (instance.abortReason === "streaming_failed") {
+					this.selfImprovingManager.triggerReview().catch((error) => {
+						this.log(
+							`[SelfImproving] triggerReview error: ${error instanceof Error ? error.message : String(error)}`,
+						)
+					})
+				}
 			}
 			const onTaskFocused = () => this.emit(RooCodeEventName.TaskFocused, instance.taskId)
 			const onTaskUnfocused = () => this.emit(RooCodeEventName.TaskUnfocused, instance.taskId)
@@ -283,6 +390,7 @@ export class ClineProvider
 			// Attach the listeners.
 			instance.on(RooCodeEventName.TaskStarted, onTaskStarted)
 			instance.on(RooCodeEventName.TaskCompleted, onTaskCompleted)
+			instance.on(RooCodeEventName.TaskUserMessage, onTaskUserMessageForLearning)
 			instance.on(RooCodeEventName.TaskAborted, onTaskAborted)
 			instance.on(RooCodeEventName.TaskFocused, onTaskFocused)
 			instance.on(RooCodeEventName.TaskUnfocused, onTaskUnfocused)
@@ -300,6 +408,7 @@ export class ClineProvider
 			this.taskEventListeners.set(instance, [
 				() => instance.off(RooCodeEventName.TaskStarted, onTaskStarted),
 				() => instance.off(RooCodeEventName.TaskCompleted, onTaskCompleted),
+				() => instance.off(RooCodeEventName.TaskUserMessage, onTaskUserMessageForLearning),
 				() => instance.off(RooCodeEventName.TaskAborted, onTaskAborted),
 				() => instance.off(RooCodeEventName.TaskFocused, onTaskFocused),
 				() => instance.off(RooCodeEventName.TaskUnfocused, onTaskUnfocused),
@@ -392,6 +501,15 @@ export class ClineProvider
 	 */
 	public async initializeCloudProfileSyncWhenReady(): Promise<void> {
 		this.log("Cloud profile synchronization is disabled in compatibility mode")
+	}
+
+	/**
+	 * Initialize the self-improving manager.
+	 * Called from extension activation after provider construction.
+	 * No-op when experiment is disabled (zero overhead guarantee).
+	 */
+	async initializeSelfImproving(): Promise<void> {
+		await this.selfImprovingManager.initialize()
 	}
 
 	// Adds a new Task instance to clineStack, marking the start of a new task.
@@ -603,6 +721,7 @@ export class ClineProvider
 		this.mcpHub = undefined
 		await this.skillsManager?.dispose()
 		this.skillsManager = undefined
+		await this.selfImprovingManager.dispose()
 		this.marketplaceManager?.cleanup()
 		this.customModesManager?.dispose()
 		this.taskHistoryStore.dispose()
@@ -986,6 +1105,9 @@ export class ClineProvider
 			// Preserve the status from the history item to avoid overwriting it when the task saves messages
 			initialStatus: historyItem.status,
 		})
+		task.questionEvaluator = this.selfImprovingManager.questionEvaluator
+		task.toolErrorHealer = this.selfImprovingManager.toolErrorHealer
+		task.resilienceService = this.selfImprovingManager.resilienceService
 
 		if (isRehydratingCurrentTask) {
 			// Replace the current task in-place to avoid UI flicker
@@ -1864,8 +1986,18 @@ export class ClineProvider
 		await this.postStateToWebview()
 	}
 
+	private getGlobalStateSafe<K extends keyof GlobalState>(key: K): GlobalState[K] | undefined {
+		return this.contextProxy.getGlobalState(key)
+	}
+
 	async refreshWorkspace() {
+		const previousWorkspacePath = this.currentWorkspacePath
 		this.currentWorkspacePath = getWorkspacePath()
+
+		if (previousWorkspacePath !== this.currentWorkspacePath) {
+			await this.selfImprovingManager.onSettingsChanged(this.getGlobalStateSafe("experiments"))
+		}
+
 		await this.postStateToWebview()
 	}
 
@@ -2094,6 +2226,10 @@ export class ClineProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
+			memoryBackend,
+			agentMemoryUrl,
+			selfImprovingScope,
+			selfImprovingAutoSkillsScope,
 			lockApiConfigAcrossModes,
 		} = await this.getState()
 
@@ -2264,6 +2400,7 @@ export class ClineProvider
 			followupAutoApproveTimeoutMs: followupAutoApproveTimeoutMs ?? 60000,
 			includeDiagnosticMessages: includeDiagnosticMessages ?? true,
 			maxDiagnosticMessages: maxDiagnosticMessages ?? 50,
+			selfImprovingStatus: await this.selfImprovingManager.getStatus(),
 			includeTaskHistoryInEnhance: includeTaskHistoryInEnhance ?? true,
 			includeCurrentTime: includeCurrentTime ?? true,
 			includeCurrentCost: includeCurrentCost ?? true,
@@ -2272,6 +2409,10 @@ export class ClineProvider
 			imageGenerationProvider,
 			openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel,
+			memoryBackend,
+			agentMemoryUrl,
+			selfImprovingScope,
+			selfImprovingAutoSkillsScope,
 			openAiCodexIsAuthenticated: await (async () => {
 				try {
 					const { openAiCodexOAuthManager } = await import("../../integrations/openai-codex/oauth")
@@ -2468,6 +2609,10 @@ export class ClineProvider
 			imageGenerationProvider: stateValues.imageGenerationProvider,
 			openRouterImageApiKey: stateValues.openRouterImageApiKey,
 			openRouterImageGenerationSelectedModel: stateValues.openRouterImageGenerationSelectedModel,
+			memoryBackend: stateValues.memoryBackend,
+			agentMemoryUrl: stateValues.agentMemoryUrl,
+			selfImprovingScope: stateValues.selfImprovingScope,
+			selfImprovingAutoSkillsScope: stateValues.selfImprovingAutoSkillsScope,
 		}
 	}
 
@@ -2644,6 +2789,10 @@ export class ClineProvider
 
 	public getSkillsManager(): SkillsManager | undefined {
 		return this.skillsManager
+	}
+
+	public getSelfImprovingManager(): SelfImprovingManager {
+		return this.selfImprovingManager
 	}
 
 	/**
@@ -2864,6 +3013,9 @@ export class ClineProvider
 			startTask: false,
 			...options,
 		})
+		task.questionEvaluator = this.selfImprovingManager.questionEvaluator
+		task.toolErrorHealer = this.selfImprovingManager.toolErrorHealer
+		task.resilienceService = this.selfImprovingManager.resilienceService
 
 		await this.addClineToStack(task)
 		task.start()

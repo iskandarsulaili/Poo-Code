@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "Ottieni chiave API OpenRouter",
 		"vercelAiGatewayApiKey": "Chiave API Vercel AI Gateway",
 		"getVercelAiGatewayApiKey": "Ottieni chiave API Vercel AI Gateway",
+		"opencodeGoApiKey": "Chiave API Opencode Go",
+		"getOpencodeGoApiKey": "Ottieni chiave API Opencode Go",
 		"apiKeyStorageNotice": "Le chiavi API sono memorizzate in modo sicuro nell'Archivio Segreto di VSCode",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,10 @@
 			"refreshSuccess": "Strumenti aggiornati con successo",
 			"refreshError": "Impossibile aggiornare gli strumenti",
 			"toolParameters": "Parametri"
+		},
+		"SELF_IMPROVING": {
+			"name": "Auto-miglioramento",
+			"description": "Abilita l'apprendimento in background dai risultati delle attività per migliorare nel tempo la guida dei prompt, le preferenze degli strumenti e la prevenzione degli errori"
 		}
 	},
 	"promptCaching": {

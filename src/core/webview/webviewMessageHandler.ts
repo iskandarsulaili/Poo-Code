@@ -662,6 +662,9 @@ export const webviewMessageHandler = async (
 
 		case "updateSettings":
 			if (message.updatedSettings) {
+				let experimentsUpdated = false
+				let selfImprovingSettingsUpdated = false
+
 				for (const [key, value] of Object.entries(message.updatedSettings)) {
 					let newValue = value
 
@@ -740,10 +743,18 @@ export const webviewMessageHandler = async (
 							continue
 						}
 
+						experimentsUpdated = true
 						newValue = {
 							...(getGlobalState("experiments") ?? experimentDefault),
 							...(value as Record<ExperimentId, boolean>),
 						}
+					} else if (
+						key === "memoryBackend" ||
+						key === "agentMemoryUrl" ||
+						key === "selfImprovingScope" ||
+						key === "selfImprovingAutoSkillsScope"
+					) {
+						selfImprovingSettingsUpdated = true
 					} else if (key === "customSupportPrompts") {
 						if (!value) {
 							continue
@@ -751,6 +762,12 @@ export const webviewMessageHandler = async (
 					}
 
 					await provider.contextProxy.setValue(key as keyof RooCodeSettings, newValue)
+				}
+
+				if (experimentsUpdated || selfImprovingSettingsUpdated) {
+					await provider.selfImprovingManager.onSettingsChanged(
+						provider.contextProxy.getGlobalState("experiments"),
+					)
 				}
 
 				await provider.postStateToWebview()
@@ -929,6 +946,7 @@ export const webviewMessageHandler = async (
 						lmstudio: {},
 						poe: {},
 						deepseek: {},
+						"opencode-go": {},
 					}
 
 			const safeGetModels = async (options: GetModelsOptions): Promise<ModelRecord> => {
@@ -1009,6 +1027,20 @@ export const webviewMessageHandler = async (
 				candidates.push({
 					key: "deepseek",
 					options: { provider: "deepseek", apiKey: deepSeekApiKey, baseUrl: deepSeekBaseUrl },
+				})
+			}
+
+			// Opencode Go is conditional on apiKey (its /models endpoint requires auth)
+			const opencodeGoApiKey = message?.values?.opencodeGoApiKey ?? apiConfiguration.opencodeGoApiKey
+
+			if (opencodeGoApiKey) {
+				if (message?.values?.opencodeGoApiKey) {
+					await flushModels({ provider: "opencode-go", apiKey: opencodeGoApiKey }, true)
+				}
+
+				candidates.push({
+					key: "opencode-go",
+					options: { provider: "opencode-go", apiKey: opencodeGoApiKey },
 				})
 			}
 

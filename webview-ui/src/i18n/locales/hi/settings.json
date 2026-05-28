@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "OpenRouter API कुंजी प्राप्त करें",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API कुंजी",
 		"getVercelAiGatewayApiKey": "Vercel AI Gateway API कुंजी प्राप्त करें",
+		"opencodeGoApiKey": "Opencode Go API कुंजी",
+		"getOpencodeGoApiKey": "Opencode Go API कुंजी प्राप्त करें",
 		"apiKeyStorageNotice": "API कुंजियाँ VSCode के सुरक्षित स्टोरेज में सुरक्षित रूप से संग्रहीत हैं",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "टूल्स सफलतापूर्वक रिफ्रेश हुए",
 			"refreshError": "टूल्स रिफ्रेश करने में विफल",
 			"toolParameters": "पैरामीटर्स"
+		},
+		"SELF_IMPROVING": {
+			"name": "स्व-सुधार",
+			"description": "कार्य परिणामों से पृष्ठभूमि में सीखने को सक्षम करें ताकि समय के साथ प्रॉम्प्ट मार्गदर्शन, टूल प्राथमिकताओं और त्रुटि-परिहार में सुधार हो सके"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "प्रश्न मूल्यांकन",
+			"description": "प्रतिक्रिया गुणवत्ता और प्रासंगिकता में सुधार के लिए उपयोगकर्ता प्रश्नों का मूल्यांकन सक्षम करें"
 		}
 	},
 	"promptCaching": {

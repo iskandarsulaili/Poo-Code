@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "OpenRouter API-sleutel ophalen",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway API-sleutel",
 		"getVercelAiGatewayApiKey": "Vercel AI Gateway API-sleutel ophalen",
+		"opencodeGoApiKey": "Opencode Go API-sleutel",
+		"getOpencodeGoApiKey": "Opencode Go API-sleutel ophalen",
 		"apiKeyStorageNotice": "API-sleutels worden veilig opgeslagen in de geheime opslag van VSCode",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "Tools succesvol vernieuwd",
 			"refreshError": "Fout bij vernieuwen van tools",
 			"toolParameters": "Parameters"
+		},
+		"SELF_IMPROVING": {
+			"name": "Zelfverbeterend",
+			"description": "Schakel achtergrondleren in op basis van taakresultaten om promptbegeleiding, toolvoorkeuren en foutvermijding in de loop van de tijd te verbeteren"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "Vraagevaluatie",
+			"description": "Evaluatie van gebruikersvragen inschakelen om de kwaliteit en relevantie van antwoorden te verbeteren"
 		}
 	},
 	"promptCaching": {

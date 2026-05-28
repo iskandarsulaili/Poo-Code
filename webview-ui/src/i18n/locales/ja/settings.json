@@ -314,6 +314,8 @@
 		"getOpenRouterApiKey": "OpenRouter APIキーを取得",
 		"vercelAiGatewayApiKey": "Vercel AI Gateway APIキー",
 		"getVercelAiGatewayApiKey": "Vercel AI Gateway APIキーを取得",
+		"opencodeGoApiKey": "Opencode Go APIキー",
+		"getOpencodeGoApiKey": "Opencode Go APIキーを取得",
 		"apiKeyStorageNotice": "APIキーはVSCodeのシークレットストレージに安全に保存されます",
 		"openAiCodexRateLimits": {
 			"title": "Usage Limits for Codex{{planLabel}}",
@@ -827,6 +829,14 @@
 			"refreshSuccess": "ツールが正常に更新されました",
 			"refreshError": "ツールの更新に失敗しました",
 			"toolParameters": "パラメーター"
+		},
+		"SELF_IMPROVING": {
+			"name": "自己改善",
+			"description": "タスク結果からのバックグラウンド学習を有効にして、時間の経過とともにプロンプトのガイダンス、ツールの好み、エラー回避を改善します"
+		},
+		"SELF_IMPROVING_QUESTION_EVALUATION": {
+			"name": "質問評価",
+			"description": "ユーザーの質問を評価して、応答の品質と関連性を向上させる"
 		}
 	},
 	"promptCaching": {
