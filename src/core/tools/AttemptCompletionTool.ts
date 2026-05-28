@@ -36,9 +36,21 @@ interface DelegationProvider {
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
+	/**
+	 * Guards against repeated attempt_completion calls for the same task instance.
+	 * Once a task has completed, subsequent calls return a no-op result.
+	 */
+	private static completedTasks = new Set<string>()
+
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
 		const { result } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
+
+		// Guard: prevent repeated attempt_completion calls for the same task
+		if (AttemptCompletionTool.completedTasks.has(task.taskId)) {
+			pushToolResult(formatResponse.toolResult("Task already completed. No further action needed."))
+			return
+		}
 
 		// Prevent attempt_completion if any tool failed in the current turn
 		if (task.didToolFailInCurrentTurn) {
@@ -197,6 +209,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task): void {
+		// Register this task as completed to prevent duplicate calls
+		AttemptCompletionTool.completedTasks.add(task.taskId)
+
 		// Force final token usage update before emitting TaskCompleted.
 		// This ensures the latest stats are captured regardless of throttle timer.
 		task.emitFinalTokenUsageUpdate()

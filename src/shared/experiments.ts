@@ -22,15 +22,15 @@ interface ExperimentConfig {
 }
 
 export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
-	PREVENT_FOCUS_DISRUPTION: { enabled: false },
-	IMAGE_GENERATION: { enabled: false },
-	RUN_SLASH_COMMAND: { enabled: false },
-	CUSTOM_TOOLS: { enabled: false },
+	PREVENT_FOCUS_DISRUPTION: { enabled: true },
+	IMAGE_GENERATION: { enabled: true },
+	RUN_SLASH_COMMAND: { enabled: true },
+	CUSTOM_TOOLS: { enabled: true },
 	SELF_IMPROVING: { enabled: true },
 	SELF_IMPROVING_AUTO_SKILLS: { enabled: true },
 	SELF_IMPROVING_AUTO_MODE: { enabled: true },
 	SELF_IMPROVING_REVIEW_TEAM: { enabled: true },
-	SELF_IMPROVING_FULL_TRUST: { enabled: false },
+	SELF_IMPROVING_FULL_TRUST: { enabled: true },
 	SELF_IMPROVING_QUESTION_EVALUATION: { enabled: true },
 }
 

@@ -9,7 +9,7 @@ describe("experiments", () => {
 		it("is configured correctly", () => {
 			expect(EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION).toBe("preventFocusDisruption")
 			expect(experimentConfigsMap.PREVENT_FOCUS_DISRUPTION).toMatchObject({
-				enabled: false,
+				enabled: true,
 			})
 		})
 	})
@@ -81,7 +81,7 @@ describe("experiments", () => {
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
 
-		it("returns false for self improving by default", () => {
+		it("returns false when self improving is explicitly disabled", () => {
 			const experiments: Record<ExperimentId, boolean> = {
 				preventFocusDisruption: false,
 				imageGeneration: false,

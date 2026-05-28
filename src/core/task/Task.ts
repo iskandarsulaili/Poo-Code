@@ -129,6 +129,8 @@ import { processUserContentMentions } from "../mentions/processUserContentMentio
 import { getMessagesSinceLastSummary, summarizeConversation, getEffectiveApiHistory } from "../condense"
 import { MessageQueueService } from "../message-queue/MessageQueueService"
 import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
+import { ToolErrorHealer } from "../../services/self-improving/ToolErrorHealer"
+import { ResilienceService } from "../../services/self-improving/ResilienceService"
 import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
@@ -288,6 +290,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	private static lastGlobalApiRequestTime?: number
 	private autoApprovalHandler: AutoApprovalHandler
 	questionEvaluator: QuestionEvaluatorService | undefined
+	toolErrorHealer: ToolErrorHealer | undefined
+	resilienceService: ResilienceService | undefined
 
 	/**
 	 * Reset the global API request timestamp. This should only be used for testing.
@@ -1779,17 +1783,15 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 			} without value for required parameter '${paramName}'. Retrying...`,
 		)
 
-		// Notify ToolErrorHealer for self-healing learning
-		const provider = this.providerRef.deref()
-		const healer = provider?.selfImprovingManager?.toolErrorHealer
-		if (healer) {
-			const fix = healer.handleToolError(toolName, paramName)
-			if (fix && fix.autoCorrectable) {
-				console.error(`[ToolErrorHealer] Auto-correcting ${toolName}.${paramName}: ${fix.fix}`)
-			}
+		// Consult ToolErrorHealer for fix suggestion and include it in the error message
+		const fix = this.toolErrorHealer?.handleToolError(toolName, paramName)
+		const baseError = formatResponse.missingToolParameterError(paramName)
+		if (fix) {
+			const fixHint = fix.autoCorrectable ? `\n\n[Fix suggestion: ${fix.fix}]` : `\n\n[Hint: ${fix.fix}]`
+			return formatResponse.toolError(baseError + fixHint)
 		}
 
-		return formatResponse.toolError(formatResponse.missingToolParameterError(paramName))
+		return formatResponse.toolError(baseError)
 	}
 
 	// Lifecycle
@@ -3226,16 +3228,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							)
 
 							// Consult ResilienceService for backoff and recovery guidance
-							const provider = this.providerRef.deref()
-							const resilienceService = provider?.selfImprovingManager?.resilienceService
-							const backoffDelay = resilienceService?.onStreamingFailure() ?? -1
+							const backoffDelay = this.resilienceService?.onStreamingFailure() ?? -1
 
 							if (backoffDelay < 0) {
 								// Max retries exceeded — enter recovery mode
 								console.error(
 									`[Task#${this.taskId}.${this.instanceId}] Max streaming retries exceeded. Entering recovery mode.`,
 								)
-								const recoverySuggestion = resilienceService?.getRecoverySuggestion()
+								const recoverySuggestion = this.resilienceService?.getRecoverySuggestion()
 								if (recoverySuggestion) {
 									await this.say("error", `[Recovery] ${recoverySuggestion}`)
 								}

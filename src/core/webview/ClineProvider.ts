@@ -1103,6 +1103,8 @@ export class ClineProvider
 			initialStatus: historyItem.status,
 		})
 		task.questionEvaluator = this.selfImprovingManager.questionEvaluator
+		task.toolErrorHealer = this.selfImprovingManager.toolErrorHealer
+		task.resilienceService = this.selfImprovingManager.resilienceService
 
 		if (isRehydratingCurrentTask) {
 			// Replace the current task in-place to avoid UI flicker
@@ -3009,6 +3011,8 @@ export class ClineProvider
 			...options,
 		})
 		task.questionEvaluator = this.selfImprovingManager.questionEvaluator
+		task.toolErrorHealer = this.selfImprovingManager.toolErrorHealer
+		task.resilienceService = this.selfImprovingManager.resilienceService
 
 		await this.addClineToStack(task)
 		task.start()

@@ -333,6 +333,7 @@ describe("SelfImprovingManager", () => {
 				devilsAdvocateWeight: 0.3,
 				deciderThreshold: 0.6,
 			},
+			questionEvaluator: expect.objectContaining({ enabled: true }),
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 		})
@@ -464,6 +465,7 @@ describe("SelfImprovingManager", () => {
 				devilsAdvocateWeight: 0.3,
 				deciderThreshold: 0.6,
 			},
+			questionEvaluator: expect.objectContaining({ enabled: true }),
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 		})
