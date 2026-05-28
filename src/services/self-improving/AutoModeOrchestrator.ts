@@ -2,6 +2,8 @@ import type { LearnedPattern } from "./types"
 import type { Logger } from "./types"
 import type { ModeFactoryService } from "./ModeFactoryService"
 import type { PatternAnalyzer } from "./PatternAnalyzer"
+import type { ToolErrorHealer } from "./ToolErrorHealer"
+import type { ResilienceService } from "./ResilienceService"
 
 export interface AutoModeConfig {
 	enabled: boolean
@@ -25,6 +27,8 @@ export class AutoModeOrchestrator {
 	private logger: Logger
 	private modeFactory: ModeFactoryService | null = null
 	private patternAnalyzer: PatternAnalyzer | null = null
+	private toolErrorHealer: ToolErrorHealer | null = null
+	private resilienceService: ResilienceService | null = null
 	private config: AutoModeConfig
 	private autoReviewTimer: ReturnType<typeof setInterval> | null = null
 	private lastModeCreationTime: number = 0
@@ -38,9 +42,16 @@ export class AutoModeOrchestrator {
 	private lastFailureTool: string | null = null
 	private lastFailureMessage: string | null = null
 
-	constructor(logger: Logger, config?: Partial<AutoModeConfig>) {
+	constructor(
+		logger: Logger,
+		config?: Partial<AutoModeConfig>,
+		healer?: ToolErrorHealer,
+		resilience?: ResilienceService,
+	) {
 		this.logger = logger
 		this.config = { ...DEFAULT_CONFIG, ...config }
+		this.toolErrorHealer = healer ?? null
+		this.resilienceService = resilience ?? null
 	}
 
 	setModeFactory(factory: ModeFactoryService): void {
@@ -49,6 +60,14 @@ export class AutoModeOrchestrator {
 
 	setPatternAnalyzer(analyzer: PatternAnalyzer): void {
 		this.patternAnalyzer = analyzer
+	}
+
+	setToolErrorHealer(healer: ToolErrorHealer): void {
+		this.toolErrorHealer = healer
+	}
+
+	setResilienceService(resilience: ResilienceService): void {
+		this.resilienceService = resilience
 	}
 
 	/**
@@ -141,19 +160,59 @@ export class AutoModeOrchestrator {
 		this.failureCount++
 		this.logger.appendLine(`[AutoMode] Auto-heal: failure #${this.failureCount} detected, attempting recovery`)
 
-		// Strategy 1: Same tool failed 3+ times → suggest different approach
+		// Strategy 1: Tool parameter error → use ToolErrorHealer for known fixes
+		if (
+			this.lastFailureMessage?.includes("Missing required parameter") &&
+			this.lastFailureTool &&
+			this.toolErrorHealer
+		) {
+			// Extract the missing parameter name from the error message
+			// Expected format: "Missing required parameter: <paramName>"
+			const paramMatch = this.lastFailureMessage.match(/Missing required parameter[:\s]+(\S+)/i)
+			const missingParam = paramMatch?.[1] ?? "unknown"
+
+			const fix = this.toolErrorHealer.handleToolError(this.lastFailureTool, missingParam)
+			if (fix) {
+				this.logger.appendLine(
+					`[AutoMode] Auto-heal: applied tool error fix for ${this.lastFailureTool}.${missingParam} — ${fix.fix}`,
+				)
+				// Reset state after applying fix
+				this.failureCount = 0
+				this.lastFailureTool = null
+				this.lastFailureMessage = null
+				return
+			}
+		}
+
+		// Strategy 2: Transient/streaming failure → use ResilienceService for retry scheduling
+		if (this.resilienceService && this.failureCount < 3) {
+			const delay = this.resilienceService.onStreamingFailure()
+			if (delay > 0) {
+				this.logger.appendLine(
+					`[AutoMode] Auto-heal: scheduled retry in ${delay}ms (failure #${this.failureCount})`,
+				)
+				return
+			}
+			if (delay === -1) {
+				this.logger.appendLine(`[AutoMode] Auto-heal: max retries exceeded, entering recovery mode`)
+				// Reset counter so next failure can trigger strategy change
+				this.failureCount = 0
+				return
+			}
+		}
+
+		// Strategy 3: Same tool failed 3+ times → suggest different approach
 		if (this.failureCount >= 3 && this.lastFailureTool) {
 			this.logger.appendLine(
 				`[AutoMode] Recovery: Tool "${this.lastFailureTool}" failed ${this.failureCount}+ times. Suggesting alternative approach.`,
 			)
-			// Reset counter after suggesting alternative
 			this.failureCount = 0
 			this.lastFailureTool = null
 			this.lastFailureMessage = null
 			return
 		}
 
-		// Strategy 2: Model stuck in loop (rapid consecutive failures) → inject strategy change
+		// Strategy 4: Model stuck in loop (rapid consecutive failures) → inject strategy change
 		if (this.failureCount >= 5) {
 			this.logger.appendLine(
 				`[AutoMode] Recovery: ${this.failureCount} consecutive failures detected. Injecting strategy change signal.`,
@@ -164,14 +223,7 @@ export class AutoModeOrchestrator {
 			return
 		}
 
-		// Strategy 3: Missing tool parameter → log the fix suggestion
-		if (this.lastFailureMessage?.includes("Missing required parameter")) {
-			this.logger.appendLine(
-				`[AutoMode] Recovery: Missing parameter detected. Fix suggestion available for next attempt.`,
-			)
-		}
-
-		// Also queue for pattern analysis as before
+		// Fallback: queue for pattern analysis
 		this.logger.appendLine("[AutoMode] Auto-heal: failure queued for pattern analysis")
 	}
 

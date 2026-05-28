@@ -41,10 +41,19 @@ const DEFAULT_CONFIG: ReviewTeamConfig = {
 export class ReviewTeamService {
 	private logger: Logger
 	private config: ReviewTeamConfig
+	private approvedPatternCount: number = 0
 
 	constructor(logger: Logger, config?: Partial<ReviewTeamConfig>) {
 		this.logger = logger
 		this.config = { ...DEFAULT_CONFIG, ...config }
+	}
+
+	getApprovedPatternCount(): number {
+		return this.approvedPatternCount
+	}
+
+	setApprovedPatternCount(count: number): void {
+		this.approvedPatternCount = count
 	}
 
 	getConfig(): ReviewTeamConfig {
@@ -78,9 +87,19 @@ export class ReviewTeamService {
 		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
 		// Lower threshold for new patterns to avoid chicken-and-egg problem
 		const threshold = pattern.frequency < 3 ? 0.4 : this.config.deciderThreshold
+		// First-pattern boost: when no patterns have ever been approved, lower threshold
+		// to seed the system and break the chicken-and-egg problem
+		const isFirstPattern = this.approvedPatternCount === 0
+		const effectiveThreshold = isFirstPattern ? Math.min(threshold, 0.3) : threshold
+		// Also override decider for first pattern — decider's 0.5 threshold is too high for cold-start
+		const effectiveDeciderApproved = isFirstPattern ? weightedScore >= effectiveThreshold : deciderVote.approved
 		const approved = this.config.requireUnanimous
 			? innovatorVote.approved && contrarianVote.approved && devilsAdvocateVote.approved && deciderVote.approved
-			: weightedScore >= threshold && deciderVote.approved
+			: weightedScore >= effectiveThreshold && effectiveDeciderApproved
+
+		if (approved) {
+			this.approvedPatternCount++
+		}
 
 		const summary = this.generateSummary(pattern, approved, weightedScore, [
 			innovatorVote,

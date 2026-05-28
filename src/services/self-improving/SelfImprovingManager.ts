@@ -111,10 +111,15 @@ export class SelfImprovingManager {
 		this.transcriptRecall = this.createTranscriptRecall()
 		this.insightsEngine = new InsightsEngine(this.globalStoragePath)
 		this.modeFactory = new ModeFactoryService(this.logger)
-		this.autoModeOrchestrator = new AutoModeOrchestrator(this.logger, {
-			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
-			reviewIntervalMs: 30000,
-		})
+		this.autoModeOrchestrator = new AutoModeOrchestrator(
+			this.logger,
+			{
+				enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
+				reviewIntervalMs: 30000,
+			},
+			this.toolErrorHealer,
+			this.resilienceService,
+		)
 		this.autoModeOrchestrator.setModeFactory(this.modeFactory)
 		this.reviewTeam = new ReviewTeamService(this.logger, {
 			enabled: this.getExperiments()?.selfImprovingReviewTeam ?? true,

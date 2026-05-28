@@ -1,12 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { AutoModeOrchestrator } from "../AutoModeOrchestrator"
+import type { ToolErrorHealer } from "../ToolErrorHealer"
+import type { ResilienceService } from "../ResilienceService"
 
 describe("AutoModeOrchestrator", () => {
 	let orchestrator: AutoModeOrchestrator
 	let mockLogger: { appendLine: ReturnType<typeof vi.fn> }
+	let mockHealer: Partial<ToolErrorHealer>
+	let mockResilience: Partial<ResilienceService>
 
 	beforeEach(() => {
 		mockLogger = { appendLine: vi.fn() }
+		mockHealer = {
+			handleToolError: vi.fn(),
+		}
+		mockResilience = {
+			onStreamingFailure: vi.fn(),
+		}
 		orchestrator = new AutoModeOrchestrator(mockLogger as any)
 	})
 
@@ -34,6 +44,17 @@ describe("AutoModeOrchestrator", () => {
 			expect(config.enabled).toBe(false)
 			expect(config.autoCreateModes).toBe(true) // from defaults
 			expect(config.reviewIntervalMs).toBe(10000)
+			custom.stop()
+		})
+
+		it("should accept optional ToolErrorHealer and ResilienceService", () => {
+			const custom = new AutoModeOrchestrator(
+				mockLogger as any,
+				undefined,
+				mockHealer as ToolErrorHealer,
+				mockResilience as ResilienceService,
+			)
+			expect(custom).toBeInstanceOf(AutoModeOrchestrator)
 			custom.stop()
 		})
 	})
@@ -84,6 +105,117 @@ describe("AutoModeOrchestrator", () => {
 				(call: any[]) => typeof call[0] === "string" && call[0].includes("failure"),
 			)
 			expect(failureLogs.length).toBe(0)
+		})
+	})
+
+	describe("autoHeal — ToolErrorHealer integration", () => {
+		it("should call ToolErrorHealer when missing parameter error detected", async () => {
+			const healer: Partial<ToolErrorHealer> = {
+				handleToolError: vi.fn().mockReturnValue({
+					fix: "Provide a valid regex pattern for the search",
+					autoCorrectable: true,
+				}),
+			}
+			const orch = new AutoModeOrchestrator(mockLogger as any, undefined, healer as ToolErrorHealer)
+			orch.setPatternAnalyzer({} as any)
+			orch.recordFailure("search_files", "Missing required parameter: regex")
+
+			await orch.onTaskCompleted(false)
+
+			expect(healer.handleToolError).toHaveBeenCalledWith("search_files", "regex")
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(
+				expect.stringContaining("Auto-heal: applied tool error fix"),
+			)
+			orch.stop()
+		})
+
+		it("should not call ToolErrorHealer when no missing parameter error", async () => {
+			const healer: Partial<ToolErrorHealer> = {
+				handleToolError: vi.fn(),
+			}
+			const orch = new AutoModeOrchestrator(mockLogger as any, undefined, healer as ToolErrorHealer)
+			orch.setPatternAnalyzer({} as any)
+			orch.recordFailure("search_files", "Connection timeout")
+
+			await orch.onTaskCompleted(false)
+
+			expect(healer.handleToolError).not.toHaveBeenCalled()
+			orch.stop()
+		})
+
+		it("should fall through when ToolErrorHealer returns null", async () => {
+			const healer: Partial<ToolErrorHealer> = {
+				handleToolError: vi.fn().mockReturnValue(null),
+			}
+			const orch = new AutoModeOrchestrator(mockLogger as any, undefined, healer as ToolErrorHealer)
+			orch.setPatternAnalyzer({} as any)
+			orch.recordFailure("search_files", "Missing required parameter: regex")
+
+			await orch.onTaskCompleted(false)
+
+			expect(healer.handleToolError).toHaveBeenCalled()
+			// Should fall through to pattern analysis fallback
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(expect.stringContaining("queued for pattern analysis"))
+			orch.stop()
+		})
+	})
+
+	describe("autoHeal — ResilienceService integration", () => {
+		it("should call ResilienceService for transient failures", async () => {
+			const resilience: Partial<ResilienceService> = {
+				onStreamingFailure: vi.fn().mockReturnValue(2000),
+			}
+			const orch = new AutoModeOrchestrator(
+				mockLogger as any,
+				undefined,
+				undefined,
+				resilience as ResilienceService,
+			)
+			orch.setPatternAnalyzer({} as any)
+			orch.recordFailure("execute_command", "Network timeout")
+
+			await orch.onTaskCompleted(false)
+
+			expect(resilience.onStreamingFailure).toHaveBeenCalled()
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(
+				expect.stringContaining("Auto-heal: scheduled retry in 2000ms"),
+			)
+			orch.stop()
+		})
+
+		it("should handle max retries exceeded from ResilienceService", async () => {
+			const resilience: Partial<ResilienceService> = {
+				onStreamingFailure: vi.fn().mockReturnValue(-1),
+			}
+			const orch = new AutoModeOrchestrator(
+				mockLogger as any,
+				undefined,
+				undefined,
+				resilience as ResilienceService,
+			)
+			orch.setPatternAnalyzer({} as any)
+			orch.recordFailure("execute_command", "Network timeout")
+
+			await orch.onTaskCompleted(false)
+
+			expect(resilience.onStreamingFailure).toHaveBeenCalled()
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(expect.stringContaining("max retries exceeded"))
+			orch.stop()
+		})
+	})
+
+	describe("autoHeal — setter injection", () => {
+		it("should accept ToolErrorHealer via setter", () => {
+			const orch = new AutoModeOrchestrator(mockLogger as any)
+			orch.setToolErrorHealer(mockHealer as ToolErrorHealer)
+			// No error means success
+			orch.stop()
+		})
+
+		it("should accept ResilienceService via setter", () => {
+			const orch = new AutoModeOrchestrator(mockLogger as any)
+			orch.setResilienceService(mockResilience as ResilienceService)
+			orch.stop()
 		})
 	})
 

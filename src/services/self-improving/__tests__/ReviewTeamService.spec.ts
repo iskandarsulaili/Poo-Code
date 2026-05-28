@@ -30,6 +30,7 @@ describe("ReviewTeamService", () => {
 		})
 
 		it("should reject low-confidence patterns", async () => {
+			service.setApprovedPatternCount(1) // Bypass first-pattern boost
 			const pattern: LearnedPattern = {
 				id: "test-2",
 				patternType: "tool",
@@ -91,6 +92,7 @@ describe("ReviewTeamService", () => {
 
 	describe("reviewPatterns", () => {
 		it("should return approved and rejected lists", async () => {
+			service.setApprovedPatternCount(1) // Bypass first-pattern boost
 			const patterns: LearnedPattern[] = [
 				{
 					id: "p1",
@@ -123,6 +125,97 @@ describe("ReviewTeamService", () => {
 			expect(result.approved).toHaveLength(1)
 			expect(result.rejected).toHaveLength(1)
 			expect(result.verdicts).toHaveLength(2)
+		})
+		it("should auto-approve first pattern when approvedPatternCount is 0 (cold start boost)", async () => {
+			const pattern: LearnedPattern = {
+				id: "cold-start-1",
+				patternType: "tool",
+				state: "active",
+				summary: "cold start pattern",
+				confidenceScore: 0.3,
+				frequency: 1,
+				successRate: 0.3,
+				firstSeenAt: Date.now(),
+				lastSeenAt: Date.now(),
+				sourceSignals: [],
+				context: { toolNames: ["read_file"] },
+			}
+			// approvedPatternCount starts at 0
+			const verdict = await service.reviewPattern(pattern)
+			expect(verdict.approved).toBe(true)
+			expect(verdict.score).toBeGreaterThanOrEqual(0.3)
+		})
+
+		it("should still reject low-confidence pattern after first pattern is approved", async () => {
+			// Seed: approve first pattern to bump count
+			const firstPattern: LearnedPattern = {
+				id: "seed-1",
+				patternType: "tool",
+				state: "active",
+				summary: "seed",
+				confidenceScore: 0.3,
+				frequency: 1,
+				successRate: 0.3,
+				firstSeenAt: Date.now(),
+				lastSeenAt: Date.now(),
+				sourceSignals: [],
+				context: { toolNames: ["read_file"] },
+			}
+			const firstVerdict = await service.reviewPattern(firstPattern)
+			expect(firstVerdict.approved).toBe(true)
+
+			// Now approvedPatternCount is 1, so boost no longer applies
+			const secondPattern: LearnedPattern = {
+				id: "cold-start-2",
+				patternType: "tool",
+				state: "active",
+				summary: "second pattern",
+				confidenceScore: 0.3,
+				frequency: 1,
+				successRate: 0.3,
+				firstSeenAt: Date.now(),
+				lastSeenAt: Date.now(),
+				sourceSignals: [],
+				context: { toolNames: ["read_file"] },
+			}
+			const secondVerdict = await service.reviewPattern(secondPattern)
+			expect(secondVerdict.approved).toBe(false)
+		})
+
+		it("should increment approvedPatternCount via reviewPatterns", async () => {
+			expect(service.getApprovedPatternCount()).toBe(0)
+
+			const patterns: LearnedPattern[] = [
+				{
+					id: "boost-test-1",
+					patternType: "tool",
+					state: "active",
+					summary: "first",
+					confidenceScore: 0.3,
+					frequency: 1,
+					successRate: 0.3,
+					firstSeenAt: Date.now(),
+					lastSeenAt: Date.now(),
+					sourceSignals: [],
+					context: { toolNames: ["read_file"] },
+				},
+				{
+					id: "boost-test-2",
+					patternType: "tool",
+					state: "active",
+					summary: "second",
+					confidenceScore: 0.8,
+					frequency: 10,
+					successRate: 0.9,
+					firstSeenAt: Date.now(),
+					lastSeenAt: Date.now(),
+					sourceSignals: [],
+					context: { toolNames: ["read_file", "edit_file"] },
+				},
+			]
+			const result = await service.reviewPatterns(patterns)
+			expect(result.approved).toHaveLength(2)
+			expect(service.getApprovedPatternCount()).toBe(2)
 		})
 	})
 
