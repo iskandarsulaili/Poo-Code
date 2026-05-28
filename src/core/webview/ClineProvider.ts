@@ -213,6 +213,11 @@ export class ClineProvider
 
 		this.customModesManager = new CustomModesManager(this.context, async () => {
 			await this.postStateToWebviewWithoutClineMessages()
+			// Re-create auto modes when .roomodes changes — CustomModesManager reloads
+			// merged state and may overwrite auto-created modes.
+			if (this.selfImprovingManager) {
+				await this.selfImprovingManager.recreateModes()
+			}
 		})
 
 		// Initialize MCP Hub through the singleton manager

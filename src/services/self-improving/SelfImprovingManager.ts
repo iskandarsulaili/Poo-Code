@@ -111,6 +111,23 @@ export class SelfImprovingManager {
 		this.transcriptRecall = this.createTranscriptRecall()
 		this.insightsEngine = new InsightsEngine(this.globalStoragePath)
 		this.modeFactory = new ModeFactoryService(this.logger)
+		this.reviewTeam = new ReviewTeamService(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingReviewTeam ?? true,
+		})
+		this.questionEvaluator = new QuestionEvaluatorService(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingQuestionEvaluation ?? true,
+			useFullTeam: this.getExperiments()?.selfImprovingReviewTeam ?? true,
+		})
+		this.questionEvaluator.setReviewTeam(this.reviewTeam)
+
+		// Init dependencies first — needed by AutoModeOrchestrator below
+		this.resilienceService = new ResilienceService(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
+		})
+		this.toolErrorHealer = new ToolErrorHealer(this.logger, {
+			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
+		})
+
 		this.autoModeOrchestrator = new AutoModeOrchestrator(
 			this.logger,
 			{
@@ -121,24 +138,26 @@ export class SelfImprovingManager {
 			this.resilienceService,
 		)
 		this.autoModeOrchestrator.setModeFactory(this.modeFactory)
-		this.reviewTeam = new ReviewTeamService(this.logger, {
-			enabled: this.getExperiments()?.selfImprovingReviewTeam ?? true,
-		})
-		this.questionEvaluator = new QuestionEvaluatorService(this.logger, {
-			enabled: this.getExperiments()?.selfImprovingQuestionEvaluation ?? true,
-			useFullTeam: this.getExperiments()?.selfImprovingReviewTeam ?? true,
-		})
-		this.questionEvaluator.setReviewTeam(this.reviewTeam)
-		this.resilienceService = new ResilienceService(this.logger, {
-			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
-		})
-		this.toolErrorHealer = new ToolErrorHealer(this.logger, {
-			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
-		})
 	}
 
 	setCustomModesManager(manager: any): void {
 		this.modeFactory.setCustomModesManager(manager)
+		// Wire pattern provider so ModeFactory can recreate modes on hot-reload
+		if (this.runtime) {
+			this.modeFactory.setPatternProvider(() => this.runtime!.store.getPatterns() as LearnedPattern[])
+		}
+	}
+
+	/**
+	 * Re-create auto modes from current patterns.
+	 * Called when .roomodes changes to re-apply auto-created modes
+	 * that may have been overwritten by the reload.
+	 */
+	async recreateModes(): Promise<string[]> {
+		if (!this.started || !this.runtime) {
+			return []
+		}
+		return this.modeFactory.recreateModes()
 	}
 
 	static isExperimentEnabled(experiments: Experiments | undefined, persistedEnabled?: boolean): boolean {

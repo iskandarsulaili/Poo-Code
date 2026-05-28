@@ -3,6 +3,16 @@ import type { LearnedPattern } from "./types"
 import type { Logger } from "./types"
 
 /**
+ * Minimum confidence for a pattern to be re-created as a mode on hot-reload.
+ */
+const MIN_RECREATE_CONFIDENCE = 0.3
+
+/**
+ * Minimum frequency for a pattern to be re-created as a mode on hot-reload.
+ */
+const MIN_RECREATE_FREQUENCY = 2
+
+/**
  * Maps tool names to appropriate tool groups.
  * Heuristic mapping based on common tool categories.
  */
@@ -41,6 +51,7 @@ type ToolGroup = "read" | "edit" | "command" | "mcp" | "modes"
 export class ModeFactoryService {
 	private logger: Logger
 	private customModesManager: { updateCustomMode(slug: string, config: ModeConfig): Promise<void> } | null = null
+	private getPatterns: (() => LearnedPattern[]) | null = null
 
 	constructor(logger: Logger) {
 		this.logger = logger
@@ -48,6 +59,42 @@ export class ModeFactoryService {
 
 	setCustomModesManager(manager: { updateCustomMode(slug: string, config: ModeConfig): Promise<void> }): void {
 		this.customModesManager = manager
+	}
+
+	/**
+	 * Register a callback to retrieve patterns from the learning store.
+	 * Required for hot-reload mode recreation.
+	 */
+	setPatternProvider(provider: () => LearnedPattern[]): void {
+		this.getPatterns = provider
+	}
+
+	/**
+	 * Re-create modes from current patterns.
+	 * Called when .roomodes changes to re-apply auto-created modes
+	 * that may have been overwritten by the reload.
+	 */
+	async recreateModes(): Promise<string[]> {
+		if (!this.getPatterns) {
+			this.logger.appendLine("[ModeFactory] Cannot recreate modes: pattern provider not set")
+			return []
+		}
+
+		const allPatterns = this.getPatterns()
+		const candidates = allPatterns.filter((p) => {
+			if (!p.context?.toolNames || p.context.toolNames.length === 0) return false
+			if ((p.confidenceScore ?? 0) < MIN_RECREATE_CONFIDENCE) return false
+			if ((p.frequency ?? 0) < MIN_RECREATE_FREQUENCY) return false
+			return true
+		})
+
+		if (candidates.length === 0) {
+			this.logger.appendLine("[ModeFactory] No candidate patterns for mode recreation")
+			return []
+		}
+
+		this.logger.appendLine(`[ModeFactory] Recreating ${candidates.length} modes from patterns`)
+		return this.createModesFromPatterns(candidates)
 	}
 
 	/**

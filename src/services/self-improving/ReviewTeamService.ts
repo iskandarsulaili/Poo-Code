@@ -42,6 +42,7 @@ export class ReviewTeamService {
 	private logger: Logger
 	private config: ReviewTeamConfig
 	private approvedPatternCount: number = 0
+	private approvedActionCount: number = 0
 
 	constructor(logger: Logger, config?: Partial<ReviewTeamConfig>) {
 		this.logger = logger
@@ -54,6 +55,14 @@ export class ReviewTeamService {
 
 	setApprovedPatternCount(count: number): void {
 		this.approvedPatternCount = count
+	}
+
+	getApprovedActionCount(): number {
+		return this.approvedActionCount
+	}
+
+	setApprovedActionCount(count: number): void {
+		this.approvedActionCount = count
 	}
 
 	getConfig(): ReviewTeamConfig {
@@ -163,9 +172,22 @@ export class ReviewTeamService {
 		const deciderVote = this.deciderReviewAction(action, [innovatorVote, contrarianVote, devilsAdvocateVote])
 
 		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
+		// Cold-start mitigation: when no actions have ever been approved, lower threshold
+		// to seed the system and break the chicken-and-egg problem.
+		// Max weighted score ~0.533 — can't reach default 0.6 threshold without boost.
+		const isFirstAction = this.approvedActionCount === 0
+		const effectiveThreshold = isFirstAction
+			? Math.min(this.config.deciderThreshold, 0.3)
+			: this.config.deciderThreshold
+		// Override decider for first action — decider's 0.5 threshold is too high for cold-start
+		const effectiveDeciderApproved = isFirstAction ? weightedScore >= effectiveThreshold : deciderVote.approved
 		const approved = this.config.requireUnanimous
 			? innovatorVote.approved && contrarianVote.approved && devilsAdvocateVote.approved && deciderVote.approved
-			: weightedScore >= this.config.deciderThreshold && deciderVote.approved
+			: weightedScore >= effectiveThreshold && effectiveDeciderApproved
+
+		if (approved) {
+			this.approvedActionCount++
+		}
 
 		const summary = `Action ${action.actionType} (${action.id}): ${approved ? "APPROVED" : "REJECTED"} (score: ${(weightedScore * 100).toFixed(0)}%)`
 
