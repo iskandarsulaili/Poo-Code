@@ -1,7 +1,9 @@
-> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. PR [#252](https://github.com/Zoo-Code-Org/Zoo-Code/pull/252) contains the complete diff.
+## Poo Code
 
 Poo-Code is a fork of Zoo-Code which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
 (The truth is I am too lazy to chunk it into smaller commits — see PR [#252](https://github.com/Zoo-Code-Org/Zoo-Code/pull/252) for the full pile)
+
+> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. PR [#252](https://github.com/Zoo-Code-Org/Zoo-Code/pull/252) contains the complete diff.
 
 ---
 
