@@ -128,6 +128,45 @@ export class ResilienceService {
 	}
 
 	/**
+	 * Check if the streaming failure is due to a large response (not model error).
+	 * Large responses occur when the model tries to deliver a comprehensive result
+	 * that exceeds API limits — this is not a model error and should not trigger recovery.
+	 */
+	isLargeResponseFailure(error: string): boolean {
+		const largeResponseIndicators = [
+			"response too large",
+			"response too long",
+			"max_tokens",
+			"maximum context length",
+			"too many tokens",
+			"content too large",
+			"stream.*timeout",
+			"timeout.*stream",
+			"413",
+			"payload too large",
+		]
+		return largeResponseIndicators.some((indicator) => new RegExp(indicator, "i").test(error))
+	}
+
+	/**
+	 * Handle a large response failure — suggest shortening instead of triggering recovery.
+	 * Does NOT increment consecutiveFailures since this isn't a model error.
+	 */
+	onLargeResponseFailure(): string {
+		return "The response was too large. Shorten the response and try again. Consider summarizing or splitting into smaller chunks."
+	}
+
+	/**
+	 * Called when the model is attempting to deliver a final result (attempt_completion).
+	 * Resets recovery state to prevent false positive recovery from large response failures.
+	 */
+	onDeliveryAttempt(): void {
+		this.state.consecutiveFailures = 0
+		this.state.isInRecoveryMode = false
+		this.state.recoveryAttempts = 0
+	}
+
+	/**
 	 * Called when a task succeeds — resets recovery state.
 	 */
 	onTaskSuccess(): void {

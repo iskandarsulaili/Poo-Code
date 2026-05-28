@@ -131,6 +131,7 @@ import { MessageQueueService } from "../message-queue/MessageQueueService"
 import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
 import { ToolErrorHealer } from "../../services/self-improving/ToolErrorHealer"
 import { ResilienceService } from "../../services/self-improving/ResilienceService"
+import { PreventionEngine } from "../../services/self-improving/PreventionEngine"
 import { AutoApprovalHandler, checkAutoApproval } from "../auto-approval"
 import { MessageManager } from "../message-manager"
 import { validateAndFixToolResultIds } from "./validateToolResultIds"
@@ -292,6 +293,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	questionEvaluator: QuestionEvaluatorService | undefined
 	toolErrorHealer: ToolErrorHealer | undefined
 	resilienceService: ResilienceService | undefined
+	preventionEngine: PreventionEngine | undefined
 
 	/**
 	 * Reset the global API request timestamp. This should only be used for testing.
@@ -3247,6 +3249,22 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								`[Task#${this.taskId}.${this.instanceId}] Stream failed, will retry: ${streamingFailedMessage}`,
 							)
 
+							// Check if this is a large response failure (not a model error)
+							// Large responses occur when the model tries to deliver a comprehensive result
+							// that exceeds API limits — don't trigger recovery, just suggest shortening
+							if (this.resilienceService?.isLargeResponseFailure(rawErrorMessage)) {
+								const suggestion = this.resilienceService.onLargeResponseFailure()
+								await this.say("error", `[Recovery] ${suggestion}`)
+								// Don't abort — let the model retry with a shorter response
+								// Push the same content back onto the stack to retry
+								stack.push({
+									userContent: currentUserContent,
+									includeFileDetails: false,
+									retryAttempt: (currentItem.retryAttempt ?? 0) + 1,
+								})
+								continue
+							}
+
 							// Consult ResilienceService for backoff and recovery guidance
 							const backoffDelay = this.resilienceService?.onStreamingFailure() ?? -1
 
@@ -4626,6 +4644,23 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordToolUsage(toolName)
 	}
 
+	/**
+	 * Get prevention context for a tool call before execution.
+	 * Returns warnings and suggestions that can be injected into the model's context.
+	 */
+	public getToolPreventionContext(
+		toolName: string,
+		params: Record<string, unknown>,
+	): string | null {
+		const sim = this.providerRef.deref()?.getSelfImprovingManager?.()
+		if (!sim?.preventionEngine) {
+			return null
+		}
+
+		const context = sim.preventionEngine.getPreventionContext(toolName, params)
+		return sim.preventionEngine.generatePreventionMessage(context)
+	}
+
 	public recordToolError(toolName: ToolName, error?: string) {
 		if (!this.toolUsage[toolName]) {
 			this.toolUsage[toolName] = { attempts: 0, failures: 0 }
@@ -4639,6 +4674,12 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 
 		// Record tool error in insights engine for session analysis
 		this.providerRef.deref()?.getSelfImprovingManager?.()?.insightsEngine?.recordError(toolName, error)
+
+		// Record tool error in prevention engine for cascade tracking
+		const sim = this.providerRef.deref()?.getSelfImprovingManager?.()
+		if (sim?.preventionEngine) {
+			sim.preventionEngine.recordToolResult(toolName, error ?? "unknown error", {})
+		}
 	}
 
 	// Getters

@@ -38,6 +38,7 @@ import type { ReviewTeamConfig } from "./ReviewTeamService"
 import { QuestionEvaluatorService } from "./QuestionEvaluatorService"
 import { ResilienceService } from "./ResilienceService"
 import { ToolErrorHealer } from "./ToolErrorHealer"
+import { PreventionEngine } from "./PreventionEngine"
 import type { CodeIndexManager } from "../code-index/manager"
 
 const SELF_IMPROVING_EXPERIMENT_ID = "selfImproving"
@@ -79,6 +80,7 @@ export class SelfImprovingManager {
 	public questionEvaluator: QuestionEvaluatorService
 	public resilienceService: ResilienceService
 	public toolErrorHealer: ToolErrorHealer
+	public preventionEngine: PreventionEngine
 	private _codeIndexManager: CodeIndexManager | undefined
 
 	private runtime: Runtime | undefined
@@ -131,6 +133,7 @@ export class SelfImprovingManager {
 		this.toolErrorHealer = new ToolErrorHealer(this.logger, {
 			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
 		})
+		this.preventionEngine = new PreventionEngine()
 
 		this.autoModeOrchestrator = new AutoModeOrchestrator(
 			this.logger,
@@ -610,6 +613,7 @@ export class SelfImprovingManager {
 		questionEvaluator: Record<string, unknown>
 		resilience: Record<string, unknown>
 		toolErrorHealer: Record<string, unknown>
+		preventionEngine: Record<string, unknown>
 	}> {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
 		const curatorStatus = this.curatorService.getStatus()
@@ -639,6 +643,7 @@ export class SelfImprovingManager {
 				questionEvaluator: questionEvaluatorStatus,
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
+				preventionEngine: { initialized: true },
 			}
 		}
 
@@ -657,6 +662,7 @@ export class SelfImprovingManager {
 				questionEvaluator: questionEvaluatorStatus,
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
+				preventionEngine: { initialized: true },
 			}
 		}
 
@@ -681,6 +687,7 @@ export class SelfImprovingManager {
 				questionEvaluator: questionEvaluatorStatus,
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
+				preventionEngine: { initialized: true },
 			}
 		} catch {
 			return {
@@ -697,6 +704,7 @@ export class SelfImprovingManager {
 				questionEvaluator: questionEvaluatorStatus,
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
+				preventionEngine: { initialized: true },
 			}
 		}
 	}

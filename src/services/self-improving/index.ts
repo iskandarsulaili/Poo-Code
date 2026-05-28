@@ -37,3 +37,11 @@ export type { TranscriptEntry } from "./TranscriptRecall"
 export type { InsightsReport } from "./InsightsEngine"
 
 export { DEFAULT_CONFIG, EMPTY_STATE } from "./types"
+
+export { ErrorClassifier, ErrorCategory } from "./ErrorClassifier"
+export type { ClassifiedError } from "./ErrorClassifier"
+export { ToolCallValidator } from "./ToolCallValidator"
+export type { ValidationResult } from "./ToolCallValidator"
+export { CascadeTracker } from "./CascadeTracker"
+export { PreventionEngine } from "./PreventionEngine"
+export type { PreventionContext } from "./PreventionEngine"

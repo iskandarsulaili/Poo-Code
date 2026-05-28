@@ -675,6 +675,20 @@ export async function presentAssistantMessage(cline: Task) {
 				}
 			}
 
+			// Inject prevention context before tool execution
+			if (!block.partial) {
+				const toolName = block.name as string
+				const params = block.nativeArgs ?? block.params ?? {}
+				const preventionMsg = cline.getToolPreventionContext(toolName, params)
+				if (preventionMsg) {
+					// Inject prevention message as a tool_result hint so the model sees it
+					cline.userMessageContent.push({
+						type: "text",
+						text: `[Prevention: ${preventionMsg}]`,
+					})
+				}
+			}
+
 			switch (block.name) {
 				case "write_to_file":
 					await checkpointSaveAndMark(cline)
@@ -813,6 +827,10 @@ export async function presentAssistantMessage(cline: Task) {
 					})
 					break
 				case "attempt_completion": {
+					// Reset recovery state — the model is trying to deliver a result,
+					// not failing. This prevents false positive recovery from large
+					// response failures during delivery attempts.
+					cline.resilienceService?.onDeliveryAttempt()
 					const completionCallbacks: AttemptCompletionCallbacks = {
 						askApproval,
 						handleError,
