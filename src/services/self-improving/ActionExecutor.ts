@@ -181,6 +181,7 @@ export class ActionExecutor {
 
 	private async executeSkillCreate(action: ImprovementAction): Promise<boolean> {
 		if (!this.skillsManager) {
+			this.logger.appendLine("[ActionExecutor] skillsManager not available — deferring SKILL_CREATE")
 			return false
 		}
 

@@ -13,6 +13,7 @@ import type {
 	SelfImprovingScope,
 	TaskEventInfo,
 } from "./types"
+import { experimentDefault } from "../../shared/experiments"
 import { LearningStore } from "./LearningStore"
 import { FeedbackCollector } from "./FeedbackCollector"
 import { PatternAnalyzer } from "./PatternAnalyzer"
@@ -151,8 +152,13 @@ export class SelfImprovingManager {
 			return false
 		}
 
-		// Check auto-skills from either experiments or persisted config
-		if (experiments?.selfImprovingAutoSkills === true) {
+		// Check auto-skills from experiments (explicitly set)
+		if (experiments && "selfImprovingAutoSkills" in experiments) {
+			return experiments.selfImprovingAutoSkills === true
+		}
+
+		// Fallback: check experiment default (experiments.ts config map)
+		if (experimentDefault.selfImprovingAutoSkills === true) {
 			return true
 		}
 
@@ -400,8 +406,7 @@ export class SelfImprovingManager {
 			}
 
 			// Review actions through multi-agent team
-			const { approved: approvedActions, rejected: rejectedActions } =
-				await this.reviewTeam.reviewActions(actions)
+			const { rejected: rejectedActions } = await this.reviewTeam.reviewActions(actions)
 
 			if (rejectedActions.length > 0) {
 				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedActions.length} actions`)

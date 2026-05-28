@@ -302,11 +302,11 @@ export class ReviewTeamService {
 		let score = 0.5
 		const reasons: string[] = []
 
-		if (action.actionType === "SKILL_CREATE" && !("skillContent" in action)) {
+		if (action.actionType === "SKILL_CREATE" && !("content" in action.payload)) {
 			score -= 0.2
 			reasons.push("Skill creation without content — may be premature")
 		}
-		if (action.actionType === "ERROR_AVOIDANCE" && !("errorKey" in action)) {
+		if (action.actionType === "ERROR_AVOIDANCE" && !("errorKey" in action.payload)) {
 			score -= 0.15
 			reasons.push("Error avoidance without specific error key")
 		}
