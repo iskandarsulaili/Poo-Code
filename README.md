@@ -46,6 +46,8 @@ This fork adds **~10,500 lines** of self-improving infrastructure across **45 fi
 | `selfImprovingFullTrust`          | Auto-approve tools that TrustService considers safe          |
 | `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer |
 
+## Statistic
+
 Projects generated: Countless
 Monthly cost: LLM & electric bills
 Non-refundable cost: My soul
@@ -55,18 +57,20 @@ Don't star this repo. It will just get me excited to drag you into the jobless c
 
 Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Org/Zoo-Code/issues as they know more than me (no cap)
 
----
-
 ## FAQ
 
-Q: What is your day job?
-A: Jobless
+**Q:** What is your day job?
 
-Q: What is your night job?
-A: Sleep
+**A:** Jobless
 
-Q: Ooo. Can I buy you coffee?
-A: No. I have insomnia.
+**Q:** What is your night job?
 
-Q: Can I.
-A: This is the end of the conversation.
+**A:** Sleep
+
+**Q:** Ooo. Can I buy you coffee?
+
+**A:** No. I have insomnia.
+
+**Q:** Can I?
+
+**A:** This is end of conversation.
