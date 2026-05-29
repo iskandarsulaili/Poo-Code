@@ -1356,4 +1356,113 @@ export class CuratorService {
 
 		return lines.join("\n")
 	}
+
+	/**
+		* Create a specialized skill from observed task patterns.
+		* This method generates a full SKILL.md with proper frontmatter
+		* and registers it in the appropriate skill directory.
+		*
+		* @param name - Skill name (validated per agentskills.io spec)
+		* @param description - Skill description
+		* @param instructions - Full markdown instructions body (without frontmatter)
+		* @param options - Optional configuration
+		* @param options.source - "global" or "project" (default: "project")
+		* @param options.modeSlugs - Mode restrictions (undefined = any mode)
+		* @param options.tools - Tool references for the skill
+		* @param options.assets - Bundled assets (scripts, templates, etc.)
+		* @returns Path to created SKILL.md file
+		*/
+	async createSpecializedSkill(
+		name: string,
+		description: string,
+		instructions: string,
+		options?: {
+			source?: "global" | "project"
+			modeSlugs?: string[]
+			tools?: string[]
+			assets?: Array<{ relativePath: string; content: string }>
+		},
+	): Promise<string> {
+		const { validateSkillName } = await import("@roo-code/types")
+		const validation = validateSkillName(name)
+		if (!validation.valid) {
+			throw new Error(`Invalid skill name "${name}": ${validation.error}`)
+		}
+
+		const trimmedDescription = description.trim()
+		if (trimmedDescription.length < 1 || trimmedDescription.length > 1024) {
+			throw new Error(`Description must be 1-1024 characters (got ${trimmedDescription.length})`)
+		}
+
+		if (!instructions.trim()) {
+			throw new Error("Instructions body cannot be empty")
+		}
+
+		const source = options?.source ?? "project"
+		const modeSlugs = options?.modeSlugs
+		const tools = options?.tools
+		const assets = options?.assets
+
+		// Build full SKILL.md content with frontmatter
+		const frontmatterLines = [`name: ${name}`, `description: ${trimmedDescription}`]
+		if (modeSlugs && modeSlugs.length > 0) {
+			frontmatterLines.push("modeSlugs:")
+			for (const slug of modeSlugs) {
+				frontmatterLines.push(`  - ${slug}`)
+			}
+		}
+		if (tools && tools.length > 0) {
+			frontmatterLines.push("tools:")
+			for (const tool of tools) {
+				frontmatterLines.push(`  - ${tool}`)
+			}
+		}
+
+		const fullContent = `---
+${frontmatterLines.join("\n")}
+---
+
+${instructions.trim()}
+`
+
+		// Determine skill directory
+		// this.config.skillsDir is the absolute path to the skills root (e.g., .roo/skills/)
+		// this.baseDir is the curator's internal state dir — only used as fallback
+		const skillsDir = this.config.skillsDir
+			? path.join(this.config.skillsDir, name)
+			: path.join(this.baseDir, "..", "..", "..", "skills", name)
+
+		const skillMdPath = path.join(skillsDir, "SKILL.md")
+
+		// Check for existing skill
+		try {
+			await fs.access(skillMdPath)
+			throw new Error(`Skill "${name}" already exists at ${skillMdPath}`)
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("already exists")) {
+				throw error
+			}
+			// File doesn't exist — proceed
+		}
+
+		// Create skill directory and write SKILL.md
+		await fs.mkdir(skillsDir, { recursive: true })
+		await fs.writeFile(skillMdPath, fullContent, "utf-8")
+
+		// Bundle assets if provided
+		if (assets && assets.length > 0) {
+			for (const asset of assets) {
+				const assetPath = path.join(skillsDir, asset.relativePath)
+				await fs.mkdir(path.dirname(assetPath), { recursive: true })
+				await fs.writeFile(assetPath, asset.content, "utf-8")
+			}
+		}
+
+		// Register in skill usage store
+		const skillId = `skill:${source}:${name}`
+		this.skillUsageStore.getOrCreate(skillId, name, "agent")
+
+		this.logger.appendLine(`[CuratorService] Specialized skill created: ${name} at ${skillMdPath}`)
+		return skillMdPath
+	}
 }

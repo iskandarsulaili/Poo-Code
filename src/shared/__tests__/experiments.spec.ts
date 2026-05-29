@@ -58,6 +58,8 @@ describe("experiments", () => {
 				cascadeTracker: false,
 				resilienceService: false,
 				toolErrorHealer: false,
+				recoveryContext: false,
+				selfImprovingSpecializedSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(false)
 		})
@@ -87,6 +89,8 @@ describe("experiments", () => {
 				cascadeTracker: false,
 				resilienceService: false,
 				toolErrorHealer: false,
+				recoveryContext: false,
+				selfImprovingSpecializedSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, EXPERIMENT_IDS.PREVENT_FOCUS_DISRUPTION)).toBe(true)
 		})
@@ -116,6 +120,8 @@ describe("experiments", () => {
 				cascadeTracker: false,
 				resilienceService: false,
 				toolErrorHealer: false,
+				recoveryContext: false,
+				selfImprovingSpecializedSkills: false,
 			}
 			expect(Experiments.isEnabled(experiments, "nonExistentExperiment" as ExperimentId)).toBeUndefined()
 		})

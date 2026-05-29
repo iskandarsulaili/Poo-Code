@@ -135,6 +135,7 @@ export const actionTypeSchema = z.enum([
 	"SKILL_CREATE",
 	"SKILL_UPDATE",
 	"SKILL_MERGE",
+	"SKILL_CREATE_FROM_SCRATCH",
 ])
 
 export type ActionType = z.infer<typeof actionTypeSchema>

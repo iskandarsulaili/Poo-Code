@@ -113,4 +113,166 @@ describe("ImprovementApplier", () => {
 		expect(actions.some((action) => action.actionType === "SKILL_CREATE")).toBe(true)
 		expect(actions.some((action) => action.actionType === "SKILL_UPDATE")).toBe(false)
 	})
+
+	describe("specialized skills (SKILL_CREATE_FROM_SCRATCH)", () => {
+		function createReactPattern(): LearnedPattern {
+			return {
+				id: "pattern-react",
+				patternType: "tool",
+				state: "active",
+				summary: "Building React components with TypeScript",
+				confidenceScore: 0.85,
+				frequency: 5,
+				successRate: 0.95,
+				firstSeenAt: 1,
+				lastSeenAt: 10,
+				sourceSignals: ["TASK_SUCCESS"],
+				context: {
+					toolNames: ["write_to_file", "read_file", "search_files"],
+					modes: ["code"],
+				},
+			}
+		}
+
+		function createApiPattern(): LearnedPattern {
+			return {
+				id: "pattern-api",
+				patternType: "tool",
+				state: "active",
+				summary: "Creating REST API endpoints with Express",
+				confidenceScore: 0.78,
+				frequency: 4,
+				successRate: 0.88,
+				firstSeenAt: 2,
+				lastSeenAt: 8,
+				sourceSignals: ["TASK_SUCCESS"],
+				context: {
+					toolNames: ["write_to_file", "read_file", "search_files"],
+					modes: ["code"],
+				},
+			}
+		}
+
+		function createLowConfidencePattern(): LearnedPattern {
+			return {
+				id: "pattern-low",
+				patternType: "tool",
+				state: "active",
+				summary: "Building React components with TypeScript",
+				confidenceScore: 0.4,
+				frequency: 2,
+				successRate: 0.6,
+				firstSeenAt: 1,
+				lastSeenAt: 2,
+				sourceSignals: ["TASK_SUCCESS"],
+				context: {
+					toolNames: ["write_to_file"],
+					modes: ["code"],
+				},
+			}
+		}
+
+		it("generates SKILL_CREATE_FROM_SCRATCH for high-confidence domain patterns", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => true,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+			})
+
+			const actions = applier.generateActions([createReactPattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeDefined()
+			expect(specializedAction?.payload.name).toContain("react-component")
+			expect(specializedAction?.payload.description).toContain("react-component")
+			expect(specializedAction?.payload.instructions).toContain("React Component")
+			expect(specializedAction?.payload.tools).toEqual(["write_to_file", "read_file", "search_files"])
+			expect(specializedAction?.payload.modeSlugs).toEqual(["code"])
+		})
+
+		it("generates SKILL_CREATE_FROM_SCRATCH for API domain patterns", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => true,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+			})
+
+			const actions = applier.generateActions([createApiPattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeDefined()
+			expect(specializedAction?.payload.name).toContain("api-endpoint")
+		})
+
+		it("does not generate specialized skills for low-confidence patterns", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => true,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+			})
+
+			const actions = applier.generateActions([createLowConfidencePattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeUndefined()
+		})
+
+		it("does not generate specialized skills when experiment is disabled", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => true,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: false } as any),
+			})
+
+			const actions = applier.generateActions([createReactPattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeUndefined()
+		})
+
+		it("does not generate specialized skills when auto-skills are disabled", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => false,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+			})
+
+			const actions = applier.generateActions([createReactPattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeUndefined()
+		})
+
+		it("skips specialized skill creation when skill already exists", () => {
+			const applier = new ImprovementApplier({
+				getSkillNames: () => [],
+				getSkillProvenance: () => "unknown",
+				isAutoSkillsEnabled: () => true,
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				hasSkill: (name: string) => name.includes("react-component"),
+			})
+
+			const actions = applier.generateActions([createReactPattern()])
+			const specializedAction = actions.find(
+				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
+			)
+
+			expect(specializedAction).toBeUndefined()
+		})
+	})
 })

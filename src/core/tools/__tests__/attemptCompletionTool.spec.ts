@@ -80,6 +80,7 @@ describe("attemptCompletionTool", () => {
 			emitFinalTokenUsageUpdate: vi.fn(),
 			emit: vi.fn(),
 			getTokenUsage: vi.fn().mockReturnValue({}),
+			getTaskMode: vi.fn().mockResolvedValue("code"),
 			toolUsage: {},
 			taskId: "task_1",
 			apiConfiguration: { apiProvider: "test" } as any,

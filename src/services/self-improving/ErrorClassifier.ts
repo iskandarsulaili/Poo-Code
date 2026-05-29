@@ -65,7 +65,7 @@ export class ErrorClassifier {
 				severity: 4,
 				toolName,
 				suggestion:
-					"Break down the task into smaller steps. Try using a simpler approach or different tool.",
+					"[Context Recovery] The previous attempt failed. Break down the task into smaller steps. Try using a simpler approach or different tool. Relevant code context will be injected automatically.",
 				isRecoverable: true,
 				recoveryAction: "break_down_task",
 			}

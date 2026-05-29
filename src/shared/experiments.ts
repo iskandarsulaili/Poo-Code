@@ -24,6 +24,8 @@ export const EXPERIMENT_IDS = {
 	TOOL_ERROR_HEALER: "toolErrorHealer",
 	VERIFICATION_ENGINE: "verificationEngine",
 	REQUIREMENTS_VERIFICATION: "requirementsVerification",
+	RECOVERY_CONTEXT: "recoveryContext",
+	SELF_IMPROVING_SPECIALIZED_SKILLS: "selfImprovingSpecializedSkills",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -58,6 +60,8 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	TOOL_ERROR_HEALER: { enabled: true },
 	VERIFICATION_ENGINE: { enabled: true },
 	REQUIREMENTS_VERIFICATION: { enabled: true },
+	RECOVERY_CONTEXT: { enabled: true },
+	SELF_IMPROVING_SPECIALIZED_SKILLS: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

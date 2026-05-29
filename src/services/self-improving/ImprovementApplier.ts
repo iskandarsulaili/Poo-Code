@@ -90,6 +90,13 @@ export class ImprovementApplier {
 			actions.push(...mergeActions)
 		}
 
+		// SPECIALIZED_SKILL: generate SKILL_CREATE_FROM_SCRATCH actions for
+		// high-confidence, domain-specific patterns that warrant dedicated skills
+		if (experiments?.selfImprovingSpecializedSkills !== false) {
+			const specializedActions = this.generateSpecializedSkillActions(patterns, now)
+			actions.push(...specializedActions)
+		}
+
 		return actions
 	}
 
@@ -403,6 +410,183 @@ ${bulletList}
 1. Start with ${inlineTools}.
 2. Keep the sequence focused on the same reusable workflow.
 3. This skill was automatically merged from similar patterns.
+`
+	}
+
+	/**
+	 * Generate SKILL_CREATE_FROM_SCRATCH actions for high-confidence,
+	 * domain-specific patterns that warrant dedicated specialized skills.
+	 *
+	 * A pattern qualifies for specialization when:
+	 * - It has high confidence (>= 0.7) and frequency (>= 3)
+	 * - It involves domain-specific tool combinations
+	 * - The pattern summary suggests a reusable domain (e.g., "react", "api", "test", "deploy")
+	 */
+	private generateSpecializedSkillActions(patterns: LearnedPattern[], now: number): ImprovementAction[] {
+		const actions: ImprovementAction[] = []
+
+		// Only generate when auto-skills are enabled
+		if (!this.isAutoSkillsEnabled()) {
+			return actions
+		}
+
+		const source = this.getAutoSkillsScope() === "global" ? "global" : "project"
+
+		for (const pattern of patterns) {
+			if (pattern.state !== "active") {
+				continue
+			}
+
+			// Require high confidence and sufficient frequency for specialization
+			if ((pattern.confidenceScore ?? 0) < 0.7 || (pattern.frequency ?? 0) < 3) {
+				continue
+			}
+
+			const toolNames = pattern.context.toolNames ?? []
+			if (toolNames.length === 0) {
+				continue
+			}
+
+			// Detect domain from pattern summary and tool names
+			const domain = this.detectSpecializedDomain(pattern.summary, toolNames)
+			if (!domain) {
+				continue
+			}
+
+			const skillName = this.buildSpecializedSkillName(domain, toolNames)
+			const skillId = this.buildSkillId(skillName, source)
+
+			// Skip if skill already exists
+			if (this.hasSkill(skillName, source)) {
+				continue
+			}
+
+			const description = `Specialized skill for ${domain}: ${pattern.summary}`
+			const instructions = this.buildSpecializedSkillContent(skillName, description, domain, toolNames, pattern)
+
+			actions.push({
+				id: crypto.randomUUID(),
+				actionType: "SKILL_CREATE_FROM_SCRATCH",
+				target: "skills-manager",
+				payload: {
+					name: skillName,
+					skillId,
+					description,
+					instructions,
+					source,
+					modeSlugs: pattern.context.modes ?? [],
+					tools: toolNames,
+					confidence: pattern.confidenceScore ?? 0.7,
+					patternId: pattern.id,
+				},
+				timestamp: now,
+			})
+		}
+
+		return actions
+	}
+
+	/**
+	 * Detect a specialized domain from pattern summary and tool names.
+	 * Returns a domain string (e.g., "react-component", "api-endpoint", "test-suite")
+	 * or undefined if no specialized domain is detected.
+	 */
+	private detectSpecializedDomain(summary: string, toolNames: string[]): string | undefined {
+		const lowerSummary = summary.toLowerCase()
+		const allTools = toolNames.map((t) => t.toLowerCase()).join(" ")
+
+		// Domain detection rules — ordered by specificity
+		const domains: Array<{ pattern: RegExp; domain: string }> = [
+			// React/UI component building
+			{ pattern: /\b(react|component|jsx|tsx|ui|component)\b/, domain: "react-component" },
+			// API endpoint creation
+			{ pattern: /\b(api|endpoint|route|rest|graphql|express|fastify)\b/, domain: "api-endpoint" },
+			// Test writing
+			{ pattern: /\b(test|spec|vitest|jest|mocha|tdd|assert)\b/, domain: "test-suite" },
+			// Database operations
+			{ pattern: /\b(db|database|sql|query|schema|migration|postgres|mongodb)\b/, domain: "database-operation" },
+			// Deployment/CI
+			{ pattern: /\b(deploy|ci|cd|pipeline|docker|kubernetes|k8s)\b/, domain: "deployment-pipeline" },
+			// Code review
+			{ pattern: /\b(review|audit|lint|quality|refactor)\b/, domain: "code-review" },
+			// Documentation
+			{ pattern: /\b(doc|readme|markdown|documentation|api-doc)\b/, domain: "documentation" },
+			// Security
+			{ pattern: /\b(security|auth|oauth|jwt|vulnerability|audit)\b/, domain: "security-audit" },
+		]
+
+		const searchText = `${lowerSummary} ${allTools}`
+		for (const { pattern, domain } of domains) {
+			if (pattern.test(searchText)) {
+				return domain
+			}
+		}
+
+		return undefined
+	}
+
+	/**
+	 * Build a skill name for a specialized domain.
+	 * Format: {domain}-{tool1}-{tool2} (sorted, deduplicated)
+	 */
+	private buildSpecializedSkillName(domain: string, toolNames: string[]): string {
+		const toolPart = toolNames
+			.map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "-"))
+			.sort()
+			.join("-")
+		return `${domain}-${toolPart}`
+	}
+
+	/**
+	 * Build full SKILL.md instructions body for a specialized skill.
+	 * Returns only the markdown body (without frontmatter — frontmatter is
+	 * added by ActionExecutor).
+	 */
+	private buildSpecializedSkillContent(
+		skillName: string,
+		description: string,
+		domain: string,
+		toolNames: string[],
+		pattern: LearnedPattern,
+	): string {
+		const title = skillName
+			.split("-")
+			.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+			.join(" ")
+
+		const toolList = toolNames.map((t) => `- \`${t}\``).join("\n")
+		const confidencePct = ((pattern.confidenceScore ?? 0) * 100).toFixed(0)
+
+		return `# ${title}
+
+## Description
+
+${description}
+
+## Domain
+
+${domain}
+
+## When to Use
+
+This specialized skill is recommended when the task involves **${domain}** patterns with the following tools:
+
+${toolList}
+
+## Instructions
+
+1. Analyze the task context to determine if this ${domain} skill applies.
+2. Use the preferred tools in the recommended sequence.
+3. Follow domain-specific best practices for ${domain}.
+4. Validate output against the expected ${domain} patterns.
+
+## Preferred Tools
+
+${toolList}
+
+## Confidence
+
+This skill was auto-generated from observed patterns with **${confidencePct}%** confidence (frequency: ${pattern.frequency}).
 `
 	}
 }

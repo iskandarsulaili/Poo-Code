@@ -171,6 +171,7 @@ export class SelfImprovingManager {
 			this.runtime.patternAnalyzer.setCodeIndexManager(manager)
 			this.runtime.codeIndexAdapter.setCodeIndexManager(manager!)
 			this.preventionEngine.setCodeIndexAdapter(this.runtime.codeIndexAdapter)
+			this.resilienceService.setCodeIndexAdapter(this.runtime.codeIndexAdapter)
 		}
 		this.reviewTeam.setCodeIndexManager(manager)
 		this.questionEvaluator.setCodeIndexManager(manager)
@@ -1004,7 +1005,8 @@ export class SelfImprovingManager {
 					(action) =>
 						action.actionType === "SKILL_SUGGESTION" ||
 						action.actionType === "SKILL_CREATE" ||
-						action.actionType === "SKILL_UPDATE",
+						action.actionType === "SKILL_UPDATE" ||
+						action.actionType === "SKILL_CREATE_FROM_SCRATCH",
 				).length,
 		})
 	}

@@ -126,6 +126,70 @@ describe("ActionExecutor", () => {
 		)
 	})
 
+	it("creates specialized skills from scratch via SKILL_CREATE_FROM_SCRATCH", async () => {
+		const memoryStore = { store: vi.fn() } as any
+		const skillUsageStore = { getOrCreate: vi.fn() } as any
+		const skillsManager = {
+			createSkillFromContent: vi.fn().mockResolvedValue("/tmp/.roo/skills/react-component-builder/SKILL.md"),
+		} as any
+		const executor = new ActionExecutor(memoryStore, skillUsageStore, logger, skillsManager)
+
+		const action: ImprovementAction = {
+			id: "action-specialized",
+			actionType: "SKILL_CREATE_FROM_SCRATCH",
+			target: "skills-manager",
+			payload: {
+				name: "react-component-builder",
+				description: "Specialized skill for building React components",
+				instructions: "# React Component Builder\n\n## Instructions\n\n1. Create component file\n2. Add TypeScript types\n3. Write tests",
+				source: "project",
+				modeSlugs: ["code"],
+				tools: ["read_file", "write_to_file", "search_files"],
+				assets: [
+					{ relativePath: "scripts/validate.sh", content: "#!/bin/bash\necho validate" },
+				],
+			},
+			timestamp: 1,
+		}
+
+		await expect(executor.execute(action)).resolves.toBe(true)
+		expect(skillsManager.createSkillFromContent).toHaveBeenCalledWith(
+			"react-component-builder",
+			"project",
+			"Specialized skill for building React components",
+			expect.stringContaining("name: react-component-builder"),
+			["code"],
+		)
+		expect(skillUsageStore.getOrCreate).toHaveBeenCalledWith(
+			expect.stringMatching(/^skill:project:react-component-builder/),
+			"react-component-builder",
+			"agent",
+		)
+	})
+
+	it("rejects SKILL_CREATE_FROM_SCRATCH with missing required fields", async () => {
+		const memoryStore = { store: vi.fn() } as any
+		const skillUsageStore = { getOrCreate: vi.fn() } as any
+		const skillsManager = {
+			createSkillFromContent: vi.fn(),
+		} as any
+		const executor = new ActionExecutor(memoryStore, skillUsageStore, logger, skillsManager)
+
+		const action: ImprovementAction = {
+			id: "action-incomplete",
+			actionType: "SKILL_CREATE_FROM_SCRATCH",
+			target: "skills-manager",
+			payload: {
+				name: "incomplete-skill",
+				// missing description and instructions
+			},
+			timestamp: 1,
+		}
+
+		await expect(executor.execute(action)).resolves.toBe(false)
+		expect(skillsManager.createSkillFromContent).not.toHaveBeenCalled()
+	})
+
 	it("updates existing agent-managed skills from mutation actions", async () => {
 		const memoryStore = { store: vi.fn() } as any
 		const skillUsageStore = {

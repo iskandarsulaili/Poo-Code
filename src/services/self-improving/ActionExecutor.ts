@@ -1,3 +1,5 @@
+import * as fs from "fs/promises"
+import * as path from "path"
 import crypto from "crypto"
 
 import type { MemoryBackend } from "./MemoryBackend"
@@ -14,6 +16,16 @@ interface SkillMutationManager {
 	): Promise<string>
 	updateSkillContent(name: string, source: "global" | "project", content: string, mode?: string): Promise<void>
 	getSkillContent?(name: string, currentMode?: string): Promise<{ instructions: string } | null>
+}
+
+/**
+ * Bundled asset reference for SKILL_CREATE_FROM_SCRATCH.
+ */
+interface BundledAsset {
+	/** Relative path within the skill directory (e.g., "scripts/validate.sh") */
+	relativePath: string
+	/** File content as string */
+	content: string
 }
 
 /**
@@ -77,6 +89,9 @@ export class ActionExecutor {
 					break
 				case "SKILL_MERGE":
 					executed = await this.executeSkillMerge(action)
+					break
+				case "SKILL_CREATE_FROM_SCRATCH":
+					executed = await this.executeSkillCreateFromScratch(action)
 					break
 				default:
 					this.logger.appendLine(`[ActionExecutor] Unknown action type: ${action.actionType}`)
@@ -299,6 +314,139 @@ export class ActionExecutor {
 
 		this.logger.appendLine(`[ActionExecutor] Merge complete: ${absorbNames.length} skills → ${umbrellaName}`)
 		return true
+	}
+
+	/**
+	 * Execute SKILL_CREATE_FROM_SCRATCH — creates a full specialized skill
+	 * with proper frontmatter, instructions, and optional bundled assets.
+	 *
+	 * Payload fields:
+	 * - name: skill name (validated per agentskills.io spec)
+	 * - description: skill description
+	 * - instructions: full markdown body (without frontmatter)
+	 * - modeSlugs?: string[] — mode restrictions
+	 * - tools?: string[] — tool references for the skill
+	 * - assets?: BundledAsset[] — referenced scripts/assets to bundle
+	 * - source: "global" | "project"
+	 */
+	private async executeSkillCreateFromScratch(action: ImprovementAction): Promise<boolean> {
+		if (!this.skillsManager) {
+			this.logger.appendLine("[ActionExecutor] skillsManager not available — deferring SKILL_CREATE_FROM_SCRATCH")
+			return false
+		}
+
+		const name = this.readStringPayload(action.payload.name)
+		const description = this.readStringPayload(action.payload.description)
+		const instructions = this.readStringPayload(action.payload.instructions)
+		const source = this.readSkillSource(action.payload.source)
+		const modeSlugs = this.readStringArrayPayload(action.payload.modeSlugs)
+		const tools = this.readStringArrayPayload(action.payload.tools)
+		const assets = this.readAssetsPayload(action.payload.assets)
+		const skillId = this.readStringPayload(action.payload.skillId) ?? this.buildSkillId(name, source)
+		const createdBy = this.readSkillProvenance(action.payload.createdBy) ?? "agent"
+
+		if (!name || !description || !instructions || !source || !skillId) {
+			this.logger.appendLine(
+				`[ActionExecutor] SKILL_CREATE_FROM_SCRATCH missing required fields: name=${!!name} desc=${!!description} instr=${!!instructions} source=${!!source}`,
+			)
+			return false
+		}
+
+		// Validate skill name format
+		const { validateSkillName } = await import("@roo-code/types")
+		const validation = validateSkillName(name)
+		if (!validation.valid) {
+			this.logger.appendLine(
+				`[ActionExecutor] SKILL_CREATE_FROM_SCRATCH invalid skill name "${name}": ${validation.error}`,
+			)
+			return false
+		}
+
+		// Build full SKILL.md content with frontmatter
+		const frontmatterLines = [`name: ${name}`, `description: ${description}`]
+		if (modeSlugs.length > 0) {
+			frontmatterLines.push("modeSlugs:")
+			for (const slug of modeSlugs) {
+				frontmatterLines.push(`  - ${slug}`)
+			}
+		}
+		if (tools.length > 0) {
+			frontmatterLines.push("tools:")
+			for (const tool of tools) {
+				frontmatterLines.push(`  - ${tool}`)
+			}
+		}
+
+		const fullContent = `---
+${frontmatterLines.join("\n")}
+---
+
+${instructions.trim()}
+`
+
+		// Create the skill via SkillsManager
+		await this.skillsManager.createSkillFromContent(name, source, description, fullContent, modeSlugs)
+
+		// Bundle referenced assets if provided
+		if (assets.length > 0) {
+			await this.bundleAssets(name, source, assets)
+		}
+
+		this.skillUsageStore.getOrCreate(skillId, name, createdBy)
+		this.logger.appendLine(`[ActionExecutor] Specialized skill created from scratch: ${name}`)
+		return true
+	}
+
+	/**
+	 * Bundle referenced assets into the skill directory.
+	 */
+	private async bundleAssets(
+		skillName: string,
+		source: "global" | "project",
+		assets: BundledAsset[],
+	): Promise<void> {
+		try {
+			// Determine skill directory path
+			const { getGlobalRooDirectory } = await import("../roo-config")
+			let baseDir: string
+			if (source === "global") {
+				baseDir = getGlobalRooDirectory()
+			} else {
+				// For project skills, we need the cwd — best-effort
+				baseDir = process.cwd()
+			}
+
+			const skillDir = path.join(baseDir, "skills", skillName)
+			await fs.mkdir(skillDir, { recursive: true })
+
+			for (const asset of assets) {
+				const assetPath = path.join(skillDir, asset.relativePath)
+				await fs.mkdir(path.dirname(assetPath), { recursive: true })
+				await fs.writeFile(assetPath, asset.content, "utf-8")
+				this.logger.appendLine(`[ActionExecutor] Bundled asset: ${asset.relativePath}`)
+			}
+		} catch (error) {
+			this.logger.appendLine(
+				`[ActionExecutor] Asset bundling error for "${skillName}": ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	/**
+	 * Parse bundled assets from payload.
+	 */
+	private readAssetsPayload(value: unknown): BundledAsset[] {
+		if (!Array.isArray(value)) {
+			return []
+		}
+
+		return value.filter(
+			(item): item is BundledAsset =>
+				typeof item === "object" &&
+				item !== null &&
+				typeof (item as any).relativePath === "string" &&
+				typeof (item as any).content === "string",
+		)
 	}
 
 	private readStringPayload(value: unknown): string | undefined {

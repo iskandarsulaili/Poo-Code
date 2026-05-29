@@ -135,7 +135,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// Guard 6: Code quality verification (VerificationEngine)
-			if (this.verificationEngine) {
+			// Skip verification for research mode — research tasks don't need build/lint/types/tests
+			const currentMode = await task.getTaskMode()
+			const isResearchMode = currentMode.includes("research")
+			if (this.verificationEngine && !isResearchMode) {
 				const verResult = await this.verificationEngine.verify()
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
 					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates.filter((g) => !g.passed).map((g) => `  ❌ ${g.name}: ${g.error || "failed"}`).join("\n")}\n\nPlease fix these issues before completing the task.`

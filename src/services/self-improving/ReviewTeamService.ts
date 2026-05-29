@@ -439,7 +439,7 @@ export class ReviewTeamService {
 		let score = 0.5
 		const reasons: string[] = []
 
-		if (action.actionType === "SKILL_CREATE") {
+		if (action.actionType === "SKILL_CREATE" || action.actionType === "SKILL_CREATE_FROM_SCRATCH") {
 			score += 0.15
 			reasons.push("Skill creation enables reusable knowledge")
 		}
@@ -508,6 +508,10 @@ export class ReviewTeamService {
 		if (action.actionType === "SKILL_CREATE" && !("content" in action.payload)) {
 			score -= 0.2
 			reasons.push("Skill creation without content — may be premature")
+		}
+		if (action.actionType === "SKILL_CREATE_FROM_SCRATCH" && !("instructions" in action.payload)) {
+			score -= 0.2
+			reasons.push("SKILL_CREATE_FROM_SCRATCH without instructions — may be incomplete")
 		}
 		if (action.actionType === "ERROR_AVOIDANCE" && !("errorKey" in action.payload)) {
 			score -= 0.15

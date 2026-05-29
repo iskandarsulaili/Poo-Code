@@ -1,4 +1,8 @@
 import type { Logger } from "./types"
+import type { ClassifiedError } from "./ErrorClassifier"
+import { ErrorCategory } from "./ErrorClassifier"
+import type { CodeIndexAdapter } from "./CodeIndexAdapter"
+import type { VectorStoreSearchResult } from "../code-index/interfaces/vector-store"
 
 export interface ResilienceConfig {
 	enabled: boolean
@@ -40,11 +44,16 @@ export class ResilienceService {
 	private logger: Logger
 	private config: ResilienceConfig
 	private state: RecoveryState
+	private codeIndexAdapter: CodeIndexAdapter | undefined
 
 	constructor(logger: Logger, config?: Partial<ResilienceConfig>) {
 		this.logger = logger
 		this.config = { ...DEFAULT_CONFIG, ...config }
 		this.state = this.getInitialState()
+	}
+
+	setCodeIndexAdapter(adapter: CodeIndexAdapter | undefined): void {
+		this.codeIndexAdapter = adapter
 	}
 
 	getConfig(): ResilienceConfig {
@@ -234,6 +243,79 @@ export class ResilienceService {
 			recoveryAttempts: 0,
 			isInRecoveryMode: false,
 		}
+	}
+
+	/**
+	 * Format a single VectorStoreSearchResult into a human-readable context line.
+	 */
+	private formatSearchResult(result: VectorStoreSearchResult): string {
+		const filePath = result.payload?.filePath ?? String(result.id)
+		const startLine = result.payload?.startLine
+		const endLine = result.payload?.endLine
+		const snippet = result.payload?.codeChunk
+		const lineRange =
+			startLine !== undefined && endLine !== undefined
+				? ` (lines ${startLine}-${endLine})`
+				: startLine !== undefined
+					? ` (line ${startLine})`
+					: ""
+		const snippetStr = snippet ? `: ${snippet.slice(0, 200).replace(/\n/g, " ")}` : ""
+		return `- ${filePath}${lineRange}${snippetStr}`
+	}
+
+	/**
+	 * Generate a recovery context block based on the classified error and original message.
+	 * For MODEL_THOUGHT_FAILURE with recoveryAction "break_down_task", queries the code index
+	 * for relevant context and injects a contextual guidance block.
+	 * Non-blocking — returns original message on any error or when no enrichment is needed.
+	 * Gated behind recoveryContext experiment flag.
+	 */
+	async generateRecoveryContext(
+		classifiedError: ClassifiedError,
+		originalMessage: string,
+		experiments?: Record<string, boolean>,
+	): Promise<string> {
+		// Only enrich for MODEL_THOUGHT_FAILURE with break_down_task recovery
+		if (
+			classifiedError.category !== ErrorCategory.MODEL_THOUGHT_FAILURE ||
+			classifiedError.recoveryAction !== "break_down_task"
+		) {
+			return originalMessage
+		}
+
+		// Check experiment gate
+		if (experiments?.recoveryContext === false) {
+			return originalMessage
+		}
+
+		// Try to enrich with code index context
+		if (this.codeIndexAdapter?.isAvailable()) {
+			try {
+				const results = await this.codeIndexAdapter.searchVectorStore(originalMessage)
+				if (results && results.length > 0) {
+					const contextLines = results.map((r) => this.formatSearchResult(r))
+					const contextBlock = [
+						"[Context Recovery] The previous attempt failed. Here is relevant context from the codebase to help:",
+						...contextLines,
+					].join("\n")
+
+					this.logger.appendLine(
+						`[Resilience] Recovery context generated: ${results.length} code index results`,
+					)
+					return `${originalMessage}\n\n${contextBlock}`
+				}
+			} catch (error) {
+				// Graceful fallback — log and return original message
+				this.logger.appendLine(
+					`[Resilience] Recovery context generation error: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}
+
+		// Fallback: inject a simpler contextual guidance block without code index
+		const fallbackGuidance =
+			"[Context Recovery] The previous attempt failed. Consider breaking the task into smaller, more focused steps. Try using a simpler approach or different tool."
+		return `${originalMessage}\n\n${fallbackGuidance}`
 	}
 
 	getStatus(): Record<string, any> {

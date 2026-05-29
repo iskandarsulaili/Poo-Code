@@ -3303,9 +3303,49 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								}
 							}
 
-							// Push the same content back onto the stack to retry, incrementing the retry attempt counter
+							// --- Recovery context injection ---
+							// Classify the error and generate recovery context to enrich the retry
+							// Non-blocking: if enrichment fails, we retry with original content
+							let retryUserContent = currentUserContent
+							try {
+								const sim = this.providerRef.deref()?.getSelfImprovingManager?.()
+								if (sim?.preventionEngine && this.resilienceService) {
+									const classifiedError = sim.preventionEngine
+										.getErrorClassifier()
+										.classify(rawErrorMessage)
+									// Extract text from current user content for enrichment
+									const originalText = currentUserContent
+										.filter((c): c is Anthropic.TextBlockParam => c.type === "text")
+										.map((c) => c.text)
+										.join("\n")
+									if (originalText) {
+										const enriched = await this.resilienceService.generateRecoveryContext(
+											classifiedError,
+											originalText,
+											state?.experiments,
+										)
+										if (enriched !== originalText) {
+											// Replace text blocks with enriched version
+											retryUserContent = [
+												{ type: "text" as const, text: enriched },
+												...currentUserContent.filter((c) => c.type !== "text"),
+											]
+											console.log(
+												`[Task#${this.taskId}.${this.instanceId}] Recovery context injected for retry`,
+											)
+										}
+									}
+								}
+							} catch (recoveryError) {
+								// Graceful fallback — retry with original content
+								console.error(
+									`[Task#${this.taskId}.${this.instanceId}] Recovery context injection failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+								)
+							}
+
+							// Push content back onto the stack to retry, incrementing the retry attempt counter
 							stack.push({
-								userContent: currentUserContent,
+								userContent: retryUserContent,
 								includeFileDetails: false,
 								retryAttempt: (currentItem.retryAttempt ?? 0) + 1,
 							})
