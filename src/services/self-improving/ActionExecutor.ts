@@ -86,11 +86,17 @@ export class ActionExecutor {
 			this.logger.appendLine(
 				`[ActionExecutor] ${executed ? "OK" : "DEF"} ${action.actionType} ${action.id} | ${(action as any).description?.substring(0, 100) ?? ""}`,
 			)
-
+	
 			return executed
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : String(error)
+			// Silently skip "already exists" errors — skill was already created by a prior cycle
+			if (errorMsg.toLowerCase().includes("already exists")) {
+				this.logger.appendLine(`[ActionExecutor] Skill already exists, skipping: ${action.id}`)
+				return true // Don't count as error — skill is already present
+			}
 			this.logger.appendLine(
-				`[ActionExecutor] Execution error for ${action.id}: ${error instanceof Error ? error.message : String(error)}`,
+				`[ActionExecutor] Execution error for ${action.id}: ${errorMsg}`,
 			)
 			return false
 		}

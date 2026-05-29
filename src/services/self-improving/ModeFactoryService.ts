@@ -54,6 +54,12 @@ export class ModeFactoryService {
 	private getPatterns: (() => LearnedPattern[]) | null = null
 	private pendingRecreateCalls: Array<() => void> = []
 
+	/** Re-entrancy guard: non-null while _recreateModes() is in flight */
+	private recreatePromise: Promise<string[]> | null = null
+	/** Debounce timer for collapsing rapid successive recreateModes() calls */
+	private recreateTimer: ReturnType<typeof setTimeout> | null = null
+	private readonly RECREATE_DEBOUNCE_MS = 500
+
 	constructor(logger: Logger) {
 		this.logger = logger
 	}
@@ -82,7 +88,44 @@ export class ModeFactoryService {
 	 * that may have been overwritten by the reload.
 	 * If the pattern provider is not yet set, queues the call for retry.
 	 */
+	/**
+	 * Re-create modes from current patterns.
+	 * Called when .roomodes changes to re-apply auto-created modes
+	 * that may have been overwritten by the reload.
+	 * If the pattern provider is not yet set, queues the call for retry.
+	 *
+	 * Debounces rapid successive calls and guards against re-entrancy
+	 * to prevent infinite recreation loops when writing to .roomodes
+	 * triggers the file watcher.
+	 */
 	async recreateModes(): Promise<string[]> {
+		// Debounce: collapse rapid successive calls
+		if (this.recreateTimer) {
+			clearTimeout(this.recreateTimer)
+		}
+
+		return new Promise((resolve) => {
+			this.recreateTimer = setTimeout(async () => {
+				// Re-entrancy guard: if already recreating, return existing promise
+				if (this.recreatePromise) {
+					const result = await this.recreatePromise
+					resolve(result)
+					return
+				}
+
+				this.recreatePromise = this._recreateModes()
+				const result = await this.recreatePromise
+				this.recreatePromise = null
+				resolve(result)
+			}, this.RECREATE_DEBOUNCE_MS)
+		})
+	}
+
+	/**
+	 * Internal implementation of recreateModes — debounced and guarded
+	 * against re-entrancy by the public wrapper.
+	 */
+	private async _recreateModes(): Promise<string[]> {
 		if (!this.getPatterns) {
 			this.logger.appendLine("[ModeFactory] Cannot recreate modes: pattern provider not set, queuing for retry")
 			return new Promise((resolve) => {
