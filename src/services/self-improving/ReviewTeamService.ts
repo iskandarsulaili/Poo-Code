@@ -60,6 +60,8 @@ export class ReviewTeamService {
 	private initialized = false
 	private initPromise: Promise<void> | null = null
 	private codeIndexManager: CodeIndexManager | undefined
+	private readonly COLD_START_GRACE_ACTIONS = 20
+	private actionCount = 0
 
 	constructor(logger: Logger, config?: Partial<ReviewTeamConfig>) {
 		this.logger = logger
@@ -281,9 +283,15 @@ export class ReviewTeamService {
 		// to seed the system and break the chicken-and-egg problem.
 		// Max weighted score ~0.533 — can't reach default 0.6 threshold without boost.
 		const isFirstAction = this.approvedActionCount === 0
-		const effectiveThreshold = isFirstAction
+		let effectiveThreshold = isFirstAction
 			? Math.min(this.config.deciderThreshold, 0.3)
 			: this.config.deciderThreshold
+		// Broader cold-start grace period: first 20 actions get a lower threshold
+		// to avoid excessive rejection during system warm-up
+		if (this.actionCount < this.COLD_START_GRACE_ACTIONS) {
+			effectiveThreshold = Math.max(effectiveThreshold * 0.5, 0.3)
+		}
+		this.actionCount++
 		// Override decider for first action — decider's 0.5 threshold is too high for cold-start
 		const effectiveDeciderApproved = isFirstAction ? weightedScore >= effectiveThreshold : deciderVote.approved
 		const approved = this.config.requireUnanimous
@@ -292,6 +300,10 @@ export class ReviewTeamService {
 
 		if (approved) {
 			this.approvedActionCount++
+		} else {
+			this.logger.appendLine(
+				`[ReviewTeam] Rejected action: ${action.actionType} (score: ${weightedScore.toFixed(2)}, threshold: ${effectiveThreshold.toFixed(2)})`,
+			)
 		}
 
 		const summary = `Action ${action.actionType} (${action.id}): ${approved ? "APPROVED" : "REJECTED"} (score: ${(weightedScore * 100).toFixed(0)}%)`

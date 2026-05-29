@@ -175,10 +175,14 @@ export class SelfImprovingManager {
 
 	setCustomModesManager(manager: any): void {
 		this.modeFactory.setCustomModesManager(manager)
-		// Wire pattern provider so ModeFactory can recreate modes on hot-reload
-		if (this.runtime) {
-			this.modeFactory.setPatternProvider(() => this.runtime!.store.getPatterns() as LearnedPattern[])
-		}
+		// Wire pattern provider eagerly — don't gate behind runtime.
+		// ModeFactoryService queues recreateModes() calls if provider not yet set.
+		this.modeFactory.setPatternProvider(() => {
+			if (this.runtime?.store) {
+				return this.runtime.store.getPatterns() as LearnedPattern[]
+			}
+			return []
+		})
 	}
 
 	/**

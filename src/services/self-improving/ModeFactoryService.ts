@@ -52,6 +52,7 @@ export class ModeFactoryService {
 	private logger: Logger
 	private customModesManager: { updateCustomMode(slug: string, config: ModeConfig): Promise<void> } | null = null
 	private getPatterns: (() => LearnedPattern[]) | null = null
+	private pendingRecreateCalls: Array<() => void> = []
 
 	constructor(logger: Logger) {
 		this.logger = logger
@@ -64,20 +65,31 @@ export class ModeFactoryService {
 	/**
 	 * Register a callback to retrieve patterns from the learning store.
 	 * Required for hot-reload mode recreation.
+	 * Flushes any queued recreateModes() calls that arrived before the provider was set.
 	 */
 	setPatternProvider(provider: () => LearnedPattern[]): void {
 		this.getPatterns = provider
+		const pending = [...this.pendingRecreateCalls]
+		this.pendingRecreateCalls = []
+		for (const call of pending) {
+			call()
+		}
 	}
 
 	/**
 	 * Re-create modes from current patterns.
 	 * Called when .roomodes changes to re-apply auto-created modes
 	 * that may have been overwritten by the reload.
+	 * If the pattern provider is not yet set, queues the call for retry.
 	 */
 	async recreateModes(): Promise<string[]> {
 		if (!this.getPatterns) {
-			this.logger.appendLine("[ModeFactory] Cannot recreate modes: pattern provider not set")
-			return []
+			this.logger.appendLine("[ModeFactory] Cannot recreate modes: pattern provider not set, queuing for retry")
+			return new Promise((resolve) => {
+				this.pendingRecreateCalls.push(() => {
+					this.recreateModes().then(resolve)
+				})
+			})
 		}
 
 		const allPatterns = this.getPatterns()

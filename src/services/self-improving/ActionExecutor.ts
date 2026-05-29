@@ -84,7 +84,7 @@ export class ActionExecutor {
 			}
 
 			this.logger.appendLine(
-				`[ActionExecutor] ${executed ? "Executed" : "Deferred"} ${action.actionType} action ${action.id}`,
+				`[ActionExecutor] ${executed ? "OK" : "DEF"} ${action.actionType} ${action.id} | ${(action as any).description?.substring(0, 100) ?? ""}`,
 			)
 
 			return executed
