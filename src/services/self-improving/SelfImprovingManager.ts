@@ -37,6 +37,8 @@ import { ReviewTeamService } from "./ReviewTeamService"
 import type { ReviewTeamConfig } from "./ReviewTeamService"
 import { QuestionEvaluatorService } from "./QuestionEvaluatorService"
 import { ResilienceService } from "./ResilienceService"
+import { VerificationEngine } from "./VerificationEngine"
+import { RequirementsVerifier } from "./RequirementsVerifier"
 import { ToolErrorHealer } from "./ToolErrorHealer"
 import { PreventionEngine } from "./PreventionEngine"
 import type { CodeIndexManager } from "../code-index/manager"
@@ -80,6 +82,8 @@ export class SelfImprovingManager {
 	public resilienceService: ResilienceService
 	public toolErrorHealer: ToolErrorHealer
 	public preventionEngine: PreventionEngine
+	public verificationEngine: VerificationEngine
+	public requirementsVerifier: RequirementsVerifier
 	private _codeIndexManager: CodeIndexManager | undefined
 
 	private runtime: Runtime | undefined
@@ -132,6 +136,8 @@ export class SelfImprovingManager {
 			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
 		})
 		this.preventionEngine = new PreventionEngine()
+		this.verificationEngine = new VerificationEngine(this.logger)
+		this.requirementsVerifier = new RequirementsVerifier(this.logger)
 
 		this.autoModeOrchestrator = new AutoModeOrchestrator(
 			this.logger,
@@ -656,6 +662,8 @@ export class SelfImprovingManager {
 		resilience: Record<string, unknown>
 		toolErrorHealer: Record<string, unknown>
 		preventionEngine: Record<string, unknown>
+		verificationEngine: Record<string, unknown>
+		requirementsVerification: Record<string, unknown>
 	}> {
 		const enabled = SelfImprovingManager.isExperimentEnabled(this.getExperiments())
 		const curatorStatus = this.curatorService.getStatus()
@@ -669,6 +677,8 @@ export class SelfImprovingManager {
 		const resilienceStatus = this.resilienceService.getStatus()
 		const toolErrorHealerStatus = this.toolErrorHealer.getStatus()
 		const questionEvaluatorStatus = this.questionEvaluator.getStatus()
+		const verificationEngineStatus = this.verificationEngine?.getStatus() ?? { enabled: false }
+		const requirementsVerificationStatus = this.requirementsVerifier?.getStatus() ?? { enabled: false }
 
 		if (!enabled) {
 			return {
@@ -686,6 +696,8 @@ export class SelfImprovingManager {
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
 				preventionEngine: { initialized: true },
+				verificationEngine: verificationEngineStatus,
+				requirementsVerification: requirementsVerificationStatus,
 			}
 		}
 
@@ -705,6 +717,8 @@ export class SelfImprovingManager {
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
 				preventionEngine: { initialized: true },
+				verificationEngine: verificationEngineStatus,
+				requirementsVerification: requirementsVerificationStatus,
 			}
 		}
 
@@ -730,6 +744,8 @@ export class SelfImprovingManager {
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
 				preventionEngine: { initialized: true },
+				verificationEngine: verificationEngineStatus,
+				requirementsVerification: requirementsVerificationStatus,
 			}
 		} catch {
 			return {
@@ -747,6 +763,8 @@ export class SelfImprovingManager {
 				resilience: resilienceStatus,
 				toolErrorHealer: toolErrorHealerStatus,
 				preventionEngine: { initialized: true },
+				verificationEngine: verificationEngineStatus,
+				requirementsVerification: requirementsVerificationStatus,
 			}
 		}
 	}

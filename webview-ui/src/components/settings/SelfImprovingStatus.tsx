@@ -171,6 +171,32 @@ export const SelfImprovingStatus = () => {
 							</td>
 						</tr>
 					)}
+					{/* Verification Engine sub-status */}
+					{status.verificationEngine && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Verification Engine</td>
+							<td className="py-1 text-right font-medium">
+								{status.verificationEngine.lastVerifyAt
+									? new Date(status.verificationEngine.lastVerifyAt as number).toLocaleTimeString()
+									: status.verificationEngine.enabled
+										? "Active"
+										: "Inactive"}
+							</td>
+						</tr>
+					)}
+					{/* Requirements Verification sub-status */}
+					{status.requirementsVerification && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Requirements Verification</td>
+							<td className="py-1 text-right font-medium">
+								{status.requirementsVerification.activeCount !== undefined
+									? `${status.requirementsVerification.activeCount} active`
+									: status.requirementsVerification.enabled
+										? "Active"
+										: "Inactive"}
+							</td>
+						</tr>
+					)}
 				</tbody>
 			</table>
 		</div>

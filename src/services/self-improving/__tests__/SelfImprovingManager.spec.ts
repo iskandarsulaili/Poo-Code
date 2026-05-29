@@ -336,6 +336,8 @@ describe("SelfImprovingManager", () => {
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
+			verificationEngine: { enabled: false },
+			requirementsVerification: { enabled: false },
 		})
 	})
 
@@ -469,6 +471,8 @@ describe("SelfImprovingManager", () => {
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
+			verificationEngine: { enabled: false },
+			requirementsVerification: { enabled: false },
 		})
 	})
 

@@ -406,6 +406,8 @@ export type ExtensionState = Pick<
 		resilience?: Record<string, unknown>
 		toolErrorHealer?: Record<string, unknown>
 		preventionEngine?: Record<string, unknown>
+		verificationEngine?: Record<string, unknown>
+		requirementsVerification?: Record<string, unknown>
 	}
 	lastShownAnnouncementId?: string
 	apiModelId?: string

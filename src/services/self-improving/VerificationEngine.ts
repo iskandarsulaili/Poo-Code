@@ -48,6 +48,8 @@ const DEFAULT_CONFIG: VerificationConfig = {
 
 export class VerificationEngine {
 	private config: VerificationConfig
+	private lastVerifyAt?: number
+	private lastResult?: VerificationResult
 
 	constructor(
 		private readonly logger?: Logger,
@@ -65,6 +67,14 @@ export class VerificationEngine {
 
 	getConfig(): VerificationConfig {
 		return { ...this.config }
+	}
+
+	getStatus(): Record<string, unknown> {
+		return {
+			enabled: true,
+			lastVerifyAt: this.lastVerifyAt,
+			lastResult: this.lastResult,
+		}
 	}
 
 	async verify(): Promise<VerificationResult> {
@@ -99,6 +109,9 @@ export class VerificationEngine {
 		}
 
 		this.logger?.appendLine(`[VerificationEngine] ${summary}`)
+
+		this.lastVerifyAt = Date.now()
+		this.lastResult = { passed, gates, summary }
 
 		return { passed, gates, summary }
 	}

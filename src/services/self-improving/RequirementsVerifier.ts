@@ -23,6 +23,7 @@ export class RequirementsVerifier {
 	private processedMessageCount = 0
 	private conflictResolver: ConflictResolver
 	private allMessages: string[] = []
+	private lastVerifyResult?: RequirementsVerificationResult
 
 	constructor(
 		private readonly logger?: Logger,
@@ -238,6 +239,16 @@ export class RequirementsVerifier {
 	/**
 	 * Run full verification — checks only ACTIVE (non-superseded) requirements
 	 */
+	getStatus(): Record<string, unknown> {
+		return {
+			enabled: true,
+			requirementCount: this.requirements.size,
+			activeCount: this.getActiveRequirements().length,
+			supersededCount: Array.from(this.requirements.values()).filter(r => r.status === 'superseded').length,
+			lastVerifyResult: this.lastVerifyResult,
+		}
+	}
+
 	async verify(): Promise<RequirementsVerificationResult> {
 		const all = this.getAllRequirements()
 		const active = this.getActiveRequirements()
@@ -256,6 +267,8 @@ export class RequirementsVerifier {
 		} else {
 			summary = `${failed.length}/${active.length} active requirements failed: ${failed.map((r) => r.text.slice(0, 80)).join("; ")}`
 		}
+
+		this.lastVerifyResult = { passed, total: all.length, verified, failed, pending, summary }
 
 		return { passed, total: all.length, verified, failed, pending, summary }
 	}

@@ -465,6 +465,32 @@ export const ExperimentalSettings = ({
 													}
 													checkboxTestId="experimental-tool-error-healer-checkbox"
 												/>
+												<ExperimentalFeature
+													experimentKey="VERIFICATION_ENGINE"
+													enabled={
+														experiments[EXPERIMENT_IDS.VERIFICATION_ENGINE] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.VERIFICATION_ENGINE,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-verification-engine-checkbox"
+												/>
+												<ExperimentalFeature
+													experimentKey="REQUIREMENTS_VERIFICATION"
+													enabled={
+														experiments[EXPERIMENT_IDS.REQUIREMENTS_VERIFICATION] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.REQUIREMENTS_VERIFICATION,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-requirements-verification-checkbox"
+												/>
 												<SelfImprovingStatus />
 												<ExperimentalFeature
 													experimentKey="ONE_SHOT_ORCHESTRATOR"
