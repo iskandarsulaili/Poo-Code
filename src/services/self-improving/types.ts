@@ -138,7 +138,7 @@ export interface Requirement {
 	/** Category of requirement */
 	category: "functional" | "non-functional" | "constraint" | "goal" | "edge-case" | "security" | "compliance"
 	/** Current verification status */
-	status: "pending" | "verified" | "failed" | "skipped"
+	status: "pending" | "verified" | "failed" | "skipped" | "superseded"
 	/** How this requirement was verified */
 	verifiedBy?: "code-review" | "test" | "manual" | "build" | "lint" | "type-check"
 	/** Evidence that this requirement is fulfilled */
@@ -147,6 +147,44 @@ export interface Requirement {
 	verifiedAt?: number
 	/** Optional linked todo item ID */
 	todoId?: string
+	/** Index of the user message this requirement was extracted from (0 = first message) */
+	messageIndex: number
+	/** If superseded, the ID of the requirement that superseded this one */
+	supersededBy?: string
+	/** If this requirement supersedes another, the ID of the superseded requirement */
+	supersedes?: string
+}
+
+/**
+ * Result of conflict resolution between a new requirement and existing ones.
+ */
+export interface ConflictResolution {
+	/** IDs of existing requirements that are superseded by the new requirement */
+	supersedes: string[]
+	/** Confidence score 0-1 */
+	confidence: number
+	/** Explanation of the decision */
+	reason: string
+}
+
+/**
+ * Pluggable conflict resolver that determines if a new requirement supersedes existing ones.
+ */
+export interface ConflictResolver {
+	readonly name: string
+	/**
+	 * Determine if a new requirement supersedes any existing requirements.
+	 * @param newRequirement The newly extracted requirement
+	 * @param existingRequirements All currently active (non-superseded) requirements
+	 * @param newMessageIndex The index of the message this requirement came from
+	 * @param allMessages All user messages in the session (for context)
+	 */
+	resolve(
+		newRequirement: Requirement,
+		existingRequirements: Requirement[],
+		newMessageIndex: number,
+		allMessages: string[],
+	): Promise<ConflictResolution>
 }
 
 /**

@@ -116,6 +116,12 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				return
 			}
 
+			// Accumulate requirements from ALL user messages before verification
+			if (this.requirementsVerifier) {
+				const userMessages = this.getAllUserMessages(task)
+				this.requirementsVerifier.processUserMessages(userMessages)
+			}
+
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier) {
 				const reqResult = await this.requirementsVerifier.verify()
@@ -266,6 +272,29 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		} else {
 			await task.say("completion_result", result ?? "", undefined, block.partial)
 		}
+	}
+
+	/**
+	 * Extract all user messages from the task's conversation history.
+	 * Includes the initial task prompt and all user_feedback messages.
+	 */
+	private getAllUserMessages(task: Task): string[] {
+		const messages: string[] = []
+
+		// Get the initial task prompt from metadata
+		if (task.metadata?.task) {
+			messages.push(task.metadata.task)
+		}
+
+		// Get user feedback messages from clineMessages
+		const clineMessages = task.clineMessages || []
+		for (const msg of clineMessages) {
+			if (msg.type === "say" && msg.say === "user_feedback" && msg.text) {
+				messages.push(msg.text)
+			}
+		}
+
+		return messages
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {

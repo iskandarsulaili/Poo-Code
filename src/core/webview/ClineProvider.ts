@@ -75,7 +75,7 @@ import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckp
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
-import { SelfImprovingManager, RequirementsVerifier, VerificationEngine } from "../../services/self-improving"
+import { SelfImprovingManager, RequirementsVerifier, VerificationEngine, LLMConflictResolver } from "../../services/self-improving"
 import { TrustService } from "../../services/self-improving/TrustService"
 import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
 import { SkillsManager } from "../../services/skills/SkillsManager"
@@ -268,9 +268,14 @@ export class ClineProvider
 		// Wire RequirementsVerifier and VerificationEngine into AttemptCompletionTool
 		const experiments = this.getGlobalStateSafe("experiments")
 		if (experiments?.requirementsVerification) {
+			const apiConfiguration = this.contextProxy.getProviderSettings()
+			const conflictResolver = apiConfiguration?.apiProvider
+				? new LLMConflictResolver(apiConfiguration)
+				: undefined // falls back to KeywordConflictResolver
 			const requirementsVerifier = new RequirementsVerifier(
 				{ appendLine: (message: string) => this.log(message) },
 				{ mandatory: true, autoExtract: true, requireAllVerified: true },
+				conflictResolver,
 			)
 			const verificationEngine = new VerificationEngine(
 				{ appendLine: (message: string) => this.log(message) },

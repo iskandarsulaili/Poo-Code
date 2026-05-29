@@ -1,5 +1,6 @@
 import crypto from "crypto"
-import type { Logger, Requirement, RequirementsVerificationResult } from "./types"
+import type { Logger, Requirement, RequirementsVerificationResult, ConflictResolver } from "./types"
+import { KeywordConflictResolver } from "./KeywordConflictResolver"
 
 export interface RequirementsVerifierConfig {
 	/** Whether requirements verification is mandatory (blocks completion) */
@@ -19,12 +20,32 @@ const DEFAULT_CONFIG: RequirementsVerifierConfig = {
 export class RequirementsVerifier {
 	private config: RequirementsVerifierConfig
 	private requirements: Map<string, Requirement> = new Map()
+	private processedMessageCount = 0
+	private conflictResolver: ConflictResolver
+	private allMessages: string[] = []
 
 	constructor(
 		private readonly logger?: Logger,
 		config?: Partial<RequirementsVerifierConfig>,
+		conflictResolver?: ConflictResolver,
 	) {
 		this.config = { ...DEFAULT_CONFIG, ...config }
+		this.conflictResolver = conflictResolver ?? new KeywordConflictResolver()
+	}
+
+	/**
+	 * Replace the conflict resolver at runtime.
+	 */
+	setConflictResolver(resolver: ConflictResolver): void {
+		this.conflictResolver = resolver
+		this.logger?.appendLine(`[RequirementsVerifier] Conflict resolver set to: ${resolver.name}`)
+	}
+
+	/**
+	 * Get the current conflict resolver.
+	 */
+	getConflictResolver(): ConflictResolver {
+		return this.conflictResolver
 	}
 
 	updateConfig(config: Partial<RequirementsVerifierConfig>): void {
@@ -37,13 +58,81 @@ export class RequirementsVerifier {
 	}
 
 	/**
-	 * Extract requirements from a user prompt using heuristic parsing.
-	 * Looks for bullet points, numbered lists, "must", "should", "need", "require" patterns.
+	 * Process ALL user messages from the session (chronological order).
+	 * Extracts requirements from each message and resolves conflicts
+	 * where later messages supersede earlier ones.
 	 */
-	extractFromPrompt(prompt: string): Requirement[] {
+	async processUserMessages(messages: string[]): Promise<Requirement[]> {
+		if (messages.length === 0) return []
+
+		this.logger?.appendLine(`[RequirementsVerifier] Processing ${messages.length} user messages`)
+
+		// Store all messages for conflict resolution context
+		this.allMessages = messages
+
+		// Only process new messages since last call
+		const newMessageCount = messages.length - this.processedMessageCount
+		if (newMessageCount <= 0) {
+			return this.getAllRequirements()
+		}
+
+		const messagesToProcess = messages.slice(this.processedMessageCount)
+
+		for (let i = 0; i < messagesToProcess.length; i++) {
+			const globalIndex = this.processedMessageCount + i
+			const message = messagesToProcess[i]
+			const extracted = this.extractFromPrompt(message, globalIndex)
+
+			// Run conflict resolution against existing requirements
+			await this.resolveConflicts(extracted, globalIndex)
+
+			// Add new requirements
+			for (const req of extracted) {
+				this.requirements.set(req.id, req)
+			}
+		}
+
+		this.processedMessageCount = messages.length
+
+		const all = this.getAllRequirements()
+		const active = all.filter((r) => r.status !== "superseded")
+		this.logger?.appendLine(
+			`[RequirementsVerifier] ${all.length} total requirements (${active.length} active, ${all.length - active.length} superseded)`,
+		)
+
+		return all
+	}
+
+	/**
+	 * Resolve conflicts between newly extracted requirements and existing ones.
+	 * Uses the pluggable conflict resolver to determine supersession.
+	 */
+	private async resolveConflicts(newRequirements: Requirement[], newMessageIndex: number): Promise<void> {
+		const existingActive = this.getActiveRequirements()
+
+		for (const newReq of newRequirements) {
+			const resolution = await this.conflictResolver.resolve(newReq, existingActive, newMessageIndex, this.allMessages)
+
+			for (const supersededId of resolution.supersedes) {
+				const existing = this.requirements.get(supersededId)
+				if (existing && existing.status !== "superseded") {
+					existing.status = "superseded"
+					existing.supersededBy = newReq.id
+					newReq.supersedes = existing.id
+					this.logger?.appendLine(
+						`[RequirementsVerifier] ${this.conflictResolver.name} resolver: "${existing.text.slice(0, 60)}..." superseded by "${newReq.text.slice(0, 60)}..." (confidence: ${resolution.confidence})`,
+					)
+				}
+			}
+		}
+	}
+
+	/**
+	 * Extract requirements from a single user message.
+	 */
+	extractFromPrompt(prompt: string, messageIndex: number = 0): Requirement[] {
 		const extracted: Requirement[] = []
 		const lines = prompt.split("\n")
-
 		let currentCategory: Requirement["category"] = "functional"
 
 		for (const line of lines) {
@@ -68,7 +157,7 @@ export class RequirementsVerifier {
 			const reqText = itemMatch?.[1] || numMatch?.[1]
 
 			if (reqText) {
-				extracted.push(this.createRequirement(reqText, currentCategory))
+				extracted.push(this.createRequirement(reqText, currentCategory, messageIndex))
 				continue
 			}
 
@@ -77,21 +166,15 @@ export class RequirementsVerifier {
 				/(?:must|should|need|require|shall|will|ensure|verify|check|validate|support|implement|add|create|build|fix|refactor)\s.+[.!]/i,
 			)
 			if (keywordMatch && trimmed.length > 10 && trimmed.length < 500) {
-				extracted.push(this.createRequirement(trimmed, currentCategory))
+				extracted.push(this.createRequirement(trimmed, currentCategory, messageIndex))
 			}
 		}
 
 		// If no structured requirements found, treat the whole prompt as one requirement
 		if (extracted.length === 0 && prompt.trim().length > 0) {
-			extracted.push(this.createRequirement(prompt.trim(), "goal"))
+			extracted.push(this.createRequirement(prompt.trim(), "goal", messageIndex))
 		}
 
-		// Store extracted requirements
-		for (const req of extracted) {
-			this.requirements.set(req.id, req)
-		}
-
-		this.logger?.appendLine(`[RequirementsVerifier] Extracted ${extracted.length} requirements from prompt`)
 		return extracted
 	}
 
@@ -99,7 +182,7 @@ export class RequirementsVerifier {
 	 * Manually add a requirement
 	 */
 	addRequirement(text: string, category: Requirement["category"] = "functional"): Requirement {
-		const req = this.createRequirement(text, category)
+		const req = this.createRequirement(text, category, this.processedMessageCount)
 		this.requirements.set(req.id, req)
 		return req
 	}
@@ -132,10 +215,17 @@ export class RequirementsVerifier {
 	}
 
 	/**
-	 * Get all requirements
+	 * Get all requirements (including superseded ones for audit trail)
 	 */
 	getAllRequirements(): Requirement[] {
 		return Array.from(this.requirements.values())
+	}
+
+	/**
+	 * Get only active (non-superseded) requirements
+	 */
+	getActiveRequirements(): Requirement[] {
+		return this.getAllRequirements().filter((r) => r.status !== "superseded")
 	}
 
 	/**
@@ -146,14 +236,15 @@ export class RequirementsVerifier {
 	}
 
 	/**
-	 * Run full verification — check all requirements
-	 * Returns a comprehensive result
+	 * Run full verification — checks only ACTIVE (non-superseded) requirements
 	 */
 	async verify(): Promise<RequirementsVerificationResult> {
 		const all = this.getAllRequirements()
-		const verified = all.filter((r) => r.status === "verified")
-		const failed = all.filter((r) => r.status === "failed")
-		const pending = all.filter((r) => r.status === "pending" || r.status === "skipped")
+		const active = this.getActiveRequirements()
+		const verified = active.filter((r) => r.status === "verified")
+		const failed = active.filter((r) => r.status === "failed")
+		const pending = active.filter((r) => r.status === "pending" || r.status === "skipped")
+		const superseded = all.filter((r) => r.status === "superseded")
 
 		const passed = failed.length === 0 && (pending.length === 0 || !this.config.requireAllVerified)
 
@@ -161,9 +252,9 @@ export class RequirementsVerifier {
 		if (all.length === 0) {
 			summary = "No requirements extracted"
 		} else if (passed) {
-			summary = `All ${all.length} requirements verified (${verified.length} passed, ${failed.length} failed, ${pending.length} pending)`
+			summary = `${active.length} active requirements: ${verified.length} verified, ${failed.length} failed, ${pending.length} pending (${superseded.length} superseded)`
 		} else {
-			summary = `${failed.length}/${all.length} requirements failed: ${failed.map((r) => r.text.slice(0, 80)).join("; ")}`
+			summary = `${failed.length}/${active.length} active requirements failed: ${failed.map((r) => r.text.slice(0, 80)).join("; ")}`
 		}
 
 		return { passed, total: all.length, verified, failed, pending, summary }
@@ -174,14 +265,24 @@ export class RequirementsVerifier {
 	 */
 	reset(): void {
 		this.requirements.clear()
+		this.processedMessageCount = 0
+		this.allMessages = []
 	}
 
-	private createRequirement(text: string, category: Requirement["category"]): Requirement {
+	/**
+	 * Get the number of processed messages
+	 */
+	getProcessedMessageCount(): number {
+		return this.processedMessageCount
+	}
+
+	private createRequirement(text: string, category: Requirement["category"], messageIndex: number): Requirement {
 		return {
 			id: crypto.randomUUID(),
 			text,
 			category,
 			status: "pending",
+			messageIndex,
 		}
 	}
 }
