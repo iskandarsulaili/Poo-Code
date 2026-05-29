@@ -35,7 +35,13 @@ This fork adds **~10,500 lines** of self-improving infrastructure across **45 fi
 | **Skill usage tracking**   | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions.                                                                                   | ❌ No usage metrics            |
 | **Auto-mode orchestrator** | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type.                                                                                         | ❌ Manual mode switching       |
 | **Mode factory**           | `ModeFactoryService` — generates custom modes from learned workflows.                                                                                                             | ❌ Fixed mode set              |
-| **Experiment toggles**     | 6 new experiment IDs: `selfImproving`, `selfImprovingAutoSkills`, `selfImprovingAutoMode`, `selfImprovingReviewTeam`, `selfImprovingFullTrust`, `selfImprovingQuestionEvaluation` | ❌ None of these exist         |
+| **Experiment toggles**     | 6 new experiment IDs: `selfImproving`, `selfImprovingAutoSkills`, `selfImprovingAutoMode`, `selfImprovingReviewTeam`, `selfImprovingFullTrust`, `selfImprovingQuestionEvaluation` | ❌ None of these exist     |
+| **ONE-SHOT Orchestrator**  | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass                                                              | ❌ No equivalent            |
+| **KAIZEN Orchestrator**    | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals                        | ❌ No equivalent            |
+| **Proactive Error Prevention** | Pre-execution tool call validation, structured error classification (12 categories), cascading failure detection, and prevention hint injection — catches errors BEFORE they happen | ❌ No equivalent            |
+| **Git Auto-Push**          | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically                                                     | ❌ No equivalent            |
+| **Self-Evolving Mini-Goals** | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first                                                                  | ❌ No equivalent            |
+| **Full UI Coverage**       | All 27 self-improving services now have toggles, config panels, or status displays in the settings UI                                                                              | ❌ No equivalent            |
 
 ### Experiment gate reference
 
@@ -47,6 +53,62 @@ This fork adds **~10,500 lines** of self-improving infrastructure across **45 fi
 | `selfImprovingReviewTeam`         | Multi-agent review before applying learned patterns          |
 | `selfImprovingFullTrust`          | Auto-approve tools that TrustService considers safe          |
 | `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer |
+| `oneShotOrchestrator`             | Enable ONE-SHOT Orchestrator mode for autonomous project builds |
+| `kaizenOrchestrator`              | Enable KAIZEN Orchestrator mode for continuous improvement |
+| `proactiveErrorPrevention`        | Enable pre-execution tool call validation and cascade detection |
+| `gitAutoPush`                     | Enable auto-commit and push in KAIZEN mode |
+| `selfEvolvingMiniGoals`           | Enable self-evolving mini-goals with regression healing |
+| `fullUICoverage`                  | Enable full UI coverage for all self-improving services |
+
+## Use Case Examples
+
+### Example 1: One-Shot Project Build
+
+**Scenario:** You need to build a complete REST API server from scratch.
+
+1. Switch to **ONE-SHOT Orchestrator** mode
+2. Describe your requirements: "Build a FastAPI REST API with PostgreSQL backend, JWT auth, and CRUD endpoints for users and products"
+3. The agent autonomously executes 8 phases:
+   - Requirements analysis → Architecture design → Project scaffolding → Core implementation → Integration → Testing → Bug fixing → Verification
+4. Result: A fully tested, production-ready API server with zero manual intervention
+
+### Example 2: Continuous Codebase Improvement
+
+**Scenario:** You have an existing codebase with technical debt and want continuous improvement.
+
+1. Switch to **KAIZEN Orchestrator** mode
+2. Set your initial mini-goal: "Fix all TypeScript strict mode errors"
+3. The agent enters the Kaizen loop:
+   - **Cycle 1**: Analyzes errors → Fixes 3 type errors → Runs tests → Git push → Re-evaluates
+   - **Cycle 2**: Fixes 5 more errors → Runs tests → Git push → Evolves mini-goal
+   - **Cycle N**: Continues until mini-goal achieved, then evolves upward
+4. Each cycle is one atomic change, verified, and pushed to CI/CD
+5. Result: Continuous, safe improvement without regressions
+
+### Example 3: Proactive Error Prevention
+
+**Scenario:** You're working on a large codebase and the model keeps hitting tool errors.
+
+1. Enable **Prevention Engine** and **Cascade Tracker** in Experimental Settings
+2. Before each tool call, the system validates parameters:
+   - `read_file` with directory path → warns to use `list_files` instead
+   - `list_files recursive=true` without ripgrep → suggests `find`/`ls` fallback
+   - Long `execute_command` → warns about shell limits
+3. After errors, the system classifies them and tracks cascading failures
+4. If 2+ errors occur within 30 seconds, a cascade warning is injected suggesting an approach change
+5. Result: Fewer wasted tool calls, faster task completion, lower API costs
+
+### Example 4: Self-Healing Production Deployment
+
+**Scenario:** A production deployment has regressions and needs immediate attention.
+
+1. Switch to **KAIZEN Orchestrator** mode
+2. The agent analyzes logs and test results
+3. Detects regressions → mini-goal auto-reverts to fixing those first
+4. Each fix is verified, committed with `kaizen: fix regression in X`, and pushed
+5. CI/CD pipeline auto-deploys each fix to staging/production
+6. Once regressions are resolved, mini-goal evolves upward to the next improvement
+7. Result: Self-healing deployment with zero manual intervention
 
 ## Statistic
 
