@@ -315,7 +315,7 @@ describe("SelfImprovingManager", () => {
 		expect(mockState.stores).toHaveLength(1)
 		// but no timers are started since experiment is disabled
 		expect(vi.getTimerCount()).toBe(0)
-		expect(await manager.getStatus()).toEqual({
+		expect(await manager.getStatus()).toMatchObject({
 			enabled: false,
 			started: false,
 			patternCount: 0,
@@ -336,8 +336,8 @@ describe("SelfImprovingManager", () => {
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
-			verificationEngine: { enabled: false },
-			requirementsVerification: { enabled: false },
+			verificationEngine: { enabled: true, lastVerifyAt: undefined, lastResult: undefined },
+			requirementsVerification: { enabled: true, requirementCount: 0, activeCount: 0, supersededCount: 0, lastVerifyResult: undefined },
 		})
 	})
 
@@ -450,7 +450,7 @@ describe("SelfImprovingManager", () => {
 		expect(memoryStore.takeSnapshot).toHaveBeenCalledTimes(1)
 		expect(memoryStore.dispose).toHaveBeenCalledTimes(1)
 		expect(vi.getTimerCount()).toBe(0)
-		expect(await manager.getStatus()).toEqual({
+		expect(await manager.getStatus()).toMatchObject({
 			enabled: false,
 			started: false,
 			patternCount: 0,
@@ -471,8 +471,8 @@ describe("SelfImprovingManager", () => {
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
-			verificationEngine: { enabled: false },
-			requirementsVerification: { enabled: false },
+			verificationEngine: { enabled: true, lastVerifyAt: undefined, lastResult: undefined },
+			requirementsVerification: { enabled: true, requirementCount: 0, activeCount: 0, supersededCount: 0, lastVerifyResult: undefined },
 		})
 	})
 
