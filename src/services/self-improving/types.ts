@@ -127,3 +127,42 @@ export const DEFAULT_CONFIG: LearningConfig = DEFAULT_LEARNING_CONFIG
  * Shared empty learning state re-exported for local convenience.
  */
 export const EMPTY_STATE: LearningState = EMPTY_LEARNING_STATE
+
+/**
+ * A single requirement extracted from a user prompt.
+ */
+export interface Requirement {
+	id: string
+	/** The original requirement text extracted from user prompt */
+	text: string
+	/** Category of requirement */
+	category: "functional" | "non-functional" | "constraint" | "goal" | "edge-case" | "security" | "compliance"
+	/** Current verification status */
+	status: "pending" | "verified" | "failed" | "skipped"
+	/** How this requirement was verified */
+	verifiedBy?: "code-review" | "test" | "manual" | "build" | "lint" | "type-check"
+	/** Evidence that this requirement is fulfilled */
+	evidence?: string
+	/** Timestamp when verified */
+	verifiedAt?: number
+	/** Optional linked todo item ID */
+	todoId?: string
+}
+
+/**
+ * Result of running requirements verification.
+ */
+export interface RequirementsVerificationResult {
+	/** All requirements passed */
+	passed: boolean
+	/** Total requirements extracted */
+	total: number
+	/** Requirements that passed verification */
+	verified: Requirement[]
+	/** Requirements that failed verification */
+	failed: Requirement[]
+	/** Requirements not yet checked */
+	pending: Requirement[]
+	/** Summary message */
+	summary: string
+}

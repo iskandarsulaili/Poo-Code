@@ -10,6 +10,8 @@ import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
+import { RequirementsVerifier } from "../../services/self-improving/RequirementsVerifier"
+import { VerificationEngine } from "../../services/self-improving/VerificationEngine"
 
 interface AttemptCompletionParams {
 	result: string
@@ -43,6 +45,19 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	 * Only exact duplicate result text is blocked.
 	 */
 	private static lastResults = new Map<string, string>()
+
+	/** Optional requirements verifier for checking user intent fulfillment */
+	private requirementsVerifier?: RequirementsVerifier
+	/** Optional verification engine for code quality checks */
+	private verificationEngine?: VerificationEngine
+
+	/**
+	 * Set the verifiers used to guard completion.
+	 */
+	setVerifiers(requirementsVerifier?: RequirementsVerifier, verificationEngine?: VerificationEngine): void {
+		this.requirementsVerifier = requirementsVerifier
+		this.verificationEngine = verificationEngine
+	}
 
 	/**
 	 * Resets the completion tracking state. Used in tests to prevent
@@ -99,6 +114,30 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				task.recordToolError("attempt_completion")
 				pushToolResult(await task.sayAndCreateMissingParamError("attempt_completion", "result"))
 				return
+			}
+
+			// Guard 5: Requirements verification — check user intent is fulfilled
+			if (this.requirementsVerifier) {
+				const reqResult = await this.requirementsVerifier.verify()
+				if (!reqResult.passed && this.requirementsVerifier.getConfig().mandatory) {
+					const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
+					task.consecutiveMistakeCount++
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+			}
+
+			// Guard 6: Code quality verification (VerificationEngine)
+			if (this.verificationEngine) {
+				const verResult = await this.verificationEngine.verify()
+				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
+					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates.filter((g) => !g.passed).map((g) => `  ❌ ${g.name}: ${g.error || "failed"}`).join("\n")}\n\nPlease fix these issues before completing the task.`
+					task.consecutiveMistakeCount++
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
 			}
 
 			task.consecutiveMistakeCount = 0

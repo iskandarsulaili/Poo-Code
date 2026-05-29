@@ -75,7 +75,7 @@ import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckp
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
-import { SelfImprovingManager } from "../../services/self-improving"
+import { SelfImprovingManager, RequirementsVerifier, VerificationEngine } from "../../services/self-improving"
 import { TrustService } from "../../services/self-improving/TrustService"
 import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
 import { SkillsManager } from "../../services/skills/SkillsManager"
@@ -87,6 +87,7 @@ import { getWorkspacePath } from "../../utils/path"
 import { OrganizationAllowListViolationError } from "../../utils/errors"
 
 import { setPanel } from "../../activate/registerCommands"
+import { attemptCompletionTool } from "../tools/AttemptCompletionTool"
 
 import { t } from "../../i18n"
 
@@ -263,6 +264,21 @@ export class ClineProvider
 				enabled: this.getGlobalStateSafe("experiments")?.selfImprovingFullTrust ?? false,
 			},
 		)
+
+		// Wire RequirementsVerifier and VerificationEngine into AttemptCompletionTool
+		const experiments = this.getGlobalStateSafe("experiments")
+		if (experiments?.requirementsVerification) {
+			const requirementsVerifier = new RequirementsVerifier(
+				{ appendLine: (message: string) => this.log(message) },
+				{ mandatory: true, autoExtract: true, requireAllVerified: true },
+			)
+			const verificationEngine = new VerificationEngine(
+				{ appendLine: (message: string) => this.log(message) },
+				{ mandatory: true },
+			)
+			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
+			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")
+		}
 
 		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)
 
