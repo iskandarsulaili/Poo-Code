@@ -279,7 +279,18 @@ export class ClineProvider
 			)
 			const verificationEngine = new VerificationEngine(
 				{ appendLine: (message: string) => this.log(message) },
-				{ mandatory: true },
+				{
+					checkBuild: true,
+					buildCommand: "pnpm build",
+					checkLint: true,
+					lintCommand: "pnpm lint",
+					checkTypes: true,
+					typeCheckCommand: "pnpm check-types",
+					checkTests: true,
+					testCommand: "pnpm test",
+					mandatory: true,
+					gateTimeoutMs: 120_000,
+				},
 			)
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
 			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")

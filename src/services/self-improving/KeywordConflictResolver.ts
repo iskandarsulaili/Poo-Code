@@ -37,7 +37,7 @@ export class KeywordConflictResolver implements ConflictResolver {
 	/**
 	 * Extract significant words from text (lowercase, remove common words)
 	 */
-	private getSignificantWords(text: string): string[] {
+	getSignificantWords(text: string): string[] {
 		const stopWords = new Set([
 			"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
 			"of", "with", "by", "from", "as", "is", "was", "are", "were", "be",
@@ -63,7 +63,7 @@ export class KeywordConflictResolver implements ConflictResolver {
 	/**
 	 * Calculate overlap ratio between two word sets (Jaccard similarity)
 	 */
-	private calculateOverlap(words1: string[], words2: string[]): number {
+	calculateOverlap(words1: string[], words2: string[]): number {
 		if (words1.length === 0 || words2.length === 0) return 0
 
 		const set1 = new Set(words1)
