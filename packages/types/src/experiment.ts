@@ -24,6 +24,10 @@ export const experimentIds = [
 	"selfImprovingCodeIndex",
 	"oneShotOrchestrator",
 	"kaizenOrchestrator",
+	"preventionEngine",
+	"cascadeTracker",
+	"resilienceService",
+	"toolErrorHealer",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -52,6 +56,10 @@ export const experimentsSchema = z.object({
 	selfImprovingCodeIndex: z.boolean().optional(),
 	oneShotOrchestrator: z.boolean().optional(),
 	kaizenOrchestrator: z.boolean().optional(),
+	preventionEngine: z.boolean().optional(),
+	cascadeTracker: z.boolean().optional(),
+	resilienceService: z.boolean().optional(),
+	toolErrorHealer: z.boolean().optional(),
 })
 
 export type Experiments = z.infer<typeof experimentsSchema>

@@ -90,7 +90,7 @@ export const SelfImprovingStatus = () => {
 						</tr>
 					)}
 					{status.lastCuratorRunAt && (
-						<tr>
+						<tr className="border-b border-vscode-panel-border">
 							<td className="py-1 pr-3 text-vscode-descriptionForeground">
 								{t("settings:experimental.SELF_IMPROVING.statusLastCurator", {
 									defaultValue: "Last Curator Run",
@@ -98,6 +98,76 @@ export const SelfImprovingStatus = () => {
 							</td>
 							<td className="py-1 text-right font-medium">
 								{new Date(status.lastCuratorRunAt).toLocaleTimeString()}
+							</td>
+						</tr>
+					)}
+					{/* Auto Mode sub-status */}
+					{status.autoMode && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Auto Mode</td>
+							<td className="py-1 text-right font-medium">
+								{String(status.autoMode.status ?? status.autoMode.mode ?? "—")}
+							</td>
+						</tr>
+					)}
+					{/* Review Team sub-status */}
+					{status.reviewTeam && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Review Team</td>
+							<td className="py-1 text-right font-medium">
+								{status.reviewTeam.lastReview
+									? new Date(status.reviewTeam.lastReview as number).toLocaleTimeString()
+									: status.reviewTeam.enabled
+										? "Active"
+										: "Inactive"}
+							</td>
+						</tr>
+					)}
+					{/* Question Evaluator sub-status */}
+					{status.questionEvaluator && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Question Evaluator</td>
+							<td className="py-1 text-right font-medium">
+								{status.questionEvaluator.lastEvaluation
+									? new Date(status.questionEvaluator.lastEvaluation as number).toLocaleTimeString()
+									: status.questionEvaluator.enabled
+										? "Active"
+										: "Inactive"}
+							</td>
+						</tr>
+					)}
+					{/* Resilience sub-status */}
+					{status.resilience && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Resilience</td>
+							<td className="py-1 text-right font-medium">
+								{status.resilience.isInRecoveryMode
+									? `Recovery (${status.resilience.consecutiveFailures ?? 0} failures)`
+									: `OK (${status.resilience.consecutiveFailures ?? 0} failures)`}
+							</td>
+						</tr>
+					)}
+					{/* Tool Error Healer sub-status */}
+					{status.toolErrorHealer && (
+						<tr className="border-b border-vscode-panel-border">
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Tool Error Healer</td>
+							<td className="py-1 text-right font-medium">
+								{status.toolErrorHealer.learnedCorrections != null
+									? `${status.toolErrorHealer.learnedCorrections} corrections`
+									: "Active"}
+							</td>
+						</tr>
+					)}
+					{/* Prevention Engine sub-status */}
+					{status.preventionEngine && (
+						<tr>
+							<td className="py-1 pr-3 text-vscode-descriptionForeground">Prevention Engine</td>
+							<td className="py-1 text-right font-medium">
+								{status.preventionEngine.cascadeCount != null
+									? `${status.preventionEngine.cascadeCount} cascades`
+									: status.preventionEngine.lastPrevention
+										? `Last: ${new Date(status.preventionEngine.lastPrevention as number).toLocaleTimeString()}`
+										: "Active"}
 							</td>
 						</tr>
 					)}

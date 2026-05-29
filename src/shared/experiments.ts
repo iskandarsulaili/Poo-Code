@@ -18,6 +18,10 @@ export const EXPERIMENT_IDS = {
 	SELF_IMPROVING_CODE_INDEX: "selfImprovingCodeIndex",
 	ONE_SHOT_ORCHESTRATOR: "oneShotOrchestrator",
 	KAIZEN_ORCHESTRATOR: "kaizenOrchestrator",
+	PREVENTION_ENGINE: "preventionEngine",
+	CASCADE_TRACKER: "cascadeTracker",
+	RESILIENCE_SERVICE: "resilienceService",
+	TOOL_ERROR_HEALER: "toolErrorHealer",
 } as const satisfies Record<string, ExperimentId>
 
 type _AssertExperimentIds = AssertEqual<Equals<ExperimentId, Values<typeof EXPERIMENT_IDS>>>
@@ -46,6 +50,10 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	SELF_IMPROVING_CODE_INDEX: { enabled: true },
 	ONE_SHOT_ORCHESTRATOR: { enabled: false },
 	KAIZEN_ORCHESTRATOR: { enabled: false },
+	PREVENTION_ENGINE: { enabled: false },
+	CASCADE_TRACKER: { enabled: false },
+	RESILIENCE_SERVICE: { enabled: false },
+	TOOL_ERROR_HEALER: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

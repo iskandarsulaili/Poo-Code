@@ -400,6 +400,12 @@ export type ExtensionState = Pick<
 		}
 		lastReviewAt?: number
 		lastCuratorRunAt?: number
+		autoMode?: Record<string, unknown>
+		reviewTeam?: Record<string, unknown>
+		questionEvaluator?: Record<string, unknown>
+		resilience?: Record<string, unknown>
+		toolErrorHealer?: Record<string, unknown>
+		preventionEngine?: Record<string, unknown>
 	}
 	lastShownAnnouncementId?: string
 	apiModelId?: string

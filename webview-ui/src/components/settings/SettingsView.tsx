@@ -29,6 +29,7 @@ import {
 	ArrowLeft,
 	GitCommitVertical,
 	GraduationCap,
+	RefreshCw,
 } from "lucide-react"
 
 import {
@@ -58,6 +59,8 @@ import {
 	TooltipProvider,
 	TooltipTrigger,
 	StandardTooltip,
+	Input,
+	ToggleSwitch,
 } from "@src/components/ui"
 
 import { Tab, TabContent, TabHeader, TabList, TabTrigger } from "../common/Tab"
@@ -110,6 +113,7 @@ export const sectionNames = [
 	"prompts",
 	"ui",
 	"experimental",
+	"kaizen",
 	"language",
 	"about",
 ] as const
@@ -207,6 +211,12 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		includeCurrentTime,
 		includeCurrentCost,
 		maxGitStatusFiles,
+		kaizenFrequency,
+		kaizenMiniGoal,
+		kaizenLimit,
+		kaizenAutoPush,
+		kaizenRemoteName,
+		kaizenCommitTemplate,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -574,6 +584,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			{ id: "worktrees", icon: GitBranch },
 			{ id: "ui", icon: Glasses },
 			{ id: "experimental", icon: FlaskConical },
+			{ id: "kaizen", icon: RefreshCw },
 			{ id: "language", icon: Globe },
 			{ id: "about", icon: Info },
 		],
@@ -970,6 +981,123 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								setSelfImprovingScope={setSelfImprovingScope}
 								setSelfImprovingAutoSkillsScope={setSelfImprovingAutoSkillsScope}
 							/>
+						)}
+
+						{/* KAIZEN Section */}
+						{renderTab === "kaizen" && (
+							<div>
+								<SectionHeader>{t("settings:sections.kaizen")}</SectionHeader>
+								<Section>
+									<div className="space-y-4">
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">KAIZEN Frequency</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													How often (in minutes) KAIZEN runs improvement cycles
+												</div>
+											</div>
+											<Input
+												type="number"
+												value={kaizenFrequency ?? 5}
+												onChange={(e) =>
+													setCachedStateField("kaizenFrequency", Number(e.target.value))
+												}
+												className="w-20"
+												min={1}
+												max={100}
+												data-testid="kaizen-frequency-input"
+											/>
+										</div>
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">KAIZEN Mini Goal</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													Optional mini-goal description for KAIZEN cycles
+												</div>
+											</div>
+											<Input
+												type="text"
+												value={kaizenMiniGoal ?? ""}
+												onChange={(e) =>
+													setCachedStateField("kaizenMiniGoal", e.target.value)
+												}
+												className="w-48"
+												placeholder=""
+												data-testid="kaizen-mini-goal-input"
+											/>
+										</div>
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">KAIZEN Limit</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													Maximum number of improvement iterations per cycle
+												</div>
+											</div>
+											<Input
+												type="number"
+												value={kaizenLimit ?? 50}
+												onChange={(e) =>
+													setCachedStateField("kaizenLimit", Number(e.target.value))
+												}
+												className="w-20"
+												min={1}
+												max={1000}
+												data-testid="kaizen-limit-input"
+											/>
+										</div>
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">Auto Push</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													Automatically push KAIZEN commits to remote
+												</div>
+											</div>
+											<ToggleSwitch
+												checked={kaizenAutoPush ?? true}
+												onChange={() =>
+													setCachedStateField("kaizenAutoPush", !(kaizenAutoPush ?? true))
+												}
+											/>
+										</div>
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">Remote Name</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													Git remote to push KAIZEN commits to
+												</div>
+											</div>
+											<Input
+												type="text"
+												value={kaizenRemoteName ?? "origin"}
+												onChange={(e) =>
+													setCachedStateField("kaizenRemoteName", e.target.value)
+												}
+												className="w-32"
+												placeholder="origin"
+												data-testid="kaizen-remote-name-input"
+											/>
+										</div>
+										<div className="flex items-center justify-between">
+											<div>
+												<div className="text-sm font-medium">Commit Template</div>
+												<div className="text-xs text-vscode-descriptionForeground">
+													Template for KAIZEN commit messages
+												</div>
+											</div>
+											<Input
+												type="text"
+												value={kaizenCommitTemplate ?? "kaizen: {description}"}
+												onChange={(e) =>
+													setCachedStateField("kaizenCommitTemplate", e.target.value)
+												}
+												className="w-48"
+												placeholder="kaizen: {description}"
+												data-testid="kaizen-commit-template-input"
+											/>
+										</div>
+									</div>
+								</Section>
+							</div>
 						)}
 
 						{/* Language Section */}

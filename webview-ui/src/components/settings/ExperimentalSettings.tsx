@@ -96,7 +96,11 @@ export const ExperimentalSettings = ({
 							key !== "SELF_IMPROVING_PERSIST_COUNTS" &&
 							key !== "SELF_IMPROVING_CODE_INDEX" &&
 							key !== "ONE_SHOT_ORCHESTRATOR" &&
-							key !== "KAIZEN_ORCHESTRATOR",
+							key !== "KAIZEN_ORCHESTRATOR" &&
+							key !== "PREVENTION_ENGINE" &&
+							key !== "CASCADE_TRACKER" &&
+							key !== "RESILIENCE_SERVICE" &&
+							key !== "TOOL_ERROR_HEALER",
 					)
 					.map((config) => {
 						const experimentKey = config[0]
@@ -408,6 +412,58 @@ export const ExperimentalSettings = ({
 														)
 													}
 													checkboxTestId="experimental-self-improving-code-index-checkbox"
+												/>
+												<ExperimentalFeature
+													experimentKey="PREVENTION_ENGINE"
+													enabled={
+														experiments[EXPERIMENT_IDS.PREVENTION_ENGINE] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.PREVENTION_ENGINE,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-prevention-engine-checkbox"
+												/>
+												<ExperimentalFeature
+													experimentKey="CASCADE_TRACKER"
+													enabled={
+														experiments[EXPERIMENT_IDS.CASCADE_TRACKER] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.CASCADE_TRACKER,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-cascade-tracker-checkbox"
+												/>
+												<ExperimentalFeature
+													experimentKey="RESILIENCE_SERVICE"
+													enabled={
+														experiments[EXPERIMENT_IDS.RESILIENCE_SERVICE] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.RESILIENCE_SERVICE,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-resilience-service-checkbox"
+												/>
+												<ExperimentalFeature
+													experimentKey="TOOL_ERROR_HEALER"
+													enabled={
+														experiments[EXPERIMENT_IDS.TOOL_ERROR_HEALER] ?? false
+													}
+													onChange={(enabled) =>
+														setExperimentEnabled(
+															EXPERIMENT_IDS.TOOL_ERROR_HEALER,
+															enabled,
+														)
+													}
+													checkboxTestId="experimental-tool-error-healer-checkbox"
 												/>
 												<SelfImprovingStatus />
 												<ExperimentalFeature
