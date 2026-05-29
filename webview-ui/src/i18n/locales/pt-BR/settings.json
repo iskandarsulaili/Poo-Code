@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Curador de erros de ferramentas",
             "description": "Correção automática de parâmetros ausentes em novas tentativas de ferramentas (ex. adicionar regex ao search_files)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Mecanismo de verificação",
+            "description": "Verifica se as alterações correspondem à intenção do usuário antes de concluir"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Verificação de requisitos",
+            "description": "Rastreia e verifica todos os requisitos antes da conclusão"
         }
     },
     "promptCaching": {

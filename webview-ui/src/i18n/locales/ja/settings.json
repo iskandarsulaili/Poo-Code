@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "ツールエラーヒーラー",
             "description": "ツール呼び出し再試行時の不足パラメータを自動修正（例：search_filesにregexを追加）"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "検証エンジン",
+            "description": "タスク完了前にコード変更がユーザーの意図と一致することを検証"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "要件検証",
+            "description": "完了前にすべてのユーザー要件が満たされていることを追跡・検証"
         }
     },
     "promptCaching": {

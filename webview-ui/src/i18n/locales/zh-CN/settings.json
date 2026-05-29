@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "工具错误修复器",
             "description": "自动修复工具调用重试时缺失的参数（例如，向search_files添加regex）"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "验证引擎",
+            "description": "在允许任务完成前验证代码更改是否符合用户意图"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "需求验证",
+            "description": "跟踪并验证所有用户需求在完成前已满足"
         }
     },
     "promptCaching": {

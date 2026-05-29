@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Araç Hata Onarıcı",
             "description": "Araç yeniden denemelerinde eksik parametreleri otomatik düzeltir (ör. search_files'a regex ekleme)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Doğrulama Motoru",
+            "description": "Tamamlamadan önce kod değişikliklerinin kullanıcı niyetiyle eşleştiğini doğrular"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Gereksinim Doğrulama",
+            "description": "Tamamlamadan önce tüm kullanıcı gereksinimlerinin karşılandığını izler ve doğrular"
         }
     },
     "promptCaching": {

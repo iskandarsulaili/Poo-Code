@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Reparador de errores de herramientas",
             "description": "Corrección automática de parámetros faltantes en reintentos de herramientas (ej. agregar regex a search_files)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Motor de verificación",
+            "description": "Verifica que los cambios cumplan la intención del usuario antes de completar"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Verificación de requisitos",
+            "description": "Rastrea y verifica todos los requisitos antes de completar"
         }
     },
     "promptCaching": {

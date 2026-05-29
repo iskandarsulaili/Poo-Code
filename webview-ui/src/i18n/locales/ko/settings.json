@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "도구 오류 힐러",
             "description": "도구 호출 재시도 시 누락된 매개변수 자동 수정 (예: search_files에 regex 추가)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "검증 엔진",
+            "description": "작업 완료 전 코드 변경이 사용자 의도와 일치하는지 검증"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "요구사항 검증",
+            "description": "완료 전 모든 사용자 요구사항이 충족되었는지 추적 및 검증"
         }
     },
     "promptCaching": {

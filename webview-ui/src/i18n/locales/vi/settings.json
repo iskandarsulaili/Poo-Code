@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Trình sửa lỗi công cụ",
             "description": "Tự động sửa các tham số bị thiếu khi thử lại công cụ (ví dụ: thêm regex vào search_files)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Công cụ xác minh",
+            "description": "Xác minh thay đổi mã khớp với ý định người dùng trước khi hoàn thành"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Xác minh yêu cầu",
+            "description": "Theo dõi và xác minh tất cả yêu cầu người dùng trước khi hoàn thành"
         }
     },
     "promptCaching": {

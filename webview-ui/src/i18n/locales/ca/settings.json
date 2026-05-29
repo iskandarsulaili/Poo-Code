@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Reparador d'errors d'eines",
             "description": "Correcció automàtica de paràmetres faltants en reintents d'eines (p. ex., afegir regex a search_files)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Motor de verificació",
+            "description": "Verifica que els canvis de codi coincideixin amb la intenció de l'usuari abans de completar"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Verificació de requisits",
+            "description": "Seguiment i verificació de tots els requisits abans de completar"
         }
     },
     "promptCaching": {

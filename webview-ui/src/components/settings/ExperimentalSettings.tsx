@@ -100,7 +100,9 @@ export const ExperimentalSettings = ({
 							key !== "PREVENTION_ENGINE" &&
 							key !== "CASCADE_TRACKER" &&
 							key !== "RESILIENCE_SERVICE" &&
-							key !== "TOOL_ERROR_HEALER",
+							key !== "TOOL_ERROR_HEALER" &&
+							key !== "VERIFICATION_ENGINE" &&
+							key !== "REQUIREMENTS_VERIFICATION",
 					)
 					.map((config) => {
 						const experimentKey = config[0]

@@ -882,6 +882,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Tool-Fehlerbehebung",
             "description": "Automatische Korrektur fehlender Parameter bei Tool-Wiederholungen (z. B. regex zu search_files hinzufügen)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Verifizierungs-Engine",
+            "description": "Überprüft Code-Änderungen auf Übereinstimmung mit Benutzerabsicht vor Abschluss"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Anforderungsverifizierung",
+            "description": "Verfolgt und verifiziert alle Benutzeranforderungen vor Abschluss"
         }
     },
     "promptCaching": {

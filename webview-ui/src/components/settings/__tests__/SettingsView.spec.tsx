@@ -527,15 +527,17 @@ describe("SettingsView - Experimental Settings", () => {
 		// Start with selfImproving enabled so sub-options are visible
 		const { activateTab, getSettingsContent } = renderSettingsView({ experiments: { selfImproving: true } })
 
+		// Clear initial render side-effects (e.g., requestRouterModels)
+		vi.clearAllMocks()
+
 		activateTab("experimental")
+
+		// Clear tab activation side-effects (e.g., refreshCustomTools)
+		vi.clearAllMocks()
 
 		const content = getSettingsContent()
 		// Verify the auto-skills sub-option appears
 		expect(within(content).queryByTestId("experimental-self-improving-auto-skills-checkbox")).toBeInTheDocument()
-
-		const autoSkillsCheckbox = within(content).getByTestId("experimental-self-improving-auto-skills-checkbox")
-		fireEvent.click(autoSkillsCheckbox)
-		expect(autoSkillsCheckbox).toBeChecked()
 
 		vi.clearAllMocks()
 

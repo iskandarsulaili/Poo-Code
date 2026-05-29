@@ -964,6 +964,14 @@
         "TOOL_ERROR_HEALER": {
             "name": "Tool Error Healer",
             "description": "Auto-fix missing parameters on tool call retries (e.g., add regex to search_files)"
+        },
+        "VERIFICATION_ENGINE": {
+            "name": "Verification Engine",
+            "description": "Verifies code changes match user intent before allowing task completion"
+        },
+        "REQUIREMENTS_VERIFICATION": {
+            "name": "Requirements Verification",
+            "description": "Tracks and verifies all user requirements are fulfilled before completion"
         }
     },
     "promptCaching": {
