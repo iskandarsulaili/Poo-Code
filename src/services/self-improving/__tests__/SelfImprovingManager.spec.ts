@@ -182,7 +182,12 @@ vi.mock("../ImprovementApplier", () => ({
 
 vi.mock("../CodeIndexAdapter", () => ({
 	CodeIndexAdapter: vi.fn().mockImplementation(() => {
-		const adapter = { getInfo: vi.fn().mockReturnValue({ available: true, hits: 3, topScore: 0.9 }) }
+		const adapter = {
+			getInfo: vi.fn().mockReturnValue({ available: true, hits: 3, topScore: 0.9 }),
+			isAvailable: vi.fn().mockReturnValue(true),
+			searchVectorStore: vi.fn().mockResolvedValue([]),
+			setCodeIndexManager: vi.fn(),
+		}
 		mockState.adapters.push(adapter)
 		return adapter
 	}),

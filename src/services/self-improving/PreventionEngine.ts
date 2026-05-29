@@ -1,6 +1,8 @@
 import { ErrorClassifier, ClassifiedError, ErrorCategory } from "./ErrorClassifier"
 import { ToolCallValidator, ValidationResult } from "./ToolCallValidator"
 import { CascadeTracker } from "./CascadeTracker"
+import type { CodeIndexAdapter } from "./CodeIndexAdapter"
+import type { VectorStoreSearchResult } from "../code-index/interfaces/vector-store"
 
 export interface PreventionContext {
 	preValidation: ValidationResult
@@ -13,11 +15,63 @@ export class PreventionEngine {
 	private errorClassifier: ErrorClassifier
 	private toolCallValidator: ToolCallValidator
 	private cascadeTracker: CascadeTracker
+	private codeIndexAdapter: CodeIndexAdapter | undefined
 
-	constructor() {
+	constructor(codeIndexAdapter?: CodeIndexAdapter) {
 		this.errorClassifier = new ErrorClassifier()
 		this.toolCallValidator = new ToolCallValidator()
 		this.cascadeTracker = new CascadeTracker()
+		this.codeIndexAdapter = codeIndexAdapter
+	}
+
+	setCodeIndexAdapter(adapter: CodeIndexAdapter | undefined): void {
+		this.codeIndexAdapter = adapter
+	}
+
+	/**
+	 * Format a single VectorStoreSearchResult into a human-readable context line.
+	 */
+	private formatSearchResult(result: VectorStoreSearchResult): string {
+		const filePath = result.payload?.filePath ?? String(result.id)
+		const startLine = result.payload?.startLine
+		const endLine = result.payload?.endLine
+		const snippet = result.payload?.codeChunk
+		const lineRange = startLine !== undefined && endLine !== undefined
+			? ` (lines ${startLine}-${endLine})`
+			: startLine !== undefined
+				? ` (line ${startLine})`
+				: ""
+		const snippetStr = snippet ? `: ${snippet.slice(0, 200).replace(/\n/g, " ")}` : ""
+		return `- ${filePath}${lineRange}${snippetStr}`
+	}
+
+	/**
+	 * Enrich a user message with relevant code index search results.
+	 * Non-blocking — returns original message on any error or empty results.
+	 * Gated behind selfImprovingCodeIndex experiment flag.
+	 */
+	async enrichContextWithCodeIndex(userMessage: string): Promise<string> {
+		if (!this.codeIndexAdapter || !this.codeIndexAdapter.isAvailable()) {
+			return userMessage
+		}
+
+		try {
+			const results = await this.codeIndexAdapter.searchVectorStore(userMessage)
+			if (!results || results.length === 0) {
+				return userMessage
+			}
+
+			const contextLines = results.map((r) => this.formatSearchResult(r))
+			const contextBlock = [
+				"Relevant existing code from codebase:",
+				...contextLines,
+			].join("\n")
+
+			return `${userMessage}\n\n${contextBlock}`
+		} catch (error) {
+			// Graceful fallback — log and return original message
+			return userMessage
+		}
 	}
 
 	/**

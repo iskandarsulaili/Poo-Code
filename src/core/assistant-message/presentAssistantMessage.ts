@@ -687,6 +687,27 @@ export async function presentAssistantMessage(cline: Task) {
 						text: `[Prevention: ${preventionMsg}]`,
 					})
 				}
+
+				// Fire-and-forget code index enrichment — non-blocking, graceful fallback
+				const sim = cline.providerRef.deref()?.getSelfImprovingManager?.()
+				if (sim?.preventionEngine) {
+					const userText = cline.userMessageContent
+						.filter((c): c is Anthropic.TextBlockParam => c.type === "text")
+						.map((c) => c.text)
+						.join("\n")
+					if (userText) {
+						sim.preventionEngine.enrichContextWithCodeIndex(userText).then((enriched) => {
+							if (enriched !== userText) {
+								cline.userMessageContent.push({
+									type: "text",
+									text: `[Code Index Context]\n${enriched}`,
+								})
+							}
+						}).catch(() => {
+							// Graceful fallback — enrichment failure is non-critical
+						})
+					}
+				}
 			}
 
 			switch (block.name) {

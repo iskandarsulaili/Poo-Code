@@ -1,5 +1,6 @@
 import type { CodeIndexInfo, Logger } from "./types"
 import type { CodeIndexManager } from "../code-index/manager"
+import type { VectorStoreSearchResult } from "../code-index/interfaces/vector-store"
 
 export interface CodeSearchResult {
 	filePath: string
@@ -70,6 +71,30 @@ export class CodeIndexAdapter {
 		} catch (error) {
 			this.logger?.appendLine(
 				`[CodeIndexAdapter] Search error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+			return []
+		}
+	}
+
+	/**
+	 * Searches the vector store directly, returning raw VectorStoreSearchResult[].
+	 * Supports optional directory prefix filtering.
+	 * Gracefully degrades when manager is not initialized or search fails.
+	 * Non-blocking — returns empty array on any error.
+	 */
+	async searchVectorStore(
+		query: string,
+		directoryPrefix?: string,
+	): Promise<VectorStoreSearchResult[]> {
+		if (!this.codeIndexManager) {
+			return []
+		}
+
+		try {
+			return await this.codeIndexManager.searchIndex(query, directoryPrefix)
+		} catch (error) {
+			this.logger?.appendLine(
+				`[CodeIndexAdapter] Vector store search error: ${error instanceof Error ? error.message : String(error)}`,
 			)
 			return []
 		}

@@ -136,6 +136,7 @@ export class SelfImprovingManager {
 			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
 		})
 		this.preventionEngine = new PreventionEngine()
+		// CodeIndexAdapter will be wired later via setCodeIndexManager() or getOrCreateRuntime()
 		this.verificationEngine = new VerificationEngine(this.logger)
 		this.requirementsVerifier = new RequirementsVerifier(this.logger)
 
@@ -168,6 +169,8 @@ export class SelfImprovingManager {
 		if (this.runtime) {
 			this.runtime.store.setCodeIndexManager(manager)
 			this.runtime.patternAnalyzer.setCodeIndexManager(manager)
+			this.runtime.codeIndexAdapter.setCodeIndexManager(manager!)
+			this.preventionEngine.setCodeIndexAdapter(this.runtime.codeIndexAdapter)
 		}
 		this.reviewTeam.setCodeIndexManager(manager)
 		this.questionEvaluator.setCodeIndexManager(manager)
