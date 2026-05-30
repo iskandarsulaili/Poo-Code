@@ -8,6 +8,7 @@ import { formatResponse } from "../prompts/responses"
 import { Package } from "../../shared/package"
 import type { ToolUse } from "../../shared/tools"
 import { t } from "../../i18n"
+import { getModeBySlug } from "../../shared/modes"
 
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { RequirementsVerifier } from "../../services/self-improving/RequirementsVerifier"
@@ -50,6 +51,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	private requirementsVerifier?: RequirementsVerifier
 	/** Optional verification engine for code quality checks */
 	private verificationEngine?: VerificationEngine
+	/** Tracks consecutive verification failures for lenient mode retry logic */
+	private consecutiveVerificationFailures = 0
 
 	/**
 	 * Set the verifiers used to guard completion.
@@ -122,11 +125,19 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				this.requirementsVerifier.processUserMessages(userMessages)
 			}
 
+			// Resolve current mode slug for per-mode verification overrides
+			const currentMode = await task.getTaskMode()
+
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier) {
-				// Read verificationLevel from experiments, default to "strict"
 				const experiments = task.experiments
-				const verificationLevel = experiments?.verificationLevel ?? "strict"
+
+				// Per-mode resolution: check verificationLevels[currentMode] first,
+				// fall back to verificationLevel, then "strict"
+				const verificationLevel =
+					experiments?.verificationLevels?.[currentMode] ??
+					experiments?.verificationLevel ??
+					"strict"
 
 				// Apply verificationLevel to the verifier config
 				this.requirementsVerifier.updateConfig({ verificationLevel })
@@ -145,7 +156,24 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						return
 					}
 					if (verificationLevel === "lenient" && !reqResult.passed) {
+						this.consecutiveVerificationFailures++
 						this.log?.(`[AttemptCompletionTool] [LENIENT] Requirements issues found but non-blocking: ${reqResult.summary}`)
+						if (this.consecutiveVerificationFailures >= 3) {
+							const bypassResponse = await task.ask(
+								"verification_bypass_prompt",
+								"Verification has failed 3 consecutive times. Bypass verification and proceed, or retry?",
+							)
+							if (bypassResponse === "yesButtonClicked") {
+								this.consecutiveVerificationFailures = 0
+								this.log?.("[AttemptCompletionTool] User chose to bypass verification")
+							} else {
+								this.consecutiveVerificationFailures = 0
+								this.log?.("[AttemptCompletionTool] User chose to retry verification")
+								return this.execute(params, task, callbacks)
+							}
+						}
+					} else if (reqResult.passed) {
+						this.consecutiveVerificationFailures = 0
 					}
 				}
 			}
@@ -153,7 +181,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Guard 6: Code quality verification (VerificationEngine)
 			// Skip verification for lenient modes — research tasks and other user-configured modes
 			// don't need build/lint/types/tests. Default: ["research"]
-			const currentMode = await task.getTaskMode()
 			const experiments = task.experiments
 			const lenientModes = experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)

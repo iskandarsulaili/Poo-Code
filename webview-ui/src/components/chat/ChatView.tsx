@@ -279,6 +279,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setPrimaryButtonText(t("chat:proceedAnyways.title"))
 							setSecondaryButtonText(t("chat:startNewTask.title"))
 							break
+						case "verification_bypass_prompt":
+							playSound("progress_loop")
+							setSendingDisabled(false)
+							setClineAsk("verification_bypass_prompt")
+							setEnableButtons(true)
+							setPrimaryButtonText("Bypass")
+							setSecondaryButtonText("Retry")
+							break
 						case "followup":
 							setSendingDisabled(isPartial)
 							setClineAsk("followup")
@@ -639,6 +647,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						case "resume_task":
 						case "resume_completed_task":
 						case "mistake_limit_reached":
+						case "verification_bypass_prompt":
 							vscode.postMessage({
 								type: "askResponse",
 								askResponse: "messageResponse",
@@ -722,6 +731,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "tool":
 				case "use_mcp_server":
 				case "mistake_limit_reached":
+				case "verification_bypass_prompt":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
 						vscode.postMessage({
@@ -805,6 +815,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "command":
 				case "tool":
 				case "use_mcp_server":
+				case "verification_bypass_prompt":
 					// Only send text/images if they exist
 					if (trimmedInput || (images && images.length > 0)) {
 						vscode.postMessage({

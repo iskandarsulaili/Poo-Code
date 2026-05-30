@@ -284,19 +284,19 @@ export class LearningStore {
 	}
 
 	getPatterns(): readonly LearnedPattern[] {
-		return this.state.patterns
+		return Array.isArray(this.state.patterns) ? this.state.patterns : []
 	}
 
 	getArchivedPatterns(): readonly LearnedPattern[] {
-		return this.state.archivedPatterns
+		return Array.isArray(this.state.archivedPatterns) ? this.state.archivedPatterns : []
 	}
 
 	getRecentEvents(): readonly LearningEvent[] {
-		return this.state.recentEvents
+		return Array.isArray(this.state.recentEvents) ? this.state.recentEvents : []
 	}
 
 	getPendingActions(): readonly ImprovementAction[] {
-		return this.state.pendingActions
+		return Array.isArray(this.state.pendingActions) ? this.state.pendingActions : []
 	}
 
 	getTelemetry(): Readonly<LearningState["telemetry"]> {

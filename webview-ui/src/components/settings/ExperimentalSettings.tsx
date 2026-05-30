@@ -1,6 +1,6 @@
 import { HTMLAttributes } from "react"
 
-import type { Experiments, ImageGenerationProvider } from "@roo-code/types"
+import type { Experiments, ImageGenerationProvider, ModeConfig, VerificationLevel } from "@roo-code/types"
 
 import { EXPERIMENT_IDS, experimentConfigsMap } from "@roo/experiments"
 
@@ -16,6 +16,7 @@ import { ExperimentalFeature } from "./ExperimentalFeature"
 import { ImageGenerationSettings } from "./ImageGenerationSettings"
 import { CustomToolsSettings } from "./CustomToolsSettings"
 import { SelfImprovingStatus } from "./SelfImprovingStatus"
+import { VerificationSettings } from "./VerificationSettings"
 
 type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	experiments: Experiments
@@ -39,6 +40,9 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	setLenientModes?: (modes: string[]) => void
 	verificationLevel?: "strict" | "lenient" | "bypass"
 	setVerificationLevel?: (level: "strict" | "lenient" | "bypass") => void
+	verificationLevels?: Record<string, VerificationLevel>
+	setVerificationLevels?: (levels: Record<string, VerificationLevel>) => void
+	customModes?: ModeConfig[]
 }
 
 // ── Category definitions ──────────────────────────────────────────────
@@ -570,6 +574,9 @@ export const ExperimentalSettings = ({
 	setLenientModes,
 	verificationLevel,
 	setVerificationLevel,
+	verificationLevels,
+	setVerificationLevels,
+	customModes,
 	className,
 	...props
 }: ExperimentalSettingsProps) => {
@@ -650,47 +657,16 @@ export const ExperimentalSettings = ({
 						<div key={key}>{renderExperiment(key)}</div>
 					))}
 
-				{/* Lenient Modes */}
-				<SearchableSetting
-					settingId="experimental-lenient-modes"
-					section="experimental"
-					label="Lenient Modes"
-					description="Modes that skip code quality verification on completion (comma-separated mode slugs)">
-					<Input
-						value={(experiments.lenientModes as string[] | undefined)?.join(", ") ?? "research"}
-						onChange={(e) => {
-							const modes = e.target.value
-								.split(",")
-								.map((m) => m.trim())
-								.filter(Boolean)
-							setLenientModes?.(modes)
-						}}
-						placeholder="research, ask, architect"
-						data-testid="experimental-lenient-modes-input"
-					/>
-				</SearchableSetting>
-
-				{/* Verification Level */}
-				<SearchableSetting
-					settingId="experimental-verification-level"
-					section="experimental"
-					label="Verification Level"
-					description="Controls how requirements verification behaves on attempt_completion">
-					<Select
-						value={verificationLevel ?? "strict"}
-						onValueChange={(value: "strict" | "lenient" | "bypass") =>
-							setVerificationLevel?.(value)
-						}>
-						<SelectTrigger data-testid="experimental-verification-level-select">
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="strict">Strict — All requirements must be verified</SelectItem>
-							<SelectItem value="lenient">Lenient — Log warnings, don't block</SelectItem>
-							<SelectItem value="bypass">Bypass — Skip requirements verification</SelectItem>
-						</SelectContent>
-					</Select>
-				</SearchableSetting>
+				{/* Verification Settings (default level + per-mode overrides) */}
+				<VerificationSettings
+					customModes={customModes ?? []}
+					lenientModes={(experiments.lenientModes as string[] | undefined) ?? []}
+					verificationLevel={verificationLevel}
+					verificationLevels={verificationLevels}
+					setLenientModes={setLenientModes!}
+					setVerificationLevel={setVerificationLevel!}
+					setVerificationLevels={setVerificationLevels!}
+				/>
 			</Section>
 		</div>
 	)

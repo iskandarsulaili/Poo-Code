@@ -142,7 +142,8 @@ export class ImprovementApplier {
 	 * Returns the top-N patterns by confidence, ordered descending.
 	 */
 	buildPromptContext(patterns: LearnedPattern[], maxEntries: number = 5): PromptContext {
-		const active = patterns.filter((p) => p.state === "active" && p.confidenceScore != null)
+		const safePatterns = Array.isArray(patterns) ? patterns : []
+		const active = safePatterns.filter((p) => p.state === "active" && p.confidenceScore != null)
 
 		// Sort by confidence descending, take top N
 		const top = active.sort((a, b) => (b.confidenceScore ?? 0) - (a.confidenceScore ?? 0)).slice(0, maxEntries)
@@ -187,7 +188,8 @@ export class ImprovementApplier {
 	 * Joins summaries of active patterns into a single description.
 	 */
 	private inferTaskDescription(patterns: LearnedPattern[]): string {
-		const active = patterns.filter((p) => p.state === "active")
+		const safePatterns = Array.isArray(patterns) ? patterns : []
+		const active = safePatterns.filter((p) => p.state === "active")
 		if (active.length === 0) {
 			return ""
 		}
@@ -217,7 +219,8 @@ export class ImprovementApplier {
 	 * Infer an approach summary from the current patterns.
 	 */
 	private inferApproach(patterns: LearnedPattern[]): string {
-		const active = patterns.filter((p) => p.state === "active")
+		const safePatterns = Array.isArray(patterns) ? patterns : []
+		const active = safePatterns.filter((p) => p.state === "active")
 		if (active.length === 0) {
 			return "No patterns available"
 		}
@@ -236,7 +239,8 @@ export class ImprovementApplier {
 	 * Infer outcome from patterns — success if no error patterns dominate.
 	 */
 	private inferOutcome(patterns: LearnedPattern[]): "success" | "failure" {
-		const active = patterns.filter((p) => p.state === "active")
+		const safePatterns = Array.isArray(patterns) ? patterns : []
+		const active = safePatterns.filter((p) => p.state === "active")
 		if (active.length === 0) {
 			return "success"
 		}
@@ -413,7 +417,8 @@ ${bulletList}
 	 */
 	private generateSkillMergeActions(patterns: LearnedPattern[], now: number): ImprovementAction[] {
 		const actions: ImprovementAction[] = []
-		const skillPatterns = patterns.filter(
+		const safePatterns = Array.isArray(patterns) ? patterns : []
+		const skillPatterns = safePatterns.filter(
 			(p) => p.patternType === "skill" && p.state === "active" && p.frequency >= 2,
 		)
 

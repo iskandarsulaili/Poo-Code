@@ -102,6 +102,7 @@ export const modeConfigSchema = z.object({
 	customInstructions: z.string().optional(),
 	groups: groupEntryArraySchema,
 	source: z.enum(["global", "project"]).optional(),
+	verificationLevel: z.enum(["strict", "lenient", "bypass"]).optional(),
 })
 
 export type ModeConfig = z.infer<typeof modeConfigSchema>

@@ -217,6 +217,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		kaizenAutoPush,
 		kaizenRemoteName,
 		kaizenCommitTemplate,
+		customModes,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -319,13 +320,20 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			return { ...prevState, experiments: { ...prevState.experiments, lenientModes: modes } }
 		})
 	}, [])
+const setVerificationLevel = useCallback((level: "strict" | "lenient" | "bypass") => {
+	setCachedState((prevState) => {
+		setChangeDetected(true)
+		return { ...prevState, experiments: { ...prevState.experiments, verificationLevel: level } }
+	})
+}, [])
 
-	const setVerificationLevel = useCallback((level: "strict" | "lenient" | "bypass") => {
-		setCachedState((prevState) => {
-			setChangeDetected(true)
-			return { ...prevState, experiments: { ...prevState.experiments, verificationLevel: level } }
-		})
-	}, [])
+const setVerificationLevels = useCallback((levels: Record<string, "strict" | "lenient" | "bypass">) => {
+	setCachedState((prevState) => {
+		setChangeDetected(true)
+		return { ...prevState, experiments: { ...prevState.experiments, verificationLevels: levels } }
+	})
+}, [])
+
 
 	const setTelemetrySetting = useCallback((setting: TelemetrySetting) => {
 		setCachedState((prevState) => {
@@ -1014,6 +1022,9 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								setLenientModes={setLenientModes}
 								verificationLevel={experiments.verificationLevel as "strict" | "lenient" | "bypass" | undefined}
 								setVerificationLevel={setVerificationLevel}
+								verificationLevels={experiments.verificationLevels as Record<string, "strict" | "lenient" | "bypass"> | undefined}
+								setVerificationLevels={setVerificationLevels}
+								customModes={customModes}
 							/>
 						)}
 

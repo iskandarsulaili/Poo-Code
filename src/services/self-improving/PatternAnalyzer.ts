@@ -72,7 +72,7 @@ export class PatternAnalyzer {
 		now: number,
 	): LearnedPattern[] {
 		const patterns: LearnedPattern[] = []
-		const correctionEvents = events.filter(
+		const correctionEvents = (events ?? []).filter(
 			(event) =>
 				event.signal === "USER_CORRECTION" || (event.signal === "TASK_FAILURE" && event.outcome.corrected),
 		)
@@ -131,7 +131,7 @@ export class PatternAnalyzer {
 		now: number,
 	): LearnedPattern[] {
 		const patterns: LearnedPattern[] = []
-		const successEvents = events.filter((event) => event.signal === "TASK_SUCCESS")
+		const successEvents = (events ?? []).filter((event) => event.signal === "TASK_SUCCESS")
 
 		if (successEvents.length < 2) {
 			return patterns
@@ -264,7 +264,7 @@ export class PatternAnalyzer {
 		now: number,
 	): Promise<LearnedPattern[]> {
 		const experiments = this.getExperiments()
-		const codeIndexEvents = events.filter((event) => event.signal === "CODE_INDEX_HIT")
+		const codeIndexEvents = (events ?? []).filter((event) => event.signal === "CODE_INDEX_HIT")
 
 		// When code index integration is enabled, use vector search for richer patterns
 		if (experiments?.selfImprovingCodeIndex !== false && this.codeIndexManager) {
@@ -411,7 +411,7 @@ export class PatternAnalyzer {
 		now: number,
 	): LearnedPattern[] {
 		const patterns: LearnedPattern[] = []
-		const qualityEvents = events.filter((event) => event.signal === "PROMPT_QUALITY")
+		const qualityEvents = (events ?? []).filter((event) => event.signal === "PROMPT_QUALITY")
 
 		if (qualityEvents.length < 2) {
 			return patterns
@@ -481,7 +481,7 @@ export class PatternAnalyzer {
 		now: number,
 	): LearnedPattern[] {
 		const patterns: LearnedPattern[] = []
-		const repeatEvents = events.filter((event) => event.signal === "PATTERN_REPEAT")
+		const repeatEvents = (events ?? []).filter((event) => event.signal === "PATTERN_REPEAT")
 
 		if (repeatEvents.length < 2) {
 			return patterns

@@ -961,6 +961,10 @@
             "name": "Code Index Integration",
             "description": "Use vector search for pattern dedup, retrieval, and scoring"
         },
+        "SELF_IMPROVING_SPECIALIZED_SKILLS": {
+            "name": "Self-Improving Specialized Skills",
+            "description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+        },
         "ONE_SHOT_ORCHESTRATOR": {
             "name": "ONE-SHOT Orchestrator",
             "description": "Enable ONE-SHOT Orchestrator mode for autonomous full-stack project building"
@@ -992,6 +996,10 @@
             "name": "Resilience Service",
             "description": "Exponential backoff retry and consecutive mistake detection for streaming failures"
         },
+        "TASK_PATTERN_LEARNING": {
+            "name": "Task Pattern Learning",
+            "description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+        },
         "TOOL_ERROR_HEALER": {
             "name": "Tool Error Healer",
             "description": "Auto-fix missing parameters on tool call retries (e.g., add regex to search_files)"
@@ -999,6 +1007,10 @@
         "VERIFICATION_ENGINE": {
             "name": "Verification Engine",
             "description": "Verifies code changes match user intent before allowing task completion"
+        },
+        "RECOVERY_CONTEXT": {
+            "name": "Recovery Context",
+            "description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
         },
         "REQUIREMENTS_VERIFICATION": {
             "name": "Requirements Verification",

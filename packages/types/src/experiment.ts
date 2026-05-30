@@ -85,6 +85,12 @@ export const experimentsSchema = z.object({
 	 * @default "strict"
 	 */
 	verificationLevel: z.enum(["strict", "lenient", "bypass"]).optional(),
+
+	/**
+	 * Per-mode verification level overrides.
+	 * Keyed by mode slug, values override the default verificationLevel for that mode.
+	 */
+	verificationLevels: z.record(z.enum(["strict", "lenient", "bypass"])).optional(),
 })
 
 export type Experiments = z.infer<typeof experimentsSchema>

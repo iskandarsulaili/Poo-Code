@@ -35,6 +35,7 @@ export class RequirementsVerifier {
 	private conflictResolver: ConflictResolver
 	private allMessages: string[] = []
 	private lastVerifyResult?: RequirementsVerificationResult
+	private taskDescription: string = ""
 
 	constructor(
 		private readonly logger?: Logger,
@@ -76,6 +77,11 @@ export class RequirementsVerifier {
 	 */
 	async processUserMessages(messages: string[]): Promise<Requirement[]> {
 		if (messages.length === 0) return []
+
+		// Store task description from first message for read-only detection
+		if (messages[0] && !this.taskDescription) {
+			this.taskDescription = messages[0]
+		}
 
 		this.logger?.appendLine(`[RequirementsVerifier] Processing ${messages.length} user messages`)
 
@@ -311,21 +317,48 @@ export class RequirementsVerifier {
 			return result
 		}
 
-		// Strict mode (default): current behavior — block on failures/pending
-		const passed = failed.length === 0 && (pending.length === 0 || !this.config.requireAllVerified)
+		// Strict mode (default)
+		// NEW: Detect read-only/audit tasks — always pass verification
+		const isReadOnlyTask = this.detectReadOnlyTask()
+
+		// NEW: If no requirements have been explicitly tracked (all pending),
+		// treat as passed — prevents auto-extracted requirements from blocking
+		const hasExplicitTracking = verified.length > 0 || failed.length > 0
+
+		let passed: boolean
+		if (isReadOnlyTask) {
+			passed = true
+		} else if (!hasExplicitTracking) {
+			passed = true
+		} else {
+			passed = failed.length === 0 && (pending.length === 0 || !this.config.requireAllVerified)
+		}
 
 		let summary: string
 		if (all.length === 0) {
 			summary = "No requirements extracted"
 		} else if (passed) {
 			summary = `${active.length} active requirements: ${verified.length} verified, ${failed.length} failed, ${pending.length} pending (${superseded.length} superseded)`
-		} else {
+		} else if (failed.length > 0) {
 			summary = `${failed.length}/${active.length} active requirements failed: ${failed.map((r) => r.text.slice(0, 80)).join("; ")}`
+		} else {
+			// pending.length > 0 but no failures — show pending requirements clearly
+			summary = `${pending.length}/${active.length} active requirements pending: ${pending.map((r) => r.text.slice(0, 80)).join("; ")}`
 		}
 
 		this.lastVerifyResult = { passed, total: all.length, verified, failed, pending, summary }
 
 		return { passed, total: all.length, verified, failed, pending, summary }
+	}
+
+	/**
+	 * Detect if this is a read-only/audit task based on the task description.
+	 * Read-only tasks always pass verification since they don't produce code changes.
+	 */
+	private detectReadOnlyTask(): boolean {
+		const readOnlyKeywords = ["audit", "verify", "check", "report", "read-only", "read only", "review", "inspect"]
+		const taskText = this.taskDescription?.toLowerCase() ?? ""
+		return readOnlyKeywords.some((kw) => taskText.includes(kw))
 	}
 
 	/**

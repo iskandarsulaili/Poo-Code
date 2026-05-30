@@ -1028,20 +1028,21 @@ export class SelfImprovingManager {
 
 	private updateReviewTelemetry(store: LearningStore, actions: ImprovementAction[]): void {
 		const telemetry = store.getTelemetry()
+		const safeActions = Array.isArray(actions) ? actions : []
 		store.updateTelemetry({
 			lastReviewAt: Date.now(),
 			promptEnrichmentUses:
 				telemetry.promptEnrichmentUses +
-				actions.filter((action) => action.actionType === "PROMPT_ENRICHMENT").length,
+				safeActions.filter((action) => action.actionType === "PROMPT_ENRICHMENT").length,
 			toolPreferenceUses:
 				telemetry.toolPreferenceUses +
-				actions.filter((action) => action.actionType === "TOOL_PREFERENCE").length,
+				safeActions.filter((action) => action.actionType === "TOOL_PREFERENCE").length,
 			errorAvoidanceUses:
 				telemetry.errorAvoidanceUses +
-				actions.filter((action) => action.actionType === "ERROR_AVOIDANCE").length,
+				safeActions.filter((action) => action.actionType === "ERROR_AVOIDANCE").length,
 			skillSuggestionCount:
 				telemetry.skillSuggestionCount +
-				actions.filter(
+				safeActions.filter(
 					(action) =>
 						action.actionType === "SKILL_SUGGESTION" ||
 						action.actionType === "SKILL_CREATE" ||
