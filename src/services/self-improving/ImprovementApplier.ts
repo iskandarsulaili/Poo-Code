@@ -69,14 +69,15 @@ export class ImprovementApplier {
 	 * before generating actions and records the current task after.
 	 */
 	generateActions(patterns: LearnedPattern[]): ImprovementAction[] {
+		const safePatterns = Array.isArray(patterns) ? patterns : []
 		const actions: ImprovementAction[] = []
 		const now = Date.now()
 
 		// ── Task Pattern Learning: check for similar patterns before generating ──
 		const experiments = this.getExperiments()
 		if (experiments?.taskPatternLearning !== false && this.taskSimilarityMatcher && this.taskPatternStore) {
-			const taskDescription = this.inferTaskDescription(patterns)
-			const toolNames = this.collectToolNames(patterns)
+			const taskDescription = this.inferTaskDescription(safePatterns)
+			const toolNames = this.collectToolNames(safePatterns)
 			const matchResult = this.taskSimilarityMatcher.match(taskDescription, toolNames)
 
 			if (matchResult.matched && matchResult.pattern) {
@@ -84,7 +85,7 @@ export class ImprovementApplier {
 			}
 		}
 
-		for (const pattern of patterns) {
+		for (const pattern of safePatterns) {
 			if (pattern.state !== "active") {
 				continue
 			}
@@ -113,23 +114,23 @@ export class ImprovementApplier {
 
 		// SKILL_MERGE: detect similar skills and generate merge actions
 		if (experiments?.selfImprovingSkillMerge !== false) {
-			const mergeActions = this.generateSkillMergeActions(patterns, now)
+			const mergeActions = this.generateSkillMergeActions(safePatterns, now)
 			actions.push(...mergeActions)
 		}
 
 		// SPECIALIZED_SKILL: generate SKILL_CREATE_FROM_SCRATCH actions for
 		// high-confidence, domain-specific patterns that warrant dedicated skills
 		if (experiments?.selfImprovingSpecializedSkills !== false) {
-			const specializedActions = this.generateSpecializedSkillActions(patterns, now)
+			const specializedActions = this.generateSpecializedSkillActions(safePatterns, now)
 			actions.push(...specializedActions)
 		}
 
 		// ── Task Pattern Learning: record current task pattern ──
 		if (experiments?.taskPatternLearning !== false && this.taskPatternStore) {
-			const taskDescription = this.inferTaskDescription(patterns)
-			const toolNames = this.collectToolNames(patterns)
-			const approach = this.inferApproach(patterns)
-			const outcome = this.inferOutcome(patterns)
+			const taskDescription = this.inferTaskDescription(safePatterns)
+			const toolNames = this.collectToolNames(safePatterns)
+			const approach = this.inferApproach(safePatterns)
+			const outcome = this.inferOutcome(safePatterns)
 
 			this.taskPatternStore.recordTask(taskDescription, toolNames, approach, outcome)
 		}

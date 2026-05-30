@@ -244,11 +244,12 @@ export class ReviewTeamService {
 		rejected: LearnedPattern[]
 		verdicts: ReviewVerdict[]
 	}> {
+		const safePatterns = Array.isArray(patterns) ? patterns : []
 		const approved: LearnedPattern[] = []
 		const rejected: LearnedPattern[] = []
 		const verdicts: ReviewVerdict[] = []
 
-		for (const pattern of patterns) {
+		for (const pattern of safePatterns) {
 			const verdict = await this.reviewPattern(pattern)
 			verdicts.push(verdict)
 			if (verdict.approved) {
@@ -259,7 +260,7 @@ export class ReviewTeamService {
 		}
 
 		this.logger.appendLine(
-			`[ReviewTeam] Reviewed ${patterns.length} patterns: ${approved.length} approved, ${rejected.length} rejected`,
+			`[ReviewTeam] Reviewed ${safePatterns.length} patterns: ${approved.length} approved, ${rejected.length} rejected`,
 		)
 
 		return { approved, rejected, verdicts }
@@ -328,11 +329,12 @@ export class ReviewTeamService {
 		rejected: ImprovementAction[]
 		verdicts: ReviewVerdict[]
 	}> {
+		const safeActions = Array.isArray(actions) ? actions : []
 		const approved: ImprovementAction[] = []
 		const rejected: ImprovementAction[] = []
 		const verdicts: ReviewVerdict[] = []
 
-		for (const action of actions) {
+		for (const action of safeActions) {
 			const verdict = await this.reviewAction(action)
 			verdicts.push(verdict)
 			if (verdict.approved) {
@@ -343,7 +345,7 @@ export class ReviewTeamService {
 		}
 
 		this.logger.appendLine(
-			`[ReviewTeam] Reviewed ${actions.length} actions: ${approved.length} approved, ${rejected.length} rejected`,
+			`[ReviewTeam] Reviewed ${safeActions.length} actions: ${approved.length} approved, ${rejected.length} rejected`,
 		)
 
 		return { approved, rejected, verdicts }

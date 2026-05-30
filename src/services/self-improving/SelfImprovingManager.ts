@@ -522,12 +522,13 @@ export class SelfImprovingManager {
 			const actions = this.runtime.improvementApplier.generateActions([
 				...this.runtime.store.getPatterns(),
 			] as LearnedPattern[])
-			for (const action of actions) {
+			const safeActions = Array.isArray(actions) ? actions : []
+			for (const action of safeActions) {
 				this.runtime.store.addAction(action)
 			}
 
 			// Review actions through multi-agent team
-			const { rejected: rejectedActions } = await this.reviewTeam.reviewActions(actions)
+			const { rejected: rejectedActions } = await this.reviewTeam.reviewActions(safeActions)
 
 			if (rejectedActions.length > 0) {
 				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedActions.length} actions`)
@@ -545,7 +546,7 @@ export class SelfImprovingManager {
 				)
 			}
 
-			this.updateReviewTelemetry(this.runtime.store, actions)
+			this.updateReviewTelemetry(this.runtime.store, safeActions)
 			this.promptRevision += 1
 			this.runtime.store.resetCounters()
 			await this.runtime.store.persist()

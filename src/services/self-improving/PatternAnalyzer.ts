@@ -34,29 +34,31 @@ export class PatternAnalyzer {
 	 * This is the main entry point called during review cycles.
 	 */
 	async analyze(events: LearningEvent[], existingPatterns: LearnedPattern[]): Promise<LearnedPattern[]> {
+		const safeEvents = Array.isArray(events) ? events : []
+		const safeExistingPatterns = Array.isArray(existingPatterns) ? existingPatterns : []
 		const patterns: LearnedPattern[] = []
 		const now = Date.now()
 
-		const correctionPatterns = this.extractCorrectionPatterns(events, existingPatterns, now)
+		const correctionPatterns = this.extractCorrectionPatterns(safeEvents, safeExistingPatterns, now)
 		patterns.push(...correctionPatterns)
 
-		const successPatterns = this.extractSuccessPatterns(events, existingPatterns, now)
+		const successPatterns = this.extractSuccessPatterns(safeEvents, safeExistingPatterns, now)
 		patterns.push(...successPatterns)
 
-		const toolPatterns = this.extractToolPatterns(events, existingPatterns, now)
+		const toolPatterns = this.extractToolPatterns(safeEvents, safeExistingPatterns, now)
 		patterns.push(...toolPatterns)
 
-		const codeIndexPatterns = await this.extractCodeIndexPatterns(events, existingPatterns, now)
+		const codeIndexPatterns = await this.extractCodeIndexPatterns(safeEvents, safeExistingPatterns, now)
 		patterns.push(...codeIndexPatterns)
 
 		const experiments = this.getExperiments()
 		if (experiments?.selfImprovingPromptQuality !== false) {
-			const promptQualityPatterns = this.extractPromptQualityPatterns(events, existingPatterns, now)
+			const promptQualityPatterns = this.extractPromptQualityPatterns(safeEvents, safeExistingPatterns, now)
 			patterns.push(...promptQualityPatterns)
 		}
 
 		if (experiments?.selfImprovingPromptQuality !== false) {
-			const patternRepeatPatterns = this.extractPatternRepeatPatterns(events, existingPatterns, now)
+			const patternRepeatPatterns = this.extractPatternRepeatPatterns(safeEvents, safeExistingPatterns, now)
 			patterns.push(...patternRepeatPatterns)
 		}
 

@@ -271,14 +271,6 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setPrimaryButtonText(t("chat:retry.title"))
 							setSecondaryButtonText(t("chat:startNewTask.title"))
 							break
-						case "mistake_limit_reached":
-							playSound("progress_loop")
-							setSendingDisabled(false)
-							setClineAsk("mistake_limit_reached")
-							setEnableButtons(true)
-							setPrimaryButtonText(t("chat:proceedAnyways.title"))
-							setSecondaryButtonText(t("chat:startNewTask.title"))
-							break
 						case "verification_bypass_prompt":
 							playSound("progress_loop")
 							setSendingDisabled(false)
@@ -286,6 +278,14 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 							setEnableButtons(true)
 							setPrimaryButtonText("Bypass")
 							setSecondaryButtonText("Retry")
+							break
+						case "mistake_limit_reached":
+							playSound("progress_loop")
+							setSendingDisabled(false)
+							setClineAsk("mistake_limit_reached")
+							setEnableButtons(true)
+							setPrimaryButtonText(t("chat:proceedAnyways.title"))
+							setSecondaryButtonText(t("chat:startNewTask.title"))
 							break
 						case "followup":
 							setSendingDisabled(isPartial)

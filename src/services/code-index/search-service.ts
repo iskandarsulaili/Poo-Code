@@ -41,11 +41,20 @@ export class CodeIndexSearchService {
 		}
 
 		try {
-			// Generate embedding for query
-			const embeddingResponse = await this.embedder.createEmbeddings([query])
-			const vector = embeddingResponse?.embeddings[0]
+			// Generate embedding for query with retry
+			let vector: number[] | undefined
+			for (let attempt = 0; attempt < 2; attempt++) {
+				if (attempt > 0) {
+					await new Promise(resolve => setTimeout(resolve, 1000))
+				}
+				const embeddingResponse = await this.embedder.createEmbeddings([query])
+				vector = embeddingResponse?.embeddings[0]
+				if (vector) break
+			}
 			if (!vector) {
-				throw new Error("Failed to generate embedding for query.")
+				// Fall back to returning empty results
+				console.warn("[CodeIndexSearchService] Embedding generation failed, returning empty results")
+				return []
 			}
 
 			// Handle directory prefix
