@@ -666,6 +666,8 @@ export const ExperimentalSettings = ({
 					setLenientModes={setLenientModes!}
 					setVerificationLevel={setVerificationLevel!}
 					setVerificationLevels={setVerificationLevels!}
+					experiments={experiments}
+					setExperimentEnabled={setExperimentEnabled}
 				/>
 			</Section>
 		</div>

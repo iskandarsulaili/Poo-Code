@@ -1,13 +1,15 @@
 import { useMemo, useCallback } from "react"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 
-import type { ModeConfig, VerificationLevel } from "@roo-code/types"
+import type { Experiments, ModeConfig, VerificationLevel } from "@roo-code/types"
 
+import { EXPERIMENT_IDS } from "@roo/experiments"
 import { getAllModes } from "@roo/modes"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui"
 import { SearchableSetting } from "./SearchableSetting"
 import { Section } from "./Section"
+import { SetExperimentEnabled } from "./types"
 
 type VerificationSettingsProps = {
 	customModes: ModeConfig[]
@@ -17,6 +19,8 @@ type VerificationSettingsProps = {
 	setLenientModes: (modes: string[]) => void
 	setVerificationLevel: (level: VerificationLevel) => void
 	setVerificationLevels: (levels: Record<string, VerificationLevel>) => void
+	experiments: Experiments
+	setExperimentEnabled: SetExperimentEnabled
 }
 
 const VERIFICATION_LEVEL_OPTIONS: { value: VerificationLevel; label: string }[] = [
@@ -33,11 +37,28 @@ export const VerificationSettings = ({
 	setLenientModes,
 	setVerificationLevel,
 	setVerificationLevels,
+	experiments,
+	setExperimentEnabled,
 }: VerificationSettingsProps) => {
 	const allModes = useMemo(() => getAllModes(customModes), [customModes])
 
 	const lenientSet = useMemo(() => new Set(lenientModes ?? []), [lenientModes])
 	const levels = useMemo(() => verificationLevels ?? {}, [verificationLevels])
+
+	// Master toggle: enabled when either verification engine or requirements verification is on
+	const verificationEngineEnabled =
+		experiments[EXPERIMENT_IDS.VERIFICATION_ENGINE] ?? false
+	const requirementsVerificationEnabled =
+		experiments[EXPERIMENT_IDS.REQUIREMENTS_VERIFICATION] ?? false
+	const masterEnabled = verificationEngineEnabled || requirementsVerificationEnabled
+
+	const handleMasterToggle = useCallback(
+		(enabled: boolean) => {
+			setExperimentEnabled(EXPERIMENT_IDS.VERIFICATION_ENGINE, enabled)
+			setExperimentEnabled(EXPERIMENT_IDS.REQUIREMENTS_VERIFICATION, enabled)
+		},
+		[setExperimentEnabled],
+	)
 
 	const handleModeToggle = useCallback(
 		(slug: string, checked: boolean) => {
@@ -58,6 +79,17 @@ export const VerificationSettings = ({
 
 	return (
 		<Section>
+			{/* Master Enable/Disable Toggle */}
+			<SearchableSetting
+				settingId="experimental-verification-master-toggle"
+				section="experimental"
+				label="Enable Verification"
+				description="Master toggle for all verification features. When disabled, both code quality verification and requirements verification are skipped.">
+				<VSCodeCheckbox
+					checked={masterEnabled}
+					onChange={(e: any) => handleMasterToggle(e.target.checked)} />
+			</SearchableSetting>
+
 			{/* Default Verification Level */}
 			<SearchableSetting
 				settingId="experimental-verification-level"
@@ -66,7 +98,8 @@ export const VerificationSettings = ({
 				description="Controls how requirements verification behaves on attempt_completion by default">
 				<Select
 					value={verificationLevel ?? "strict"}
-					onValueChange={(value: VerificationLevel) => setVerificationLevel(value)}>
+					onValueChange={(value: VerificationLevel) => setVerificationLevel(value)}
+					disabled={!masterEnabled}>
 					<SelectTrigger data-testid="experimental-verification-level-select">
 						<SelectValue />
 					</SelectTrigger>
@@ -81,7 +114,7 @@ export const VerificationSettings = ({
 			</SearchableSetting>
 
 			{/* Per-Mode Verification Settings */}
-			<div className="flex flex-col gap-1">
+			<div className={`flex flex-col gap-1 ${!masterEnabled ? "opacity-50 pointer-events-none" : ""}`}>
 				<span className="text-vscode-foreground text-sm font-medium">Per-Mode Verification</span>
 				<span className="text-vscode-descriptionForeground text-xs mb-2">
 					Override verification behavior for specific modes. Checked modes use lenient/bypass instead of the
@@ -97,13 +130,15 @@ export const VerificationSettings = ({
 							className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-vscode-list-hoverBackground">
 							<VSCodeCheckbox
 								checked={isLenient}
+								disabled={!masterEnabled}
 								onChange={(e: any) => handleModeToggle(mode.slug, e.target.checked)}>
 								{mode.name ?? mode.slug}
 							</VSCodeCheckbox>
 							{isLenient && (
 								<Select
 									value={modeLevel}
-									onValueChange={(value: VerificationLevel) => handleLevelChange(mode.slug, value)}>
+									onValueChange={(value: VerificationLevel) => handleLevelChange(mode.slug, value)}
+									disabled={!masterEnabled}>
 									<SelectTrigger className="w-48" data-testid={`verification-level-${mode.slug}`}>
 										<SelectValue />
 									</SelectTrigger>

@@ -36,14 +36,24 @@ export class RequirementsVerifier {
 	private allMessages: string[] = []
 	private lastVerifyResult?: RequirementsVerificationResult
 	private taskDescription: string = ""
+	private enabled: boolean
 
 	constructor(
 		private readonly logger?: Logger,
 		config?: Partial<RequirementsVerifierConfig>,
 		conflictResolver?: ConflictResolver,
+		enabled: boolean = true,
 	) {
 		this.config = { ...DEFAULT_CONFIG, ...config }
 		this.conflictResolver = conflictResolver ?? new KeywordConflictResolver()
+		this.enabled = enabled
+	}
+
+	setEnabled(enabled: boolean): void {
+		this.enabled = enabled
+		this.logger?.appendLine(
+			`[RequirementsVerifier] ${enabled ? "Enabled" : "Disabled"}`,
+		)
 	}
 
 	/**
@@ -257,6 +267,9 @@ export class RequirementsVerifier {
 	 * Run full verification — checks only ACTIVE (non-superseded) requirements
 	 */
 	getStatus(): Record<string, unknown> {
+		if (!this.enabled) {
+			return { enabled: false }
+		}
 		return {
 			enabled: true,
 			requirementCount: this.requirements.size,

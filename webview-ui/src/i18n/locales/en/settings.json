@@ -1005,8 +1005,12 @@
             "description": "Auto-fix missing parameters on tool call retries (e.g., add regex to search_files)"
         },
         "VERIFICATION_ENGINE": {
-            "name": "Verification Engine",
-            "description": "Verifies code changes match user intent before allowing task completion"
+        	"name": "Verification Engine",
+        	"description": "Verifies code changes match user intent before allowing task completion"
+        },
+        "verification": {
+        	"enableVerification": "Enable Verification",
+        	"enableVerification.description": "Master toggle for all verification features. When disabled, both code quality verification and requirements verification are skipped."
         },
         "RECOVERY_CONTEXT": {
             "name": "Recovery Context",

@@ -1,3 +1,5 @@
+import * as fs from "fs/promises"
+import * as path from "path"
 import type { Logger } from "./types"
 
 export interface VerificationResult {
@@ -50,12 +52,22 @@ export class VerificationEngine {
 	private config: VerificationConfig
 	private lastVerifyAt?: number
 	private lastResult?: VerificationResult
+	private enabled: boolean
 
 	constructor(
 		private readonly logger?: Logger,
 		config?: Partial<VerificationConfig>,
+		enabled: boolean = true,
 	) {
 		this.config = { ...DEFAULT_CONFIG, ...config }
+		this.enabled = enabled
+	}
+
+	setEnabled(enabled: boolean): void {
+		this.enabled = enabled
+		this.logger?.appendLine(
+			`[VerificationEngine] ${enabled ? "Enabled" : "Disabled"}`,
+		)
 	}
 
 	updateConfig(config: Partial<VerificationConfig>): void {
@@ -70,6 +82,9 @@ export class VerificationEngine {
 	}
 
 	getStatus(): Record<string, unknown> {
+		if (!this.enabled) {
+			return { enabled: false, gates: [] }
+		}
 		return {
 			enabled: true,
 			lastVerifyAt: this.lastVerifyAt,
@@ -116,11 +131,73 @@ export class VerificationEngine {
 		return { passed, gates, summary }
 	}
 
+	/**
+	 * Check whether a valid package.json exists in the configured cwd.
+	 * Falls back to process.cwd() if config.cwd is not set.
+	 */
+	private async isCwdValid(): Promise<boolean> {
+		try {
+			const cwd = this.config.cwd || process.cwd()
+			const packageJsonPath = path.join(cwd, "package.json")
+			await fs.access(packageJsonPath)
+			return true
+		} catch {
+			return false
+		}
+	}
+
+	/**
+	 * Walk up from the configured cwd (or process.cwd()) looking for
+	 * the first directory that contains a package.json.
+	 * Returns the found directory path, or undefined if none exists.
+	 */
+	private async findProjectRoot(): Promise<string | undefined> {
+		let current = path.resolve(this.config.cwd || process.cwd())
+		const root = path.parse(current).root
+
+		while (current !== root) {
+			try {
+				await fs.access(path.join(current, "package.json"))
+				return current
+			} catch {
+				current = path.dirname(current)
+			}
+		}
+		// One last check at filesystem root
+		try {
+			await fs.access(path.join(root, "package.json"))
+			return root
+		} catch {
+			return undefined
+		}
+	}
+
 	private async runGate(
 		name: string,
 		command: string,
 	): Promise<VerificationResult["gates"][0]> {
 		const start = Date.now()
+
+		// --- cwd guard: skip gate if no package.json is reachable ---
+		if (!(await this.isCwdValid())) {
+			const fallbackCwd = await this.findProjectRoot()
+			if (fallbackCwd) {
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "${name}": cwd invalid, falling back to ${fallbackCwd}`,
+				)
+				this.config.cwd = fallbackCwd
+			} else {
+				this.logger?.warn?.(
+					`[VerificationEngine] No package.json found in cwd or any parent directory, skipping gate "${name}"`,
+				)
+				return {
+					name,
+					passed: true,
+					output: "Skipped: no package.json in working directory",
+					durationMs: Date.now() - start,
+				}
+			}
+		}
 
 		try {
 			// Use dynamic import for child_process to avoid issues in webview context

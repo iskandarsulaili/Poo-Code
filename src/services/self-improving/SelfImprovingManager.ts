@@ -151,8 +151,18 @@ export class SelfImprovingManager {
 		})
 		this.preventionEngine = new PreventionEngine()
 		// CodeIndexAdapter will be wired later via setCodeIndexManager() or getOrCreateRuntime()
-		this.verificationEngine = new VerificationEngine(this.logger)
-		this.requirementsVerifier = new RequirementsVerifier(this.logger)
+		const experiments = this.getExperiments()
+		this.verificationEngine = new VerificationEngine(
+			this.logger,
+			undefined,
+			experiments?.verificationEngine ?? true,
+		)
+		this.requirementsVerifier = new RequirementsVerifier(
+			this.logger,
+			undefined,
+			undefined,
+			experiments?.requirementsVerification ?? true,
+		)
 
 		this.autoModeOrchestrator = new AutoModeOrchestrator(
 			this.logger,
@@ -344,6 +354,12 @@ export class SelfImprovingManager {
 	 * This enables/disables the module at runtime.
 	 */
 	async onSettingsChanged(_experiments: Experiments | undefined): Promise<void> {
+		// Propagate experiment flag changes to verification services
+		const experiments = this.getExperiments()
+		if (experiments) {
+			this.verificationEngine?.setEnabled(experiments.verificationEngine ?? true)
+			this.requirementsVerifier?.setEnabled(experiments.requirementsVerification ?? true)
+		}
 		await this.reconfigureIfNeeded()
 		await this.handleExperimentChange()
 	}
