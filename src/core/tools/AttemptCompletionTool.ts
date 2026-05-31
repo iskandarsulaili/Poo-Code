@@ -144,7 +144,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Bypass mode: skip verification entirely
 				if (verificationLevel === "bypass") {
-					this.log?.(`[AttemptCompletionTool] Requirements verification bypassed (verificationLevel=bypass)`)
 				} else {
 					const reqResult = await this.requirementsVerifier.verify()
 					const isBlocking = verificationLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
@@ -157,18 +156,15 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					}
 					if (verificationLevel === "lenient" && !reqResult.passed) {
 						this.consecutiveVerificationFailures++
-						this.log?.(`[AttemptCompletionTool] [LENIENT] Requirements issues found but non-blocking: ${reqResult.summary}`)
 						if (this.consecutiveVerificationFailures >= 3) {
-							const bypassResponse = await task.ask(
+							const bypassResponse = (await task.ask(
 								"verification_bypass_prompt",
 								"Verification has failed 3 consecutive times. Bypass verification and proceed, or retry?",
-							)
+							)).response
 							if (bypassResponse === "yesButtonClicked") {
 								this.consecutiveVerificationFailures = 0
-								this.log?.("[AttemptCompletionTool] User chose to bypass verification")
 							} else {
 								this.consecutiveVerificationFailures = 0
-								this.log?.("[AttemptCompletionTool] User chose to retry verification")
 								return this.execute(params, task, callbacks)
 							}
 						}

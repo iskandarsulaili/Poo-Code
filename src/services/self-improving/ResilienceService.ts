@@ -3,6 +3,7 @@ import type { ClassifiedError } from "./ErrorClassifier"
 import { ErrorCategory } from "./ErrorClassifier"
 import type { CodeIndexAdapter } from "./CodeIndexAdapter"
 import type { VectorStoreSearchResult } from "../code-index/interfaces/vector-store"
+import type { Experiments } from "@roo-code/types"
 
 export interface ResilienceConfig {
 	enabled: boolean
@@ -275,7 +276,7 @@ export class ResilienceService {
 	async generateRecoveryContext(
 		classifiedError: ClassifiedError,
 		originalMessage: string,
-		experiments?: Record<string, boolean>,
+		experiments?: Partial<Experiments>,
 		recentMessages?: string[],
 	): Promise<string> {
 		// Only enrich for MODEL_THOUGHT_FAILURE with break_down_task recovery

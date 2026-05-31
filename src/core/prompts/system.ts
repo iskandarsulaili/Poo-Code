@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import type { Experiments } from "@roo-code/types"
 
 import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@roo-code/types"
 
@@ -74,7 +75,7 @@ async function generatePrompt(
 	promptComponent?: PromptComponent,
 	customModeConfigs?: ModeConfig[],
 	globalCustomInstructions?: string,
-	experiments?: Record<string, boolean>,
+	experiments?: Partial<Experiments>,
 	language?: string,
 	rooIgnoreInstructions?: string,
 	settings?: SystemPromptSettings,
@@ -152,7 +153,7 @@ export const SYSTEM_PROMPT = async (
 	customModePrompts?: CustomModePrompts,
 	customModes?: ModeConfig[],
 	globalCustomInstructions?: string,
-	experiments?: Record<string, boolean>,
+	experiments?: Partial<Experiments>,
 	language?: string,
 	rooIgnoreInstructions?: string,
 	settings?: SystemPromptSettings,

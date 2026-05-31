@@ -35,7 +35,7 @@ export function validateToolUse(
 	customModes?: ModeConfig[],
 	toolRequirements?: Record<string, boolean>,
 	toolParams?: Record<string, unknown>,
-	experiments?: Record<string, boolean>,
+	experiments?: Partial<import("@roo-code/types").Experiments>,
 	includedTools?: string[],
 ): void {
 	// First, check if the tool name is actually a valid/known tool
@@ -123,7 +123,7 @@ export function isToolAllowedForMode(
 	customModes: ModeConfig[],
 	toolRequirements?: Record<string, boolean>,
 	toolParams?: Record<string, any>, // All tool parameters
-	experiments?: Record<string, boolean>,
+	experiments?: Partial<import("@roo-code/types").Experiments>,
 	includedTools?: string[], // Opt-in tools explicitly included (e.g., from modelInfo)
 ): boolean {
 	// Resolve alias to canonical name (e.g., "search_and_replace" → "edit")

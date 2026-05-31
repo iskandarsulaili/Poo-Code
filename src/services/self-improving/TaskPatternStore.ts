@@ -245,7 +245,7 @@ export class TaskPatternStore {
 		}
 
 		const queryTokens = this.tokenize(taskDescription)
-		if (queryTokens.length === 0) {
+		if (queryTokens.size === 0) {
 			return []
 		}
 
@@ -253,12 +253,12 @@ export class TaskPatternStore {
 
 		for (const entry of this.entries.values()) {
 			const entryTokens = this.tokenize(entry.taskDescription)
-			if (entryTokens.length === 0) {
+			if (entryTokens.size === 0) {
 				continue
 			}
 
-			const overlap = queryTokens.filter((t) => entryTokens.has(t)).length
-			const score = overlap / Math.max(queryTokens.length, entryTokens.size)
+			const overlap = [...queryTokens].filter((t) => entryTokens.has(t)).length
+			const score = overlap / Math.max(queryTokens.size, entryTokens.size)
 
 			if (score >= threshold) {
 				results.push({ pattern: entry, score })

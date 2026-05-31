@@ -32,6 +32,7 @@ import {
 	type ToolProgressStatus,
 	type HistoryItem,
 	type CreateTaskOptions,
+	type Experiments,
 	type ModelInfo,
 	type ClineApiReqCancelReason,
 	type ClineApiReqInfo,
@@ -152,7 +153,7 @@ export interface TaskOptions extends CreateTaskOptions {
 	task?: string
 	images?: string[]
 	historyItem?: HistoryItem
-	experiments?: Record<string, boolean | string[]>
+	experiments?: Partial<Experiments>
 	startTask?: boolean
 	rootTask?: Task
 	parentTask?: Task
@@ -177,7 +178,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	todoList?: TodoItem[]
 
 	/** Experiments configuration including lenientModes */
-	experiments?: Record<string, boolean | string[]>
+	experiments?: Partial<Experiments>
 
 	readonly rootTask: Task | undefined = undefined
 	readonly parentTask: Task | undefined = undefined

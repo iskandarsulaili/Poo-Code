@@ -6,6 +6,7 @@ import { defaultModeSlug } from "../../../shared/modes"
 import type { CodeIndexManager } from "../../../services/code-index/manager"
 import type { McpHub } from "../../../services/mcp/McpHub"
 import { isToolAllowedForMode } from "../../../core/tools/validateToolUse"
+import type { Experiments } from "@roo-code/types"
 
 /**
  * Reverse lookup map - maps alias name to canonical tool name.
@@ -226,7 +227,7 @@ export function filterNativeToolsForMode(
 	nativeTools: OpenAI.Chat.ChatCompletionTool[],
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
-	experiments: Record<string, boolean> | undefined,
+	experiments: Partial<Experiments> | undefined,
 	codeIndexManager?: CodeIndexManager,
 	settings?: Record<string, any>,
 	mcpHub?: McpHub,
@@ -353,7 +354,7 @@ export function isToolAllowedInMode(
 	toolName: ToolName,
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
-	experiments: Record<string, boolean> | undefined,
+	experiments: Partial<Experiments> | undefined,
 	codeIndexManager?: CodeIndexManager,
 	settings?: Record<string, any>,
 ): boolean {
@@ -411,7 +412,7 @@ export function getAvailableToolsInGroup(
 	groupName: ToolGroup,
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
-	experiments: Record<string, boolean> | undefined,
+	experiments: Partial<Experiments> | undefined,
 	codeIndexManager?: CodeIndexManager,
 	settings?: Record<string, any>,
 ): ToolName[] {
@@ -438,7 +439,7 @@ export function filterMcpToolsForMode(
 	mcpTools: OpenAI.Chat.ChatCompletionTool[],
 	mode: string | undefined,
 	customModes: ModeConfig[] | undefined,
-	experiments: Record<string, boolean> | undefined,
+	experiments: Partial<Experiments> | undefined,
 ): OpenAI.Chat.ChatCompletionTool[] {
 	const modeSlug = mode ?? defaultModeSlug
 
