@@ -744,11 +744,7 @@ export const webviewMessageHandler = async (
 						}
 
 						experimentsUpdated = true
-						const existing = getGlobalState("experiments") ?? experimentDefault
-						newValue = {
-							...existing,
-							...(value as Record<string, unknown>),
-						}
+						newValue = value as Record<string, unknown>
 					} else if (
 						key === "memoryBackend" ||
 						key === "agentMemoryUrl" ||
