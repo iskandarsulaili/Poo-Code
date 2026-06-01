@@ -369,7 +369,8 @@ export class VerificationEngine {
 	 * Returns null if no known project files are found.
 	 */
 	async autoDetectProject(cwd?: string): Promise<ProjectProfile | null> {
-		const dir = cwd || this.config.cwd || process.cwd()
+		const dir = cwd || this.config.cwd
+		if (!dir) return null // Never fall back to process.cwd()
 		for (const sig of LANG_SIGNATURES) {
 			for (const filePattern of sig.files) {
 				if (filePattern.includes("*")) {
@@ -563,7 +564,8 @@ export class VerificationEngine {
 	 * Falls back to first directory containing package.json.
 	 */
 	private async findProjectRoot(): Promise<string | undefined> {
-		const cwd = this.config.cwd || process.cwd()
+		const cwd = this.config.cwd
+		if (!cwd) return undefined // No cwd configured
 		let current = path.resolve(cwd)
 		const root = path.parse(current).root
 

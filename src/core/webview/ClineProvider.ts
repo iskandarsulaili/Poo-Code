@@ -287,9 +287,11 @@ export class ClineProvider
 				{ mandatory: true, autoExtract: true, requireAllVerified: true },
 				conflictResolver,
 			)
+			const userProjectCwd = this.detectUserProjectCwd()
 			const verificationEngine = new VerificationEngine(
 				{ appendLine: (message: string) => this.log(message) },
 				{
+					cwd: userProjectCwd,
 					checkBuild: experiments.verificationCheckBuild ?? true,
 					buildCommand: experiments.verificationBuildCommand,
 					checkLint: experiments.verificationCheckLint ?? true,
@@ -304,7 +306,7 @@ export class ClineProvider
 			)
 			// Fill any remaining gaps via auto-detection
 			;(async () => {
-				await verificationEngine.applyAutoProfile()
+				await verificationEngine.applyAutoProfile(userProjectCwd)
 			})()
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
 			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")
@@ -3326,6 +3328,28 @@ export class ClineProvider
 			...(await this.getTaskProperties()),
 			...(await this.getGitProperties()),
 		}
+	}
+
+	/**
+	 * Detect the "user project" from VS Code workspace folders.
+	 * Identifies any folder that is NOT the extension root (Zoo-Code).
+	 * Falls back to the first workspace folder if all are the extension root.
+	 * Returns undefined if there are no workspace folders.
+	 */
+	private detectUserProjectCwd(): string | undefined {
+		const extensionRoot = process.cwd()
+		const folders = vscode.workspace.workspaceFolders
+		if (!folders || folders.length === 0) {
+			return undefined
+		}
+		// Prefer the first folder that is NOT the extension root
+		for (const folder of folders) {
+			if (folder.uri.fsPath !== extensionRoot) {
+				return folder.uri.fsPath
+			}
+		}
+		// All folders are the extension root — use the first anyway
+		return folders[0].uri.fsPath
 	}
 
 	public get cwd() {
