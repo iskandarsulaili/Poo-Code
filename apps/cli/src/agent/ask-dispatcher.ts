@@ -30,6 +30,7 @@ import { FOLLOWUP_TIMEOUT_SECONDS } from "@/types/index.js"
 
 import type { OutputManager } from "./output-manager.js"
 import type { PromptManager } from "./prompt-manager.js"
+import type { ContextualAnswerService } from "../services/contextual-answer-service.js"
 
 // =============================================================================
 // Types
@@ -65,10 +66,17 @@ export interface AskDispatcherOptions {
 	exitOnError?: boolean
 
 	/**
+	/**
 	 * Whether to disable ask handling (for TUI mode).
 	 * In TUI mode, the TUI handles asks directly.
 	 */
 	disabled?: boolean
+
+	/**
+	 * ContextualAnswerService for generating answers when stdin times out.
+	 * If not provided, falls back to existing default-value behavior.
+	 */
+	contextualAnswerService?: ContextualAnswerService
 }
 
 /**
@@ -96,6 +104,11 @@ export class AskDispatcher {
 	private disabled: boolean
 
 	/**
+	 * ContextualAnswerService for generating gated answers on stdin timeout.
+	 */
+	private contextualAnswerService?: ContextualAnswerService
+
+	/**
 	 * Track which asks have been handled to avoid duplicates.
 	 * Key: message ts
 	 */
@@ -108,6 +121,7 @@ export class AskDispatcher {
 		this.nonInteractive = options.nonInteractive ?? false
 		this.exitOnError = options.exitOnError ?? false
 		this.disabled = options.disabled ?? false
+		this.contextualAnswerService = options.contextualAnswerService
 	}
 
 	// ===========================================================================
@@ -329,7 +343,27 @@ export class AskDispatcher {
 			responseText = this.resolveNumberedSuggestion(responseText, suggestions)
 
 			if (result.timedOut || result.cancelled) {
-				this.outputManager.output(`[Using default: ${defaultAnswer || "(empty)"}]`)
+				// If contextual answer service is available, generate a gated contextual answer
+				if (this.contextualAnswerService && result.timedOut) {
+					try {
+						const contextualResult = await this.contextualAnswerService.getGatedAnswer(question, {
+							suggestions,
+						})
+						if (contextualResult.answer && contextualResult.answer.trim().length > 0) {
+							responseText = contextualResult.answer
+							this.outputManager.output(
+								`[Contextual answer generated (score: ${contextualResult.score.toFixed(2)}, approved: ${contextualResult.approved})]`,
+							)
+						} else {
+							this.outputManager.output(`[Using default: ${defaultAnswer || "(empty)"}]`)
+						}
+					} catch (error) {
+						debugLog(`[AskDispatcher] Contextual answer generation failed: ${error}`)
+						this.outputManager.output(`[Using default: ${defaultAnswer || "(empty)"}]`)
+					}
+				} else {
+					this.outputManager.output(`[Using default: ${defaultAnswer || "(empty)"}]`)
+				}
 			}
 
 			this.sendFollowupResponse(responseText)
