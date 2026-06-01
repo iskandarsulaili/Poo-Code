@@ -45,10 +45,7 @@ export class CascadeTracker {
 
 		const timeSinceRoot = event.timestamp - this.activeCascade.rootError.timestamp
 
-		if (
-			timeSinceRoot < this.CASCADE_WINDOW_MS &&
-			this.activeCascade.chain.length < this.MAX_CHAIN_LENGTH
-		) {
+		if (timeSinceRoot < this.CASCADE_WINDOW_MS && this.activeCascade.chain.length < this.MAX_CHAIN_LENGTH) {
 			this.activeCascade.chain.push(event)
 		} else {
 			// Cascade expired or too long — archive and start new
@@ -73,9 +70,7 @@ export class CascadeTracker {
 	}
 
 	getRecentErrors(toolName?: string, count: number = 5): ErrorEvent[] {
-		const filtered = toolName
-			? this.recentErrors.filter((e) => e.toolName === toolName)
-			: this.recentErrors
+		const filtered = toolName ? this.recentErrors.filter((e) => e.toolName === toolName) : this.recentErrors
 		return filtered.slice(-count)
 	}
 

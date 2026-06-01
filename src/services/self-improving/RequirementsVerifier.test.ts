@@ -106,7 +106,8 @@ describe("RequirementsVerifier", () => {
 		})
 
 		it("should extract requirements from keyword sentences", () => {
-			const prompt = "The system must handle 10k concurrent users. It should encrypt all data at rest. We need to implement rate limiting."
+			const prompt =
+				"The system must handle 10k concurrent users. It should encrypt all data at rest. We need to implement rate limiting."
 			const reqs = verifier.extractFromPrompt(prompt)
 			expect(reqs.length).toBeGreaterThanOrEqual(1)
 			expect(reqs.some((r) => r.text.includes("handle 10k concurrent users"))).toBe(true)
@@ -294,10 +295,14 @@ describe("RequirementsVerifier", () => {
 		})
 
 		it("should return passed=false when pending and requireAllVerified=true", async () => {
-			verifier.addRequirement("Req 1")
+			const r1 = verifier.addRequirement("Req 1")
+			verifier.addRequirement("Req 2")
+			verifier.verifyRequirement(r1.id, "test", "Tests pass")
 
 			const result = await verifier.verify()
 			expect(result.passed).toBe(false)
+			expect(result.total).toBe(2)
+			expect(result.verified).toHaveLength(1)
 			expect(result.pending).toHaveLength(1)
 		})
 
@@ -312,14 +317,18 @@ describe("RequirementsVerifier", () => {
 
 		it("should ignore superseded requirements in verification", async () => {
 			const r1 = verifier.addRequirement("Req 1")
-			verifier.addRequirement("Req 2")
+			const r2 = verifier.addRequirement("Req 2")
+			const r3 = verifier.addRequirement("Req 3")
 
+			// Verify one requirement so hasExplicitTracking is true
+			verifier.verifyRequirement(r3.id, "test", "Tests pass")
 			// Supersede r1 — it should not block completion
 			r1.status = "superseded"
 
 			const result = await verifier.verify()
 			expect(result.passed).toBe(false) // Req 2 is still pending
-			expect(result.total).toBe(2) // Total includes superseded
+			expect(result.total).toBe(3) // Total includes superseded
+			expect(result.verified).toHaveLength(1)
 			expect(result.pending).toHaveLength(1) // Only Req 2 is pending
 		})
 
@@ -345,10 +354,7 @@ describe("RequirementsVerifier", () => {
 		})
 
 		it("should accumulate requirements across multiple messages", async () => {
-			const messages = [
-				"- Build authentication",
-				"- Add logging",
-			]
+			const messages = ["- Build authentication", "- Add logging"]
 			const reqs = await verifier.processUserMessages(messages)
 			expect(reqs).toHaveLength(2)
 			expect(reqs[0].text).toBe("Build authentication")
@@ -358,10 +364,7 @@ describe("RequirementsVerifier", () => {
 		})
 
 		it("should supersede earlier requirement when later message overlaps", async () => {
-			const messages = [
-				"- Build authentication with JWT",
-				"- Build authentication with OAuth",
-			]
+			const messages = ["- Build authentication with JWT", "- Build authentication with OAuth"]
 			const reqs = await verifier.processUserMessages(messages)
 			expect(reqs).toHaveLength(2)
 
@@ -375,10 +378,7 @@ describe("RequirementsVerifier", () => {
 		})
 
 		it("should NOT supersede when topics are different", async () => {
-			const messages = [
-				"- Build authentication with JWT",
-				"- Add database schema for users",
-			]
+			const messages = ["- Build authentication with JWT", "- Add database schema for users"]
 			const reqs = await verifier.processUserMessages(messages)
 			expect(reqs).toHaveLength(2)
 
@@ -419,10 +419,7 @@ describe("RequirementsVerifier", () => {
 			expect(verifier.getProcessedMessageCount()).toBe(1)
 
 			// Third call with new messages appended
-			const reqs3 = await verifier.processUserMessages([
-				"- Build authentication",
-				"- Add logging",
-			])
+			const reqs3 = await verifier.processUserMessages(["- Build authentication", "- Add logging"])
 			expect(reqs3).toHaveLength(2)
 			expect(verifier.getProcessedMessageCount()).toBe(2)
 		})
@@ -569,4 +566,3 @@ describe("KeywordConflictResolver", () => {
 		expect(result.supersedes).not.toContain("existing-2")
 	})
 })
-

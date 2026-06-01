@@ -79,9 +79,7 @@ export class AccumulatedScoreStore {
 	private async doInitialize(): Promise<void> {
 		try {
 			await this.loadFromDisk()
-			this.logger.appendLine(
-				`[AccumulatedScoreStore] Initialized: ${this.entries.size} pattern entries loaded`,
-			)
+			this.logger.appendLine(`[AccumulatedScoreStore] Initialized: ${this.entries.size} pattern entries loaded`)
 		} catch (error) {
 			this.logger.appendLine(
 				`[AccumulatedScoreStore] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
@@ -233,9 +231,7 @@ export class AccumulatedScoreStore {
 	 * These are candidates for LLM evaluation.
 	 */
 	getAmbiguousPatterns(): AccumulatedScoreEntry[] {
-		return this.getAllPatterns().filter(
-			(entry) => entry.accumulatedScore > 0.3 && entry.accumulatedScore < 0.7,
-		)
+		return this.getAllPatterns().filter((entry) => entry.accumulatedScore > 0.3 && entry.accumulatedScore < 0.7)
 	}
 
 	/**

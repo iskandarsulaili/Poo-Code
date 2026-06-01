@@ -125,6 +125,7 @@ describe("Nested delegation resume (A → B → C)", () => {
 				// Return minimal parent instance with resumeAfterDelegation
 				return {
 					taskId: historyItem.id,
+					getTaskMode: vi.fn().mockResolvedValue("code"),
 					resumeAfterDelegation: vi.fn().mockResolvedValue(undefined),
 					overwriteClineMessages: vi.fn().mockResolvedValue(undefined),
 					overwriteApiConversationHistory: vi.fn().mockResolvedValue(undefined),
@@ -173,6 +174,7 @@ describe("Nested delegation resume (A → B → C)", () => {
 			parentTaskId: "B",
 			historyItem: { parentTaskId: "B" },
 			providerRef: { deref: () => provider },
+			getTaskMode: vi.fn().mockResolvedValue("code"),
 			say: vi.fn().mockResolvedValue(undefined),
 			emit: vi.fn(),
 			getTokenUsage: vi.fn(() => ({})),
@@ -220,6 +222,7 @@ describe("Nested delegation resume (A → B → C)", () => {
 			parentTaskId: "A", // persisted parent id
 			historyItem: { parentTaskId: "A" },
 			providerRef: { deref: () => provider },
+			getTaskMode: vi.fn().mockResolvedValue("code"),
 			say: vi.fn().mockResolvedValue(undefined),
 			emit: vi.fn(),
 			getTokenUsage: vi.fn(() => ({})),

@@ -51,9 +51,7 @@ export class RequirementsVerifier {
 
 	setEnabled(enabled: boolean): void {
 		this.enabled = enabled
-		this.logger?.appendLine(
-			`[RequirementsVerifier] ${enabled ? "Enabled" : "Disabled"}`,
-		)
+		this.logger?.appendLine(`[RequirementsVerifier] ${enabled ? "Enabled" : "Disabled"}`)
 	}
 
 	/**
@@ -139,7 +137,12 @@ export class RequirementsVerifier {
 		const existingActive = this.getActiveRequirements()
 
 		for (const newReq of newRequirements) {
-			const resolution = await this.conflictResolver.resolve(newReq, existingActive, newMessageIndex, this.allMessages)
+			const resolution = await this.conflictResolver.resolve(
+				newReq,
+				existingActive,
+				newMessageIndex,
+				this.allMessages,
+			)
 
 			for (const supersededId of resolution.supersedes) {
 				const existing = this.requirements.get(supersededId)
@@ -274,7 +277,7 @@ export class RequirementsVerifier {
 			enabled: true,
 			requirementCount: this.requirements.size,
 			activeCount: this.getActiveRequirements().length,
-			supersededCount: Array.from(this.requirements.values()).filter(r => r.status === 'superseded').length,
+			supersededCount: Array.from(this.requirements.values()).filter((r) => r.status === "superseded").length,
 			lastVerifyResult: this.lastVerifyResult,
 		}
 	}

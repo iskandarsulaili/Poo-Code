@@ -75,7 +75,12 @@ import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckp
 import { CodeIndexManager } from "../../services/code-index/manager"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
-import { SelfImprovingManager, RequirementsVerifier, VerificationEngine, LLMConflictResolver } from "../../services/self-improving"
+import {
+	SelfImprovingManager,
+	RequirementsVerifier,
+	VerificationEngine,
+	LLMConflictResolver,
+} from "../../services/self-improving"
 import { TrustService } from "../../services/self-improving/TrustService"
 import { QuestionEvaluatorService } from "../../services/self-improving/QuestionEvaluatorService"
 import { SkillsManager } from "../../services/skills/SkillsManager"

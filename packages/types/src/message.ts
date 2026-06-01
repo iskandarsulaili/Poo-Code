@@ -98,7 +98,7 @@ export function isInteractiveAsk(ask: ClineAsk): ask is InteractiveAsk {
  * to update chat messages.
  */
 
-export const nonBlockingAsks = ["command_output"] as const satisfies readonly ClineAsk[]
+export const nonBlockingAsks = ["command_output", "mode_switch", "verification_bypass_prompt"] as const satisfies readonly ClineAsk[]
 
 export type NonBlockingAsk = (typeof nonBlockingAsks)[number]
 

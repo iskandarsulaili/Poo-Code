@@ -497,13 +497,9 @@ const CustomToolsSection = ({
 /** Renders a category group with a sub-header and its experiments. */
 const CategoryGroup = ({
 	category,
-	experiments,
-	setExperimentEnabled,
 	renderInline,
 }: {
 	category: ExperimentCategory
-	experiments: Experiments
-	setExperimentEnabled: SetExperimentEnabled
 	renderInline: (key: string) => React.ReactNode
 }) => {
 	const { t } = useAppTranslation()
@@ -619,8 +615,6 @@ export const ExperimentalSettings = ({
 					<CategoryGroup
 						key={category.key}
 						category={category}
-						experiments={experiments}
-						setExperimentEnabled={setExperimentEnabled}
 						renderInline={renderExperiment}
 					/>
 				))}

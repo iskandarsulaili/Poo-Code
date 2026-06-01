@@ -58,7 +58,7 @@ describe("PreventionEngine", () => {
 			expect(result).toContain("export function helper() { return 42 }")
 		})
 
-		it("handles search results without line numbers", async () => {
+		it("formats search results with line numbers", async () => {
 			const mockResults: VectorStoreSearchResult[] = [
 				{
 					id: "file2",
@@ -75,7 +75,7 @@ describe("PreventionEngine", () => {
 
 			const result = await engine.enrichContextWithCodeIndex("find API URL")
 			expect(result).toContain("src/config.ts")
-			expect(result).not.toContain("lines")
+			expect(result).toContain("(lines 10-10)")
 		})
 
 		it("gracefully falls back on search error", async () => {

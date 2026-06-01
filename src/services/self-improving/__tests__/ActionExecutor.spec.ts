@@ -141,13 +141,12 @@ describe("ActionExecutor", () => {
 			payload: {
 				name: "react-component-builder",
 				description: "Specialized skill for building React components",
-				instructions: "# React Component Builder\n\n## Instructions\n\n1. Create component file\n2. Add TypeScript types\n3. Write tests",
+				instructions:
+					"# React Component Builder\n\n## Instructions\n\n1. Create component file\n2. Add TypeScript types\n3. Write tests",
 				source: "project",
 				modeSlugs: ["code"],
 				tools: ["read_file", "write_to_file", "search_files"],
-				assets: [
-					{ relativePath: "scripts/validate.sh", content: "#!/bin/bash\necho validate" },
-				],
+				assets: [{ relativePath: "scripts/validate.sh", content: "#!/bin/bash\necho validate" }],
 			},
 			timestamp: 1,
 		}

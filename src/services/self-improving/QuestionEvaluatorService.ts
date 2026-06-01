@@ -335,7 +335,7 @@ export class QuestionEvaluatorService {
 		let hash = 0
 		for (let i = 0; i < str.length; i++) {
 			const char = str.charCodeAt(i)
-			hash = ((hash << 5) - hash) + char
+			hash = (hash << 5) - hash + char
 			hash = hash & hash // Convert to 32bit integer
 		}
 		return Math.abs(hash).toString(16).slice(0, 8)
@@ -542,10 +542,7 @@ export class QuestionEvaluatorService {
 	 * with empty text fields. The first choice is the same as what auto-approve
 	 * timeout would have selected anyway.
 	 */
-	private resolveSelectedText(
-		choices: { text: string; mode: string | null }[],
-		preferredIndex: number,
-	): string {
+	private resolveSelectedText(choices: { text: string; mode: string | null }[], preferredIndex: number): string {
 		const preferred = choices[preferredIndex]?.text
 		if (preferred && preferred.trim().length > 0) {
 			return preferred

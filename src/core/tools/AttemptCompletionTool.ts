@@ -135,9 +135,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				// Per-mode resolution: check verificationLevels[currentMode] first,
 				// fall back to verificationLevel, then "strict"
 				const verificationLevel =
-					experiments?.verificationLevels?.[currentMode] ??
-					experiments?.verificationLevel ??
-					"strict"
+					experiments?.verificationLevels?.[currentMode] ?? experiments?.verificationLevel ?? "strict"
 
 				// Apply verificationLevel to the verifier config
 				this.requirementsVerifier.updateConfig({ verificationLevel })
@@ -149,18 +147,20 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					const isBlocking = verificationLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
-							// Don't increment consecutiveMistakeCount — verification has its own counter
-							task.recordToolError("attempt_completion")
+						// Don't increment consecutiveMistakeCount — verification has its own counter
+						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
 					}
 					if (verificationLevel === "lenient" && !reqResult.passed) {
 						this.consecutiveVerificationFailures++
 						if (this.consecutiveVerificationFailures >= 3) {
-							const bypassResponse = (await task.ask(
-								"verification_bypass_prompt",
-								"Verification has failed 3 consecutive times. Bypass verification and proceed, or retry?",
-							)).response
+							const bypassResponse = (
+								await task.ask(
+									"verification_bypass_prompt",
+									"Verification has failed 3 consecutive times. Bypass verification and proceed, or retry?",
+								)
+							).response
 							if (bypassResponse === "yesButtonClicked") {
 								this.consecutiveVerificationFailures = 0
 							} else {
@@ -183,7 +183,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (this.verificationEngine && !isLenientMode) {
 				const verResult = await this.verificationEngine.verify()
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
-					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates.filter((g) => !g.passed).map((g) => `  ❌ ${g.name}: ${g.error || "failed"}`).join("\n")}\n\nPlease fix these issues before completing the task.`
+					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates
+						.filter((g) => !g.passed)
+						.map((g) => `  ❌ ${g.name}: ${g.error || "failed"}`)
+						.join("\n")}\n\nPlease fix these issues before completing the task.`
 					// Don't increment consecutiveMistakeCount — verification has its own counter
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))

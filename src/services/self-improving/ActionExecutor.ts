@@ -101,7 +101,7 @@ export class ActionExecutor {
 			this.logger.appendLine(
 				`[ActionExecutor] ${executed ? "OK" : "DEF"} ${action.actionType} ${action.id} | ${(action as any).description?.substring(0, 100) ?? ""}`,
 			)
-	
+
 			return executed
 		} catch (error) {
 			const errorMsg = error instanceof Error ? error.message : String(error)
@@ -110,9 +110,7 @@ export class ActionExecutor {
 				this.logger.appendLine(`[ActionExecutor] Skill already exists, skipping: ${action.id}`)
 				return true // Don't count as error — skill is already present
 			}
-			this.logger.appendLine(
-				`[ActionExecutor] Execution error for ${action.id}: ${errorMsg}`,
-			)
+			this.logger.appendLine(`[ActionExecutor] Execution error for ${action.id}: ${errorMsg}`)
 			return false
 		}
 	}
@@ -422,11 +420,7 @@ ${instructions.trim()}
 	/**
 	 * Bundle referenced assets into the skill directory.
 	 */
-	private async bundleAssets(
-		skillName: string,
-		source: "global" | "project",
-		assets: BundledAsset[],
-	): Promise<void> {
+	private async bundleAssets(skillName: string, source: "global" | "project", assets: BundledAsset[]): Promise<void> {
 		try {
 			// Determine skill directory path
 			const { getGlobalRooDirectory } = await import("../roo-config")

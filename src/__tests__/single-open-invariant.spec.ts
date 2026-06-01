@@ -57,6 +57,11 @@ describe("Single-open-task invariant", () => {
 			getStateToPostToWebview: vi.fn(),
 			providerSettingsManager: { getModeConfigId: vi.fn(), listConfig: vi.fn() },
 			customModesManager: { getCustomModes: vi.fn().mockResolvedValue([]) },
+			selfImprovingManager: {
+				questionEvaluator: undefined,
+				toolErrorHealer: undefined,
+				resilienceService: undefined,
+			},
 			taskCreationCallback: vi.fn(),
 			contextProxy: {
 				extensionUri: {},
@@ -100,6 +105,11 @@ describe("Single-open-task invariant", () => {
 			// Methods used by createTaskWithHistoryItem for pending edit cleanup
 			getPendingEditOperation: vi.fn().mockReturnValue(undefined),
 			clearPendingEditOperation: vi.fn(),
+			selfImprovingManager: {
+				questionEvaluator: undefined,
+				toolErrorHealer: undefined,
+				resilienceService: undefined,
+			},
 			context: { extension: { packageJSON: {} }, globalStorageUri: { fsPath: "/tmp" } },
 			contextProxy: {
 				extensionUri: {},

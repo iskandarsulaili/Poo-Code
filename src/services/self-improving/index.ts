@@ -37,7 +37,17 @@ export type { AccumulatedScoreEntry } from "./AccumulatedScoreStore"
 export { LLMScorer } from "./LLMScorer"
 export type { LLMScoreInput, LLMScoreResult } from "./LLMScorer"
 
-export type { CodeIndexInfo, Logger, PromptContext, SelfImprovingManagerOptions, TaskEventInfo, Requirement, RequirementsVerificationResult, ConflictResolver, ConflictResolution } from "./types"
+export type {
+	CodeIndexInfo,
+	Logger,
+	PromptContext,
+	SelfImprovingManagerOptions,
+	TaskEventInfo,
+	Requirement,
+	RequirementsVerificationResult,
+	ConflictResolver,
+	ConflictResolution,
+} from "./types"
 export type { MemoryBackend, MemoryBackendType } from "./MemoryBackend"
 export type { MemoryStoreType } from "./MemoryStore"
 export type { SkillTelemetryRecord, SkillProvenance, SkillLifecycleState } from "./SkillUsageStore"

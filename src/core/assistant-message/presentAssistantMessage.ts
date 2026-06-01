@@ -619,7 +619,7 @@ export async function presentAssistantMessage(cline: Task) {
 						content: typeof errorContent === "string" ? errorContent : "(validation error)",
 						is_error: true,
 					})
-	
+
 					break
 				}
 			}
@@ -697,16 +697,19 @@ export async function presentAssistantMessage(cline: Task) {
 						.map((c) => c.text)
 						.join("\n")
 					if (userText) {
-						sim.preventionEngine.enrichContextWithCodeIndex(userText).then((enriched) => {
-							if (enriched !== userText) {
-								cline.userMessageContent.push({
-									type: "text",
-									text: `[Code Index Context]\n${enriched}`,
-								})
-							}
-						}).catch(() => {
-							// Graceful fallback — enrichment failure is non-critical
-						})
+						sim.preventionEngine
+							.enrichContextWithCodeIndex(userText)
+							.then((enriched) => {
+								if (enriched !== userText) {
+									cline.userMessageContent.push({
+										type: "text",
+										text: `[Code Index Context]\n${enriched}`,
+									})
+								}
+							})
+							.catch(() => {
+								// Graceful fallback — enrichment failure is non-critical
+							})
 					}
 				}
 			}

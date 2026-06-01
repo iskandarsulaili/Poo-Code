@@ -55,6 +55,7 @@ describe("presentAssistantMessage - Unknown Tool Handling", () => {
 			},
 			say: vi.fn().mockResolvedValue(undefined),
 			ask: vi.fn().mockResolvedValue({ response: "yesButtonClicked" }),
+			getToolPreventionContext: vi.fn().mockReturnValue(undefined),
 		}
 
 		// Add pushToolResultToUserContent method after mockTask is created so 'this' binds correctly

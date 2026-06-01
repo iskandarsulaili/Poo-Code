@@ -85,6 +85,11 @@ vi.mock("../../ignore/RooIgnoreController", () => ({
 	},
 }))
 
+vi.mock("../../../shared/experiments", () => ({
+	EXPERIMENT_IDS: { PREVENT_FOCUS_DISRUPTION: "preventFocusDisruption" },
+	experiments: { isEnabled: vi.fn().mockReturnValue(false) },
+}))
+
 describe("writeToFileTool", () => {
 	// Test data
 	const testFilePath = "test/file.txt"

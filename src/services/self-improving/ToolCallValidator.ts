@@ -35,9 +35,7 @@ export class ToolCallValidator {
 				const recursive = params.recursive
 				if (recursive === true) {
 					warnings.push("Recursive listing may fail if ripgrep is unavailable")
-					suggestions.push(
-						"If list_files fails, use 'find PATH -type f' via execute_command",
-					)
+					suggestions.push("If list_files fails, use 'find PATH -type f' via execute_command")
 				}
 				break
 			}
@@ -124,10 +122,7 @@ export class ToolCallValidator {
 		}
 	}
 
-	getPreventionHints(
-		toolName: string,
-		recentErrors: Array<{ toolName: string; category: ErrorCategory }>,
-	): string[] {
+	getPreventionHints(toolName: string, recentErrors: Array<{ toolName: string; category: ErrorCategory }>): string[] {
 		const hints: string[] = []
 
 		// Check if this tool has failed recently

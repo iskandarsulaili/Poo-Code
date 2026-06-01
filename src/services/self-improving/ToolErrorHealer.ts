@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: ToolErrorHealerConfig = {
  */
 const KNOWN_TOOL_REQUIREMENTS: Record<string, { param: string; defaultValue?: string; hint: string }[]> = {
 	search_files: [
-		{ param: "regex", hint: "Provide a valid regex pattern for the search" },
+		{ param: "regex", defaultValue: ".*", hint: "Provide a valid regex pattern for the search" },
 		{ param: "path", hint: "Specify the directory path to search in" },
 	],
 	read_file: [{ param: "path", hint: "Specify the file path to read" }],
@@ -70,19 +70,19 @@ const TOOL_RESTRICTION_FIXES: Array<{
 	{
 		pattern: /Tool "([^"]+)" is not allowed in mode "([^"]+)"/i,
 		suggestion:
-			'Tool restriction detected. Consider delegating the task to an appropriate mode by using the `new_task` tool or switching to a mode that has access to this tool.',
+			"Tool restriction detected. Consider delegating the task to an appropriate mode by using the `new_task` tool or switching to a mode that has access to this tool.",
 		autoCorrectable: false,
 	},
 	{
 		pattern: /Unknown tool "([^"]+)"/i,
 		suggestion:
-			'Unknown tool name. Verify the tool name is correct and the tool is available in the current mode configuration.',
+			"Unknown tool name. Verify the tool name is correct and the tool is available in the current mode configuration.",
 		autoCorrectable: false,
 	},
 	{
 		pattern: /can only edit files matching pattern/i,
 		suggestion:
-			'File path restriction detected. Try using `read_file` and `search_files` for reading, or switch to a mode that has access to the target file paths.',
+			"File path restriction detected. Try using `read_file` and `search_files` for reading, or switch to a mode that has access to the target file paths.",
 		autoCorrectable: false,
 	},
 ]
@@ -163,18 +163,24 @@ export class ToolErrorHealer {
 	/**
 	 * Handle a tool parameter error. Returns a fix suggestion or null.
 	 */
-	handleToolError(toolName: string, missingParam: string): { fix: string; autoCorrectable: boolean } | null {
+	handleToolError(
+		toolName: string,
+		missingParam: string,
+	): { fix: string; autoCorrectable: boolean; defaultValue?: string; occurrences: number } | null {
 		if (!this.config.enabled) {
 			return null
 		}
-
+	
 		// Check if we have a known fix first (before recording, so unknown tools don't get learned fixes)
 		const knownFix = this.getKnownFix(toolName, missingParam)
 		if (knownFix) {
 			this.logger.appendLine(`[ToolErrorHealer] Known fix for ${toolName}.${missingParam}: ${knownFix.fix}`)
 			// Record the error for learning purposes
 			this.recordError(toolName, missingParam)
-			return knownFix
+			return {
+				...knownFix,
+				occurrences: this.getOccurrenceCount(toolName, missingParam) + 1, // +1 because we haven't recorded yet
+			}
 		}
 
 		// For unknown tools, only return a learned fix if we've seen this error before
@@ -184,13 +190,27 @@ export class ToolErrorHealer {
 			this.logger.appendLine(`[ToolErrorHealer] Learned fix for ${toolName}.${missingParam}: ${learnedFix.fix}`)
 			// Record the error for learning purposes
 			this.recordError(toolName, missingParam)
-			return learnedFix
+			return {
+				...learnedFix,
+				occurrences: this.getOccurrenceCount(toolName, missingParam) + 1,
+			}
 		}
 
 		// Record the error for future learning
 		this.recordError(toolName, missingParam)
 
 		return null
+	}
+
+	/**
+		* Get the number of times a specific tool+param error has occurred.
+		*/
+	getOccurrenceCount(toolName: string, missingParam: string): number {
+		const key = `${toolName}:${missingParam}`
+		const toolCorrections = this.corrections.get(key)
+		if (!toolCorrections) return 0
+		const found = toolCorrections.find((c) => c.toolName === toolName && c.missingParam === missingParam)
+		return found?.occurrences ?? 0
 	}
 
 	/**
@@ -266,7 +286,10 @@ export class ToolErrorHealer {
 		}
 	}
 
-	private getKnownFix(toolName: string, missingParam: string): { fix: string; autoCorrectable: boolean } | null {
+	private getKnownFix(
+		toolName: string,
+		missingParam: string,
+	): { fix: string; autoCorrectable: boolean; defaultValue?: string } | null {
 		const requirements = KNOWN_TOOL_REQUIREMENTS[toolName]
 		if (!requirements) {
 			return null
@@ -280,6 +303,7 @@ export class ToolErrorHealer {
 		return {
 			fix: req.hint,
 			autoCorrectable: this.config.autoCorrect,
+			defaultValue: req.defaultValue,
 		}
 	}
 

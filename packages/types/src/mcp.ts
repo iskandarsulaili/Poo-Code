@@ -99,33 +99,69 @@ export type McpResourceResponse = {
 	}>
 }
 
+export type McpAnnotation = {
+	audience?: Array<"user" | "assistant">
+	priority?: number
+	lastModified?: string
+}
+
+export type McpContentMeta = Record<string, unknown>
+
+export type McpToolCallContent =
+	| {
+			type: "text"
+			text: string
+			annotations?: McpAnnotation
+			_meta?: McpContentMeta
+	  }
+	| {
+			type: "image"
+			data: string
+			mimeType: string
+			annotations?: McpAnnotation
+			_meta?: McpContentMeta
+	  }
+	| {
+			type: "audio"
+			data: string
+			mimeType: string
+			annotations?: McpAnnotation
+			_meta?: McpContentMeta
+	  }
+	| {
+			type: "resource"
+			resource: {
+				uri: string
+				mimeType?: string
+				_meta?: McpContentMeta
+				text?: string
+				blob?: string
+			}
+			annotations?: McpAnnotation
+			_meta?: McpContentMeta
+	  }
+	| {
+			type: "resource_link"
+			uri: string
+			name: string
+			description?: string
+			mimeType?: string
+			size?: number
+			annotations?: McpAnnotation
+			_meta?: McpContentMeta
+			icons?: Array<{
+				src: string
+				mimeType?: string
+				sizes?: string[]
+				theme?: "light" | "dark"
+			}>
+			title?: string
+	  }
+
 export type McpToolCallResponse = {
 	_meta?: Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
-	content: Array<
-		| {
-				type: "text"
-				text: string
-		  }
-		| {
-				type: "image"
-				data: string
-				mimeType: string
-		  }
-		| {
-				type: "audio"
-				data: string
-				mimeType: string
-		  }
-		| {
-				type: "resource"
-				resource: {
-					uri: string
-					mimeType?: string
-					text?: string
-					blob?: string
-				}
-		  }
-	>
+	content: Array<McpToolCallContent>
+	structuredContent?: Record<string, unknown>
 	isError?: boolean
 }
 

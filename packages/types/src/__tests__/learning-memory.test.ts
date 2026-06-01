@@ -13,9 +13,9 @@ import {
 describe("learning types", () => {
 	it("exports the default learning config", () => {
 		expect(DEFAULT_LEARNING_CONFIG).toMatchObject({
-			enabled: false,
-			reviewOnTurnCount: 10,
-			reviewOnToolIterationCount: 50,
+			enabled: true,
+			reviewOnTurnCount: 3,
+			reviewOnToolIterationCount: 10,
 		})
 	})
 

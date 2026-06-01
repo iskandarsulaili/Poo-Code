@@ -37,8 +37,7 @@ export class CodeIndexAdapter {
 
 		try {
 			const status = this.codeIndexManager.getCurrentStatus()
-			const isIndexed =
-				status.systemStatus === "Indexed" || status.systemStatus === "Indexing"
+			const isIndexed = status.systemStatus === "Indexed" || status.systemStatus === "Indexing"
 			return {
 				available: isIndexed,
 				hits: isIndexed ? 1 : 0,
@@ -82,10 +81,7 @@ export class CodeIndexAdapter {
 	 * Gracefully degrades when manager is not initialized or search fails.
 	 * Non-blocking — returns empty array on any error.
 	 */
-	async searchVectorStore(
-		query: string,
-		directoryPrefix?: string,
-	): Promise<VectorStoreSearchResult[]> {
+	async searchVectorStore(query: string, directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
 		if (!this.codeIndexManager) {
 			return []
 		}

@@ -363,7 +363,13 @@ describe("SelfImprovingManager", () => {
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
 			verificationEngine: { enabled: true, lastVerifyAt: undefined, lastResult: undefined },
-			requirementsVerification: { enabled: true, requirementCount: 0, activeCount: 0, supersededCount: 0, lastVerifyResult: undefined },
+			requirementsVerification: {
+				enabled: true,
+				requirementCount: 0,
+				activeCount: 0,
+				supersededCount: 0,
+				lastVerifyResult: undefined,
+			},
 		})
 	})
 
@@ -498,7 +504,13 @@ describe("SelfImprovingManager", () => {
 			toolErrorHealer: expect.objectContaining({ enabled: true, knownTools: 10 }),
 			preventionEngine: { initialized: true },
 			verificationEngine: { enabled: true, lastVerifyAt: undefined, lastResult: undefined },
-			requirementsVerification: { enabled: true, requirementCount: 0, activeCount: 0, supersededCount: 0, lastVerifyResult: undefined },
+			requirementsVerification: {
+				enabled: true,
+				requirementCount: 0,
+				activeCount: 0,
+				supersededCount: 0,
+				lastVerifyResult: undefined,
+			},
 		})
 	})
 

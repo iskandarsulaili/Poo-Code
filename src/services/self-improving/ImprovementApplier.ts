@@ -654,11 +654,7 @@ ${bulletList}
 	 * - Pattern frequency: higher frequency suggests broader applicability
 	 * - Mode diversity: pattern used across multiple modes → higher versatility
 	 */
-	private computeVersatilityScore(
-		domain: string,
-		toolNames: string[],
-		pattern: LearnedPattern,
-	): number {
+	private computeVersatilityScore(domain: string, toolNames: string[], pattern: LearnedPattern): number {
 		let score = 0.5 // baseline
 
 		// Tool diversity: 0–0.2 bonus for 3+ distinct tools
@@ -843,11 +839,7 @@ ${crossDomainSection}
 	/**
 	 * Infer related domains from tool usage and pattern context.
 	 */
-	private inferRelatedDomains(
-		domain: string,
-		toolNames: string[],
-		pattern: LearnedPattern,
-	): string[] {
+	private inferRelatedDomains(domain: string, toolNames: string[], pattern: LearnedPattern): string[] {
 		const related: string[] = []
 		const toolSet = new Set(toolNames.map((t) => t.toLowerCase()))
 

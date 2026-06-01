@@ -36,11 +36,12 @@ export class PreventionEngine {
 		const startLine = result.payload?.startLine
 		const endLine = result.payload?.endLine
 		const snippet = result.payload?.codeChunk
-		const lineRange = startLine !== undefined && endLine !== undefined
-			? ` (lines ${startLine}-${endLine})`
-			: startLine !== undefined
-				? ` (line ${startLine})`
-				: ""
+		const lineRange =
+			startLine !== undefined && endLine !== undefined
+				? ` (lines ${startLine}-${endLine})`
+				: startLine !== undefined
+					? ` (line ${startLine})`
+					: ""
 		const snippetStr = snippet ? `: ${snippet.slice(0, 200).replace(/\n/g, " ")}` : ""
 		return `- ${filePath}${lineRange}${snippetStr}`
 	}
@@ -62,10 +63,7 @@ export class PreventionEngine {
 			}
 
 			const contextLines = results.map((r) => this.formatSearchResult(r))
-			const contextBlock = [
-				"Relevant existing code from codebase:",
-				...contextLines,
-			].join("\n")
+			const contextBlock = ["Relevant existing code from codebase:", ...contextLines].join("\n")
 
 			return `${userMessage}\n\n${contextBlock}`
 		} catch (error) {
@@ -79,10 +77,7 @@ export class PreventionEngine {
 	 * Returns validation warnings, cascade warnings, and hints
 	 * that can be injected into the model's context.
 	 */
-	getPreventionContext(
-		toolName: string,
-		params: Record<string, unknown>,
-	): PreventionContext {
+	getPreventionContext(toolName: string, params: Record<string, unknown>): PreventionContext {
 		const preValidation = this.toolCallValidator.validate(toolName, params)
 		const cascadeWarning = this.cascadeTracker.getCascadeSuggestion()
 		const recentErrors = this.cascadeTracker.getRecentErrors(toolName, 3)
@@ -106,11 +101,7 @@ export class PreventionEngine {
 	 * Called AFTER every tool call to record the result.
 	 * Returns a ClassifiedError if there was an error, or null on success.
 	 */
-	recordToolResult(
-		toolName: string,
-		error: string | null,
-		_params: Record<string, unknown>,
-	): ClassifiedError | null {
+	recordToolResult(toolName: string, error: string | null, _params: Record<string, unknown>): ClassifiedError | null {
 		if (!error) {
 			// Success — check if we were in a cascade and can clear it
 			this.cascadeTracker.reset()
@@ -134,15 +125,11 @@ export class PreventionEngine {
 		}
 
 		if (context.preValidation.warnings.length > 0) {
-			parts.push(
-				`⚠️ Pre-validation warnings: ${context.preValidation.warnings.join("; ")}`,
-			)
+			parts.push(`⚠️ Pre-validation warnings: ${context.preValidation.warnings.join("; ")}`)
 		}
 
 		if (context.preValidation.suggestions.length > 0) {
-			parts.push(
-				`💡 Suggestions: ${context.preValidation.suggestions.join("; ")}`,
-			)
+			parts.push(`💡 Suggestions: ${context.preValidation.suggestions.join("; ")}`)
 		}
 
 		if (context.preventionHints.length > 0) {

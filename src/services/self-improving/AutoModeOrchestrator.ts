@@ -188,12 +188,17 @@ export class AutoModeOrchestrator {
 		// (which would just re-apply the same auto-correct that didn't work)
 		if (this.failureCount >= 3 && this.lastFailureMessage) {
 			const isMissingParam = this.lastFailureMessage.includes("Missing required parameter")
-			const isValidationError = this.lastFailureMessage.includes("must be") ||
-									  this.lastFailureMessage.includes("required") ||
-									  this.lastFailureMessage.includes("without value for")
+			const isValidationError =
+				this.lastFailureMessage.includes("must be") ||
+				this.lastFailureMessage.includes("required") ||
+				this.lastFailureMessage.includes("without value for")
 			if (isMissingParam || isValidationError) {
-				this.logger.appendLine(`[AutoMode] LOOP DETECTED: ${this.failureCount} consecutive failures with "${this.lastFailureTool}"`)
-				this.logger.appendLine(`[AutoMode] Skipping auto-correction — repeated same fix failed. Injecting strategy change.`)
+				this.logger.appendLine(
+					`[AutoMode] LOOP DETECTED: ${this.failureCount} consecutive failures with "${this.lastFailureTool}"`,
+				)
+				this.logger.appendLine(
+					`[AutoMode] Skipping auto-correction — repeated same fix failed. Injecting strategy change.`,
+				)
 				this.failureCount = 0
 				return
 			}

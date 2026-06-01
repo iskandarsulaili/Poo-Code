@@ -72,12 +72,7 @@ export class ErrorClassifier {
 		}
 
 		// Empty response — tool returned nothing (Situation D)
-		if (
-			errorMessage === "" ||
-			errorMessage === "Running" ||
-			!errorMessage ||
-			errorMessage.trim().length === 0
-		) {
+		if (errorMessage === "" || errorMessage === "Running" || !errorMessage || errorMessage.trim().length === 0) {
 			return {
 				category: ErrorCategory.EMPTY_RESPONSE,
 				severity: 3,

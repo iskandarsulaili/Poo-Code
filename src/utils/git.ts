@@ -398,43 +398,43 @@ export async function getGitStatus(cwd: string, maxFiles: number = 20): Promise<
 }
 
 /**
-	* Gets the current branch name from the git repository
-	* @param cwd The working directory of the git repository
-	* @returns The current branch name
-	*/
+ * Gets the current branch name from the git repository
+ * @param cwd The working directory of the git repository
+ * @returns The current branch name
+ */
 export async function getCurrentBranch(cwd: string): Promise<string> {
 	const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", { cwd })
 	return stdout.trim()
 }
 
 /**
-	* Stages all changes in the working directory
-	* @param cwd The working directory of the git repository
-	* @returns The git command output
-	*/
+ * Stages all changes in the working directory
+ * @param cwd The working directory of the git repository
+ * @returns The git command output
+ */
 export async function gitAddAll(cwd: string): Promise<string> {
 	const { stdout } = await execAsync("git add .", { cwd })
 	return stdout.trim()
 }
 
 /**
-	* Creates a git commit with the given message
-	* @param cwd The working directory of the git repository
-	* @param message The commit message
-	* @returns The git command output
-	*/
+ * Creates a git commit with the given message
+ * @param cwd The working directory of the git repository
+ * @param message The commit message
+ * @returns The git command output
+ */
 export async function gitCommit(cwd: string, message: string): Promise<string> {
 	const { stdout } = await execAsync(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd })
 	return stdout.trim()
 }
 
 /**
-	* Pushes changes to a remote repository
-	* @param cwd The working directory of the git repository
-	* @param remote The remote name (default: "origin")
-	* @param branch The branch to push (default: auto-detected from current branch)
-	* @returns The git command output
-	*/
+ * Pushes changes to a remote repository
+ * @param cwd The working directory of the git repository
+ * @param remote The remote name (default: "origin")
+ * @param branch The branch to push (default: auto-detected from current branch)
+ * @returns The git command output
+ */
 export async function gitPush(cwd: string, remote: string = "origin", branch?: string): Promise<string> {
 	const actualBranch = branch || (await getCurrentBranch(cwd))
 	const { stdout } = await execAsync(`git push ${remote} ${actualBranch}`, { cwd })
@@ -442,12 +442,12 @@ export async function gitPush(cwd: string, remote: string = "origin", branch?: s
 }
 
 /**
-	* Performs the full git add, commit, push cycle in one call
-	* @param cwd The working directory of the git repository
-	* @param message The commit message
-	* @param remote The remote name (default: "origin")
-	* @returns Object containing outputs from each step
-	*/
+ * Performs the full git add, commit, push cycle in one call
+ * @param cwd The working directory of the git repository
+ * @param message The commit message
+ * @param remote The remote name (default: "origin")
+ * @returns Object containing outputs from each step
+ */
 export async function gitAddCommitPush(
 	cwd: string,
 	message: string,

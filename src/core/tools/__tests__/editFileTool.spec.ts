@@ -69,6 +69,11 @@ vi.mock("vscode", () => ({
 	},
 }))
 
+vi.mock("../../../shared/experiments", () => ({
+	EXPERIMENT_IDS: { PREVENT_FOCUS_DISRUPTION: "preventFocusDisruption" },
+	experiments: { isEnabled: vi.fn().mockReturnValue(false) },
+}))
+
 describe("editFileTool", () => {
 	// Test data
 	const testFilePath = "test/file.txt"

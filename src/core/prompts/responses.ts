@@ -64,7 +64,7 @@ Otherwise, if you have not completed the task and do not need additional informa
 		const instructions = getToolInstructionsReminder()
 		const toolPrefix = toolName ? ` for '${toolName}'` : ""
 
-		return `Missing value for required parameter '${paramName}'${toolPrefix}. Please retry with complete response.\n\n${instructions}`
+		return `Missing value for required parameter '${paramName}'${toolPrefix}. You MUST provide a value for this required parameter. Do NOT retry without including a valid '${paramName}' parameter in your tool call.\n\n${instructions}`
 	},
 
 	invalidMcpToolArgumentError: (serverName: string, toolName: string) =>

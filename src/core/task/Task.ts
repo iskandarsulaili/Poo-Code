@@ -1837,8 +1837,50 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	async sayAndCreateMissingParamError(toolName: ToolName, paramName: string, relPath?: string) {
 		// Consult ToolErrorHealer for fix suggestion first so we can include it in both say and tool result
 		const fix = this.toolErrorHealer?.handleToolError(toolName, paramName)
+		const occurrences = fix?.occurrences ?? 0
+		const defaultVal = fix?.defaultValue
 		const fixSuffix = fix ? ` Suggestion: ${fix.fix}` : ""
 
+		// 3+ occurrences of the same missing param → break the retry loop with strategy change
+		if (occurrences >= 3) {
+			await this.say(
+				"error",
+				`Roo tried to use ${toolName}${
+					relPath ? ` for '${relPath.toPosix()}'` : ""
+				} without value for required parameter '${paramName}'. Strategy change needed.${fixSuffix}`,
+			)
+
+			const recoveryMsg = `[RECOVERY: You have attempted to use ${toolName} without the required '${paramName}' parameter ${occurrences} times. This approach is not working. Please try a different strategy:
+1. Use a different tool that doesn't require '${paramName}'
+2. Or if using ${toolName}, provide a valid value for '${paramName}'${defaultVal ? ` (e.g., '${defaultVal}')` : ""}
+3. Or break down the task into smaller steps
+
+Choose an alternative approach now.]`
+
+			return formatResponse.toolError(recoveryMsg)
+		}
+
+		// 2nd occurrence → stronger warning with recurrence count
+		if (occurrences >= 2) {
+			await this.say(
+				"error",
+				`Roo tried to use ${toolName}${
+					relPath ? ` for '${relPath.toPosix()}'` : ""
+				} without value for required parameter '${paramName}'. Retrying...${fixSuffix}`,
+			)
+
+			const baseError = formatResponse.missingToolParameterError(paramName, toolName)
+			if (fix) {
+				const fixHint = fix.autoCorrectable
+					? `\n\n[Fix suggestion: ${fix.fix}${defaultVal ? ` - try a value like '${defaultVal}'` : ""}]`
+					: `\n\n[Hint: ${fix.fix}]`
+				const recurrenceWarning = `\n\n[WARNING: This is the ${occurrences}th time you've made this error. You MUST include the required '${paramName}' parameter in your next call to ${toolName}.]`
+				return formatResponse.toolError(baseError + fixHint + recurrenceWarning)
+			}
+			return formatResponse.toolError(baseError)
+		}
+
+		// 1st occurrence: standard error with fix suggestion
 		await this.say(
 			"error",
 			`Roo tried to use ${toolName}${
@@ -1849,7 +1891,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		// Build error message with healing suggestion prominently included
 		const baseError = formatResponse.missingToolParameterError(paramName, toolName)
 		if (fix) {
-			const fixHint = fix.autoCorrectable ? `\n\n[Fix suggestion: ${fix.fix}]` : `\n\n[Hint: ${fix.fix}]`
+			const fixHint = fix.autoCorrectable
+				? `\n\n[Fix suggestion: ${fix.fix}${defaultVal ? ` (e.g., '${defaultVal}')` : ""}]`
+				: `\n\n[Hint: ${fix.fix}]`
 			// Also try getHealingSuggestion for additional context from error message parsing
 			const healingSuggestion = this.toolErrorHealer?.getHealingSuggestion(toolName, baseError)
 			const healingSuffix = healingSuggestion ? `\n\n${healingSuggestion}` : ""
@@ -4740,10 +4784,7 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * Get prevention context for a tool call before execution.
 	 * Returns warnings and suggestions that can be injected into the model's context.
 	 */
-	public getToolPreventionContext(
-		toolName: string,
-		params: Record<string, unknown>,
-	): string | null {
+	public getToolPreventionContext(toolName: string, params: Record<string, unknown>): string | null {
 		const sim = this.providerRef.deref()?.getSelfImprovingManager?.()
 		if (!sim?.preventionEngine) {
 			return null

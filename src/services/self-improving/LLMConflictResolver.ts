@@ -23,9 +23,7 @@ export class LLMConflictResolver implements ConflictResolver {
 
 	private readonly keywordResolver: KeywordConflictResolver
 
-	constructor(
-		private readonly apiConfiguration: ProviderSettings,
-	) {
+	constructor(private readonly apiConfiguration: ProviderSettings) {
 		this.keywordResolver = new KeywordConflictResolver()
 	}
 
@@ -64,12 +62,7 @@ export class LLMConflictResolver implements ConflictResolver {
 
 		if (ambiguousPairs.length > 0) {
 			try {
-				const result = await this.callLlm(
-					newRequirement,
-					ambiguousPairs,
-					newMessageIndex,
-					allMessages,
-				)
+				const result = await this.callLlm(newRequirement, ambiguousPairs, newMessageIndex, allMessages)
 				llmSupersedes = result.supersedes
 				llmReason = result.reason
 			} catch (error) {
@@ -84,11 +77,7 @@ export class LLMConflictResolver implements ConflictResolver {
 		}
 
 		const allSupersedes = [...new Set([...clearSupersedes, ...llmSupersedes])]
-		const confidence = this.calculateConfidence(
-			clearSupersedes.length,
-			ambiguousPairs.length,
-			llmSupersedes.length,
-		)
+		const confidence = this.calculateConfidence(clearSupersedes.length, ambiguousPairs.length, llmSupersedes.length)
 
 		return {
 			supersedes: allSupersedes,
@@ -100,11 +89,7 @@ export class LLMConflictResolver implements ConflictResolver {
 	/**
 	 * Calculate overall confidence based on how many decisions came from keyword vs LLM.
 	 */
-	private calculateConfidence(
-		clearCount: number,
-		ambiguousCount: number,
-		llmSupersedeCount: number,
-	): number {
+	private calculateConfidence(clearCount: number, ambiguousCount: number, llmSupersedeCount: number): number {
 		const totalDecisions = clearCount + ambiguousCount
 		if (totalDecisions === 0) return 0.95
 

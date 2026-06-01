@@ -19,9 +19,7 @@
 		"openUiHistory": "Buka Riwayat UI",
 		"backToParentTask": "Tugas Induk"
 	},
-	"history": {
-		"title": "Riwayat"
-	},
+	"history": {},
 	"unpin": "Lepas Pin",
 	"pin": "Pin",
 	"fileChangesInConversation": {
@@ -35,9 +33,7 @@
 		"title": "Mulai Tugas Baru",
 		"tooltip": "Mulai tugas baru"
 	},
-	"reportBug": {
-		"title": "Laporkan Bug"
-	},
+	"reportBug": {},
 	"proceedAnyways": {
 		"title": "Lanjutkan Saja",
 		"tooltip": "Lanjutkan saat perintah dijalankan"
@@ -220,9 +216,7 @@
 		"wantsToLoad": "Zoo ingin memuat keterampilan",
 		"didLoad": "Zoo telah memuat keterampilan"
 	},
-	"instructions": {
-		"wantsToFetch": "Roo ingin mengambil instruksi detail untuk membantu tugas saat ini"
-	},
+	"instructions": {},
 	"fileOperations": {
 		"wantsToRead": "Zoo ingin membaca file ini",
 		"wantsToReadMultiple": "Zoo ingin membaca beberapa file",
@@ -238,8 +232,6 @@
 		"wantsToGenerateImageProtected": "Zoo ingin menghasilkan gambar di lokasi yang dilindungi",
 		"didGenerateImage": "Zoo telah menghasilkan gambar",
 		"wantsToCreate": "Zoo ingin membuat file baru",
-		"wantsToSearchReplace": "Roo ingin mencari dan mengganti di file ini",
-		"didSearchReplace": "Roo melakukan pencarian dan penggantian pada file ini",
 		"wantsToInsert": "Zoo ingin menyisipkan konten ke file ini",
 		"wantsToInsertWithLineNumber": "Zoo ingin menyisipkan konten ke file ini di baris {{lineNumber}}",
 		"wantsToInsertAtEnd": "Zoo ingin menambahkan konten ke akhir file ini"
@@ -305,7 +297,6 @@
 		"wantsToCreate": "Zoo ingin membuat subtugas baru dalam mode {{mode}}",
 		"wantsToFinish": "Zoo ingin menyelesaikan subtugas ini",
 		"newTaskContent": "Instruksi Subtugas",
-		"completionContent": "Subtugas Selesai",
 		"resultContent": "Hasil Subtugas",
 		"defaultResult": "Silakan lanjutkan ke tugas berikutnya.",
 		"completionInstructions": "Subtugas selesai! Kamu bisa meninjau hasilnya dan menyarankan koreksi atau langkah selanjutnya. Jika semuanya terlihat baik, konfirmasi untuk mengembalikan hasil ke tugas induk.",
@@ -342,7 +333,6 @@
 		"tooltipManage": "Kelola pengaturan persetujuan otomatis",
 		"tooltipStatus": "Persetujuan otomatis diaktifkan untuk: {{toggles}}",
 		"title": "Setujui Otomatis",
-		"toggle": "Beralih persetujuan otomatis",
 		"all": "Semua",
 		"none": "Tidak ada",
 		"description": "Jalankan tindakan ini tanpa meminta izin. Hanya aktifkan untuk tindakan yang Anda percayai sepenuhnya.",
@@ -426,11 +416,7 @@
 	"versionIndicator": {
 		"ariaLabel": "Versi {{version}} - Klik untuk melihat catatan rilis"
 	},
-	"rooCloudCTA": {
-		"title": "Zoo Code Cloud sedang berkembang!",
-		"description": "Jalankan agen jarak jauh di cloud, akses tugas Anda dari mana saja, berkolaborasi dengan orang lain, dan banyak lagi.",
-		"joinWaitlist": "Daftar untuk mendapatkan pembaruan terbaru."
-	},
+	"rooCloudCTA": {},
 	"editMessage": {
 		"placeholder": "Edit pesan Anda..."
 	},

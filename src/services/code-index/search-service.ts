@@ -45,7 +45,7 @@ export class CodeIndexSearchService {
 			let vector: number[] | undefined
 			for (let attempt = 0; attempt < 2; attempt++) {
 				if (attempt > 0) {
-					await new Promise(resolve => setTimeout(resolve, 1000))
+					await new Promise((resolve) => setTimeout(resolve, 1000))
 				}
 				const embeddingResponse = await this.embedder.createEmbeddings([query])
 				vector = embeddingResponse?.embeddings[0]

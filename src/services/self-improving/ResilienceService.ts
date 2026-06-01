@@ -355,17 +355,13 @@ export class ResilienceService {
 		// Build summary from the last user request
 		if (lastUserReq) {
 			// Truncate to first 200 chars for a concise summary
-			const truncated = lastUserReq.length > 200
-				? lastUserReq.slice(0, 200) + "..."
-				: lastUserReq
+			const truncated = lastUserReq.length > 200 ? lastUserReq.slice(0, 200) + "..." : lastUserReq
 			return truncated
 		}
 
 		// Fallback to assistant response if no user message found
 		if (lastAssistantRes) {
-			const truncated = lastAssistantRes.length > 200
-				? lastAssistantRes.slice(0, 200) + "..."
-				: lastAssistantRes
+			const truncated = lastAssistantRes.length > 200 ? lastAssistantRes.slice(0, 200) + "..." : lastAssistantRes
 			return truncated
 		}
 

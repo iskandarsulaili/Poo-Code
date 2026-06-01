@@ -379,7 +379,7 @@ export class ReviewTeamService {
 			if (!Array.isArray(results) || results.length === 0) {
 				return []
 			}
-	
+
 			return results
 				.filter((r) => r.payload?.codeChunk)
 				.map((r) => ({

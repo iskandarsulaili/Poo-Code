@@ -177,13 +177,11 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => true,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true }) as any,
 			})
 
 			const actions = applier.generateActions([createReactPattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeDefined()
 			expect(specializedAction?.payload.name).toContain("react-component")
@@ -198,13 +196,11 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => true,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true }) as any,
 			})
 
 			const actions = applier.generateActions([createApiPattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeDefined()
 			expect(specializedAction?.payload.name).toContain("api-endpoint")
@@ -215,13 +211,11 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => true,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true }) as any,
 			})
 
 			const actions = applier.generateActions([createLowConfidencePattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeUndefined()
 		})
@@ -231,13 +225,11 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => true,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: false } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: false }) as any,
 			})
 
 			const actions = applier.generateActions([createReactPattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeUndefined()
 		})
@@ -247,13 +239,11 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => false,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true }) as any,
 			})
 
 			const actions = applier.generateActions([createReactPattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeUndefined()
 		})
@@ -263,14 +253,12 @@ describe("ImprovementApplier", () => {
 				getSkillNames: () => [],
 				getSkillProvenance: () => "unknown",
 				isAutoSkillsEnabled: () => true,
-				getExperiments: () => ({ selfImprovingSpecializedSkills: true } as any),
+				getExperiments: () => ({ selfImprovingSpecializedSkills: true }) as any,
 				hasSkill: (name: string) => name.includes("react-component"),
 			})
 
 			const actions = applier.generateActions([createReactPattern()])
-			const specializedAction = actions.find(
-				(action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH",
-			)
+			const specializedAction = actions.find((action) => action.actionType === "SKILL_CREATE_FROM_SCRATCH")
 
 			expect(specializedAction).toBeUndefined()
 		})
