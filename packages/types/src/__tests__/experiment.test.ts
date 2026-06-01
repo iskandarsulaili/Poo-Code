@@ -196,22 +196,17 @@ describe("@roo-code/types/experiment", () => {
 			expect(result.success).toBe(false)
 		})
 
-		it("accepts all verification gate config fields", () => {
+		it("accepts all verification gate config fields (booleans + timeout only)", () => {
 			const result = experimentsSchema.safeParse({
 				verificationCheckBuild: true,
 				verificationCheckLint: false,
 				verificationCheckTypes: true,
 				verificationCheckTests: false,
-				verificationBuildCommand: "npm run build",
-				verificationLintCommand: "npm run lint",
-				verificationTypeCheckCommand: "npm run typecheck",
-				verificationTestCommand: "npm test",
 				verificationTimeoutMs: 30000,
 			})
 			expect(result.success).toBe(true)
 			if (result.success) {
 				expect(result.data.verificationCheckBuild).toBe(true)
-				expect(result.data.verificationBuildCommand).toBe("npm run build")
 				expect(result.data.verificationTimeoutMs).toBe(30000)
 			}
 		})

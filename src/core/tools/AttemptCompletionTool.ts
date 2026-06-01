@@ -181,6 +181,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const lenientModes = experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)
 			if (this.verificationEngine && !isLenientMode) {
+				// Set cwd from task context — the directory the agent is working in
+				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
+				this.verificationEngine.updateConfig({ cwd: task.cwd })
+				await this.verificationEngine.applyAutoProfile(task.cwd)
 				const verResult = await this.verificationEngine.verify()
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
 					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates

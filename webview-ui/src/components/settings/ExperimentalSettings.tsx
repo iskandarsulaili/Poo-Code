@@ -54,10 +54,6 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	verificationCheckLint?: boolean
 	verificationCheckTypes?: boolean
 	verificationCheckTests?: boolean
-	verificationBuildCommand?: string
-	verificationLintCommand?: string
-	verificationTypeCheckCommand?: string
-	verificationTestCommand?: string
 	verificationTimeoutMs?: number
 	onVerificationGateChange?: (key: string, value: boolean | string | number) => void
 	autoDetectedProfile?: AutoDetectedProfile
@@ -555,10 +551,6 @@ export const ExperimentalSettings = ({
 	verificationCheckLint,
 	verificationCheckTypes,
 	verificationCheckTests,
-	verificationBuildCommand,
-	verificationLintCommand,
-	verificationTypeCheckCommand,
-	verificationTestCommand,
 	verificationTimeoutMs,
 	onVerificationGateChange,
 	autoDetectedProfile,
@@ -646,10 +638,6 @@ export const ExperimentalSettings = ({
 					verificationCheckLint={verificationCheckLint}
 					verificationCheckTypes={verificationCheckTypes}
 					verificationCheckTests={verificationCheckTests}
-					verificationBuildCommand={verificationBuildCommand}
-					verificationLintCommand={verificationLintCommand}
-					verificationTypeCheckCommand={verificationTypeCheckCommand}
-					verificationTestCommand={verificationTestCommand}
 					verificationTimeoutMs={verificationTimeoutMs}
 					onVerificationGateChange={onVerificationGateChange}
 					setExperimentEnabled={setExperimentEnabled}

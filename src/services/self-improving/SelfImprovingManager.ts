@@ -185,20 +185,17 @@ export class SelfImprovingManager {
 		const ex = experiments ?? this.getExperiments()
 		if (!ex) return
 
-		// Apply user-configured gate overrides from experiments
+		// Apply user-configured gate toggles and timeout from experiments.
+		// Commands are always auto-detected per-task — no global command overrides.
 		this.verificationEngine.updateConfig({
 			checkBuild: ex.verificationCheckBuild ?? this.verificationEngine.getConfig().checkBuild,
 			checkLint: ex.verificationCheckLint ?? this.verificationEngine.getConfig().checkLint,
 			checkTypes: ex.verificationCheckTypes ?? this.verificationEngine.getConfig().checkTypes,
 			checkTests: ex.verificationCheckTests ?? this.verificationEngine.getConfig().checkTests,
-			buildCommand: ex.verificationBuildCommand ?? this.verificationEngine.getConfig().buildCommand,
-			lintCommand: ex.verificationLintCommand ?? this.verificationEngine.getConfig().lintCommand,
-			typeCheckCommand: ex.verificationTypeCheckCommand ?? this.verificationEngine.getConfig().typeCheckCommand,
-			testCommand: ex.verificationTestCommand ?? this.verificationEngine.getConfig().testCommand,
 			gateTimeoutMs: ex.verificationTimeoutMs ?? this.verificationEngine.getConfig().gateTimeoutMs,
 		})
 
-		// Auto-detect project and fill any remaining gaps
+		// Auto-detect project and fill remaining command gaps
 		await this.verificationEngine.applyAutoProfile()
 	}
 

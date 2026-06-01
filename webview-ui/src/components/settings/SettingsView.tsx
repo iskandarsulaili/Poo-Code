@@ -1053,12 +1053,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 								verificationCheckLint={experiments.verificationCheckLint as boolean | undefined}
 								verificationCheckTypes={experiments.verificationCheckTypes as boolean | undefined}
 								verificationCheckTests={experiments.verificationCheckTests as boolean | undefined}
-								verificationBuildCommand={experiments.verificationBuildCommand as string | undefined}
-								verificationLintCommand={experiments.verificationLintCommand as string | undefined}
-								verificationTypeCheckCommand={
-									experiments.verificationTypeCheckCommand as string | undefined
-								}
-								verificationTestCommand={experiments.verificationTestCommand as string | undefined}
 								verificationTimeoutMs={experiments.verificationTimeoutMs as number | undefined}
 								onVerificationGateChange={onVerificationGateChange}
 							/>

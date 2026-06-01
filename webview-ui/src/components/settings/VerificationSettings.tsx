@@ -1,9 +1,8 @@
 import { useMemo, useCallback } from "react"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { Input } from "@/components/ui"
-import { X } from "lucide-react"
 
-import type { AutoDetectedProfile, Experiments, ModeConfig, VerificationLevel } from "@roo-code/types"
+import type { Experiments, ModeConfig, VerificationLevel } from "@roo-code/types"
 
 import { EXPERIMENT_IDS } from "@roo/experiments"
 import { getAllModes } from "@roo/modes"
@@ -24,20 +23,16 @@ type VerificationSettingsProps = {
 	experiments: Experiments
 	setExperimentEnabled: SetExperimentEnabled
 
-	// Gate config
+	// Gate config — checkboxes only, commands are auto-detected per-task
 	verificationCheckBuild?: boolean
 	verificationCheckLint?: boolean
 	verificationCheckTypes?: boolean
 	verificationCheckTests?: boolean
-	verificationBuildCommand?: string
-	verificationLintCommand?: string
-	verificationTypeCheckCommand?: string
-	verificationTestCommand?: string
 	verificationTimeoutMs?: number
 	onVerificationGateChange?: (key: string, value: boolean | string | number) => void
 
 	// Auto-detected profile from the engine
-	autoDetectedProfile?: AutoDetectedProfile
+	autoDetectedProfile?: any
 	autoDetectingVerification?: boolean
 }
 
@@ -47,24 +42,12 @@ const VERIFICATION_LEVEL_OPTIONS: { value: VerificationLevel; label: string }[] 
 	{ value: "bypass", label: "Bypass — Skip requirements verification" },
 ]
 
-type GateDef = {
-	key: string
-	label: string
-	checkKey: string
-	cmdKey: string
-}
-
-const GATES: GateDef[] = [
-	{ key: "build", label: "Build", checkKey: "verificationCheckBuild", cmdKey: "verificationBuildCommand" },
-	{ key: "lint", label: "Lint", checkKey: "verificationCheckLint", cmdKey: "verificationLintCommand" },
-	{
-		key: "type-check",
-		label: "Type Check",
-		checkKey: "verificationCheckTypes",
-		cmdKey: "verificationTypeCheckCommand",
-	},
-	{ key: "tests", label: "Tests", checkKey: "verificationCheckTests", cmdKey: "verificationTestCommand" },
-]
+const GATE_LABELS = [
+	{ key: "build", label: "Build", checkKey: "verificationCheckBuild" },
+	{ key: "lint", label: "Lint", checkKey: "verificationCheckLint" },
+	{ key: "type-check", label: "Type Check", checkKey: "verificationCheckTypes" },
+	{ key: "tests", label: "Tests", checkKey: "verificationCheckTests" },
+] as const
 
 export const VerificationSettings = ({
 	customModes,
@@ -80,10 +63,6 @@ export const VerificationSettings = ({
 	verificationCheckLint,
 	verificationCheckTypes,
 	verificationCheckTests,
-	verificationBuildCommand,
-	verificationLintCommand,
-	verificationTypeCheckCommand,
-	verificationTestCommand,
 	verificationTimeoutMs,
 	onVerificationGateChange,
 	autoDetectedProfile,
@@ -122,91 +101,21 @@ export const VerificationSettings = ({
 		[levels, setVerificationLevels],
 	)
 
-	/**
-	 * Resolve the effective command for a gate using tiered priority:
-	 *  Tier 1: User override (experiments value) — highest priority
-	 *  Tier 2: Auto-detected from project files
-	 *  Tier 3: Hardcoded fallback
-	 */
-	const resolveCommand = useCallback(
-		(
-			gateKey: string,
-			_checkKey: string,
-			cmdKey: string,
-		): { command: string; sourceLabel: string | null; isOverride: boolean; placeholder: string } => {
-			// Get the user override value from experiment props
-			const getOverrideCommand = (key: string): string | undefined => {
-				switch (key) {
-					case "verificationBuildCommand":
-						return verificationBuildCommand
-					case "verificationLintCommand":
-						return verificationLintCommand
-					case "verificationTypeCheckCommand":
-						return verificationTypeCheckCommand
-					case "verificationTestCommand":
-						return verificationTestCommand
-					default:
-						return undefined
-				}
-			}
-
-			const userOverride = getOverrideCommand(cmdKey)
-
-			// Tier 1: User has explicitly set a command override
-			if (userOverride !== undefined && userOverride !== "") {
-				return { command: userOverride, sourceLabel: null, isOverride: true, placeholder: "" }
-			}
-
-			// Tier 2: Auto-detected from project — show nothing in value, hint in placeholder
-			if (autoDetectedProfile) {
-				const detected = autoDetectedProfile[gateKey as keyof AutoDetectedProfile] as
-					| { command?: string | null; source?: string | null }
-					| undefined
-				if (detected?.command) {
-					const sourceLabel = detected.source
-						? ({
-								"package.json": "package.json",
-								cargo: "Cargo.toml",
-								"go-mod": "go.mod",
-								gradle: "build.gradle",
-								maven: "pom.xml",
-								dotnet: "*.csproj",
-								zig: "build.zig",
-								deno: "deno.json",
-								mix: "mix.exs",
-								gemfile: "Gemfile",
-								pyproject: "pyproject.toml",
-								detected: "detected",
-								fallback: "default",
-							}[detected.source] ?? detected.source)
-						: null
-					return {
-						command: "",
-						sourceLabel: sourceLabel ? `from ${sourceLabel}` : null,
-						isOverride: false,
-						placeholder: detected.command,
-					}
-				}
-			}
-
-			// Tier 3: No auto-detect and no user override
-			return { command: "", sourceLabel: null, isOverride: false, placeholder: "" }
-		},
-		[
-			autoDetectedProfile,
-			verificationBuildCommand,
-			verificationLintCommand,
-			verificationTypeCheckCommand,
-			verificationTestCommand,
-		],
-	)
-
-	const handleResetCommand = useCallback(
-		(cmdKey: string) => {
-			onVerificationGateChange?.(cmdKey, "")
-		},
-		[onVerificationGateChange],
-	)
+	// Determine checked state for each gate based on the prop
+	const getChecked = (checkKey: string): boolean => {
+		switch (checkKey) {
+			case "verificationCheckBuild":
+				return verificationCheckBuild ?? false
+			case "verificationCheckLint":
+				return verificationCheckLint ?? false
+			case "verificationCheckTypes":
+				return verificationCheckTypes ?? false
+			case "verificationCheckTests":
+				return verificationCheckTests ?? false
+			default:
+				return false
+		}
+	}
 
 	return (
 		<Section>
@@ -284,7 +193,7 @@ export const VerificationSettings = ({
 				<span className="text-vscode-foreground text-sm font-medium">Code Quality Gates</span>
 				<span className="text-vscode-descriptionForeground text-xs mb-1">
 					Configure which checks run on attempt_completion. The engine auto-detects your project language and
-					fills default commands — override them here.
+					uses the correct commands automatically.
 				</span>
 
 				{/* Auto-detection status */}
@@ -321,71 +230,16 @@ export const VerificationSettings = ({
 					/>
 				</SearchableSetting>
 
-				{GATES.map((gate) => {
-					const checked =
-						gate.checkKey === "verificationCheckBuild"
-							? (verificationCheckBuild ?? false)
-							: gate.checkKey === "verificationCheckLint"
-								? (verificationCheckLint ?? false)
-								: gate.checkKey === "verificationCheckTypes"
-									? (verificationCheckTypes ?? false)
-									: (verificationCheckTests ?? false)
-
-					const { command, sourceLabel, isOverride, placeholder } = resolveCommand(
-						gate.key,
-						gate.checkKey,
-						gate.cmdKey,
-					)
-
+				{GATE_LABELS.map((gate) => {
+					const checked = getChecked(gate.checkKey)
 					return (
-						<div key={gate.key} className="flex flex-col gap-1 mb-2">
-							<div className="flex items-center gap-2">
-								<VSCodeCheckbox
-									checked={checked}
-									onChange={(e: any) => onVerificationGateChange?.(gate.checkKey, e.target.checked)}
-									disabled={!masterEnabled}>
-									{gate.label}
-								</VSCodeCheckbox>
-							</div>
-							{checked && (
-								<div className="flex items-center gap-2">
-									<div className="flex-1 relative">
-										<Input
-											value={command}
-											placeholder={placeholder || "Enter command..."}
-											onChange={(e: any) => {
-												const val = e.target.value
-												// When user clears the value, remove the experiment key entirely
-												// so it falls back to auto-detected default
-												if (val === "") {
-													onVerificationGateChange?.(gate.cmdKey, "")
-												} else {
-													onVerificationGateChange?.(gate.cmdKey, val)
-												}
-											}}
-											disabled={!masterEnabled}
-											style={{ width: "100%" }}
-										/>
-									</div>
-									{/* Source badge — show auto-detected source when no user override */}
-									{sourceLabel && !isOverride && (
-										<span className="text-xs text-vscode-descriptionForeground whitespace-nowrap">
-											{sourceLabel}
-										</span>
-									)}
-									{/* Reset button — only show when there's a user override */}
-									{isOverride && (
-										<button
-											type="button"
-											onClick={() => handleResetCommand(gate.cmdKey)}
-											disabled={!masterEnabled}
-											className="p-1 text-vscode-descriptionForeground hover:text-vscode-foreground transition-colors disabled:opacity-50"
-											title="Reset to auto-detected or default">
-											<X size={14} />
-										</button>
-									)}
-								</div>
-							)}
+						<div key={gate.key} className="flex items-center gap-2 mb-2">
+							<VSCodeCheckbox
+								checked={checked}
+								onChange={(e: any) => onVerificationGateChange?.(gate.checkKey, e.target.checked)}
+								disabled={!masterEnabled}>
+								{gate.label}
+							</VSCodeCheckbox>
 						</div>
 					)
 				})}

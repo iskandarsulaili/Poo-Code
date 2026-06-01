@@ -129,14 +129,6 @@ export const experimentsSchema = z.object({
 	verificationCheckTypes: z.boolean().optional(),
 	/** Gate config — whether to run tests */
 	verificationCheckTests: z.boolean().optional(),
-	/** Build command (e.g. "npm run build") */
-	verificationBuildCommand: z.string().optional(),
-	/** Lint command (e.g. "npm run lint") */
-	verificationLintCommand: z.string().optional(),
-	/** Type check command (e.g. "npm run typecheck") */
-	verificationTypeCheckCommand: z.string().optional(),
-	/** Test command (e.g. "npm test") */
-	verificationTestCommand: z.string().optional(),
 	/** Per-gate timeout in ms */
 	verificationTimeoutMs: z.number().min(1000).optional(),
 })
