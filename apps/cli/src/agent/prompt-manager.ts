@@ -221,6 +221,10 @@ export class PromptManager {
 
 				// Handle Enter
 				if (char === "\r" || char === "\n") {
+					// Ignore whitespace-only input (e.g., trailing newlines from piped stdin)
+					if (inputBuffer.trim() === "") {
+						return
+					}
 					if (!resolved) {
 						resolved = true
 						cleanup()
