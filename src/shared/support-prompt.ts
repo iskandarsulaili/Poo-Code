@@ -44,8 +44,19 @@ type SupportPromptType =
 	| "TERMINAL_FIX"
 	| "TERMINAL_EXPLAIN"
 	| "NEW_TASK"
+	| "RECOVERY"
 
 const supportPromptConfigs: Record<SupportPromptType, SupportPromptConfig> = {
+	RECOVERY: {
+		template: `The previous attempt failed because Zoo is having trouble with the following: \${errorSubject}
+
+[Context Recovery Pipeline]
+1. Subject: \${errorSubject}
+2. Context: \${troubleContext}
+3. Approved Recovery Direction: \${contextualAnswer}
+
+Please continue working on the task by following the approved recovery direction above. Break down the task into smaller, focused steps.`,
+	},
 	ENHANCE: {
 		template: `Generate an enhanced version of this prompt (reply with only the enhanced prompt - no conversation, explanations, lead-in, bullet points, placeholders, or surrounding quotes):
 

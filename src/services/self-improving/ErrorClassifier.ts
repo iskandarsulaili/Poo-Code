@@ -22,9 +22,23 @@ export interface ClassifiedError {
 	suggestion: string
 	isRecoverable: boolean
 	recoveryAction?: string
+	/** Context-generated recovery answer from evaluation pipeline */
+	contextualAnswer?: string
 }
 
 export class ErrorClassifier {
+	/**
+	 * Extract the trouble subject from a "Zoo is having trouble" error message.
+	 * Returns the text after the "Zoo is having trouble" prefix, trimmed.
+	 */
+	extractTroubleSubject(errorMessage: string): string {
+		const idx = errorMessage.indexOf("Zoo is having trouble")
+		if (idx === -1) {
+			return ""
+		}
+		return errorMessage.slice(idx + "Zoo is having trouble".length).trim()
+	}
+
 	classify(errorMessage: string, toolName?: string): ClassifiedError {
 		// Directory confusion — trying to read a directory as file (Situations C, E)
 		if (errorMessage.includes("is a directory") || errorMessage.includes("Cannot read")) {

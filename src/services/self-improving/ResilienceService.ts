@@ -1,9 +1,10 @@
 import type { Logger } from "./types"
 import type { ClassifiedError } from "./ErrorClassifier"
-import { ErrorCategory } from "./ErrorClassifier"
+import { ErrorCategory, ErrorClassifier } from "./ErrorClassifier"
 import type { CodeIndexAdapter } from "./CodeIndexAdapter"
 import type { VectorStoreSearchResult } from "../code-index/interfaces/vector-store"
 import type { Experiments } from "@roo-code/types"
+import type { QuestionEvaluatorService } from "./QuestionEvaluatorService"
 
 export interface ResilienceConfig {
 	enabled: boolean
@@ -46,6 +47,7 @@ export class ResilienceService {
 	private config: ResilienceConfig
 	private state: RecoveryState
 	private codeIndexAdapter: CodeIndexAdapter | undefined
+	private questionEvaluator: QuestionEvaluatorService | undefined
 
 	constructor(logger: Logger, config?: Partial<ResilienceConfig>) {
 		this.logger = logger
@@ -55,6 +57,14 @@ export class ResilienceService {
 
 	setCodeIndexAdapter(adapter: CodeIndexAdapter | undefined): void {
 		this.codeIndexAdapter = adapter
+	}
+
+	/**
+	 * Set the QuestionEvaluatorService for contextual recovery answer generation.
+	 * Used by the "Zoo is having trouble" pipeline to generate review-gated answers.
+	 */
+	setQuestionEvaluator(evaluator: QuestionEvaluatorService | undefined): void {
+		this.questionEvaluator = evaluator
 	}
 
 	getConfig(): ResilienceConfig {
@@ -265,11 +275,77 @@ export class ResilienceService {
 	}
 
 	/**
+	 * Generate a contextual recovery answer for "Zoo is having trouble" messages.
+	 * Uses the QuestionEvaluatorService (which gates through ReviewTeamService) to
+	 * evaluate the trouble subject and produce an approved recovery direction.
+	 *
+	 * Pipeline:
+	 * 1. Detect "Zoo is having trouble" pattern
+	 * 2. Extract trouble subject from error message
+	 * 3. Generate contextual answer via QuestionEvaluatorService
+	 * 4. Gate through ReviewTeamService (4 personas score)
+	 * 5. Return approved answer
+	 */
+	async getContextualRecoveryAnswer(errorMessage: string): Promise<string | undefined> {
+		// Only for "Zoo is having trouble" messages
+		if (!errorMessage.includes("Zoo is having trouble")) {
+			return undefined
+		}
+
+		if (!this.questionEvaluator || !this.questionEvaluator.getConfig().enabled) {
+			return undefined
+		}
+
+		const troubleSubject = new ErrorClassifier().extractTroubleSubject(errorMessage)
+		if (!troubleSubject) {
+			return undefined
+		}
+
+		this.logger.appendLine(
+			`[Resilience] Getting contextual recovery answer for: "${troubleSubject.substring(0, 80)}"`,
+		)
+
+		try {
+			// Provide 2 synthetic choices so evaluator bypasses minChoicesForEvaluation guard
+			const evaluation = await this.questionEvaluator.evaluateBestChoice(
+				`Recovery guidance needed for: ${troubleSubject.substring(0, 200)}`,
+				[
+					{
+						text: `Continue with contextual recovery for: ${troubleSubject.substring(0, 150)}`,
+						mode: null,
+					},
+					{
+						text: `Use standard recovery approach for: ${troubleSubject.substring(0, 150)}`,
+						mode: null,
+					},
+				],
+			)
+
+			// Only use result if it was actually evaluated (not fallback)
+			if (evaluation.evaluatedBy !== "fallback") {
+				const answer = `[Contextual Recovery] Problem analysis: ${evaluation.reasoning}. Suggested approach: ${evaluation.selectedText}.`
+				this.logger.appendLine(
+					`[Resilience] Contextual recovery answer generated via ${evaluation.evaluatedBy}`,
+				)
+				return answer
+			}
+		} catch (error) {
+			this.logger.appendLine(
+				`[Resilience] getContextualRecoveryAnswer error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+
+		return undefined
+	}
+
+	/**
 	 * Generate a recovery context block based on the classified error, original message,
 	 * and recent conversation history.
 	 *
 	 * Uses actual recent messages (last user req + last assistant res) to build a
 	 * contextual task summary, then queries the code index for relevant context.
+	 * Also retrieves contextual recovery answer for "Zoo is having trouble" messages
+	 * via the QuestionEvaluatorService/ReviewTeamService pipeline.
 	 * Non-blocking — returns original message on any error or when no enrichment is needed.
 	 * Gated behind recoveryContext experiment flag.
 	 */
@@ -292,27 +368,37 @@ export class ResilienceService {
 			return originalMessage
 		}
 
+		// Step 1: Try to get contextual recovery answer via evaluator + review team
+		const contextualAnswer = await this.getContextualRecoveryAnswer(originalMessage)
+
 		// Build task summary from recent conversation messages
 		const taskSummary = this.buildTaskSummary(recentMessages)
 
 		// Use task summary as the search query for code index (more contextual than originalMessage)
 		const searchQuery = taskSummary || originalMessage
 
-		// Try to enrich with code index context
+		// Step 2: Try to enrich with code index context
 		if (this.codeIndexAdapter?.isAvailable()) {
 			try {
 				const results = await this.codeIndexAdapter.searchVectorStore(searchQuery)
 				if (results && results.length > 0) {
 					const contextLines = results.map((r) => this.formatSearchResult(r))
-					const contextBlock = [
+					const parts: string[] = [originalMessage]
+
+					// Inject contextual recovery answer if available (higher priority)
+					if (contextualAnswer) {
+						parts.push(contextualAnswer)
+					}
+
+					parts.push(
 						`[Context Recovery] You were working on: ${taskSummary || "a task that failed"}. Here is relevant code context:`,
 						...contextLines,
-					].join("\n")
+					)
 
 					this.logger.appendLine(
-						`[Resilience] Recovery context generated: ${results.length} code index results (taskSummary: "${(taskSummary || originalMessage).slice(0, 80)}")`,
+						`[Resilience] Recovery context generated: ${results.length} code index results + ${contextualAnswer ? "contextual answer" : "no contextual answer"} (taskSummary: "${(taskSummary || originalMessage).slice(0, 80)}")`,
 					)
-					return `${originalMessage}\n\n${contextBlock}`
+					return parts.join("\n\n")
 				}
 			} catch (error) {
 				// Graceful fallback — log and return original message
@@ -322,7 +408,14 @@ export class ResilienceService {
 			}
 		}
 
-		// Fallback: inject contextual guidance referencing the actual task
+		// Step 3: Fallback — inject contextual guidance + recovery answer if available
+		if (contextualAnswer) {
+			const fallbackGuidance = taskSummary
+				? `[Context Recovery] You were working on: ${taskSummary}. Consider breaking this into smaller, more focused steps.`
+				: "[Context Recovery] The previous attempt failed. Consider breaking the task into smaller, more focused steps."
+			return `${originalMessage}\n\n${contextualAnswer}\n\n${fallbackGuidance}`
+		}
+
 		const fallbackGuidance = taskSummary
 			? `[Context Recovery] You were working on: ${taskSummary}. Consider breaking this into smaller, more focused steps. Try using a simpler approach or different tool.`
 			: "[Context Recovery] The previous attempt failed. Consider breaking the task into smaller, more focused steps. Try using a simpler approach or different tool."

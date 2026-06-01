@@ -146,6 +146,8 @@ export class SelfImprovingManager {
 		this.resilienceService = new ResilienceService(this.logger, {
 			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
 		})
+		// Wire QuestionEvaluatorService into ResilienceService for contextual recovery answers
+		this.resilienceService.setQuestionEvaluator(this.questionEvaluator)
 		this.toolErrorHealer = new ToolErrorHealer(this.logger, {
 			enabled: this.getExperiments()?.selfImprovingAutoMode ?? true,
 		})
