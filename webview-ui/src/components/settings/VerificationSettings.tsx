@@ -133,7 +133,7 @@ export const VerificationSettings = ({
 			gateKey: string,
 			_checkKey: string,
 			cmdKey: string,
-		): { command: string; sourceLabel: string | null; isOverride: boolean } => {
+		): { command: string; sourceLabel: string | null; isOverride: boolean; placeholder: string } => {
 			// Get the user override value from experiment props
 			const getOverrideCommand = (key: string): string | undefined => {
 				switch (key) {
@@ -153,11 +153,11 @@ export const VerificationSettings = ({
 			const userOverride = getOverrideCommand(cmdKey)
 
 			// Tier 1: User has explicitly set a command override
-			if (userOverride) {
-				return { command: userOverride, sourceLabel: null, isOverride: true }
+			if (userOverride !== undefined && userOverride !== "") {
+				return { command: userOverride, sourceLabel: null, isOverride: true, placeholder: "" }
 			}
 
-			// Tier 2: Auto-detected from project
+			// Tier 2: Auto-detected from project — show nothing in value, hint in placeholder
 			if (autoDetectedProfile) {
 				const detected = autoDetectedProfile[gateKey as keyof AutoDetectedProfile] as
 					| { command?: string | null; source?: string | null }
@@ -181,16 +181,16 @@ export const VerificationSettings = ({
 							}[detected.source] ?? detected.source)
 						: null
 					return {
-						command: detected.command,
+						command: "",
 						sourceLabel: sourceLabel ? `from ${sourceLabel}` : null,
 						isOverride: false,
+						placeholder: detected.command,
 					}
 				}
 			}
 
-			// Tier 3: Hardcoded fallback
-			const hardcoded = getHardcodedDefault(gateKey)
-			return { command: "", sourceLabel: hardcoded ? "default" : null, isOverride: false }
+			// Tier 3: No auto-detect and no user override
+			return { command: "", sourceLabel: null, isOverride: false, placeholder: "" }
 		},
 		[
 			autoDetectedProfile,
@@ -331,8 +331,11 @@ export const VerificationSettings = ({
 									? (verificationCheckTypes ?? false)
 									: (verificationCheckTests ?? false)
 
-					const { command, sourceLabel, isOverride } = resolveCommand(gate.key, gate.checkKey, gate.cmdKey)
-					const hardcodedDefault = getHardcodedDefault(gate.key)
+					const { command, sourceLabel, isOverride, placeholder } = resolveCommand(
+						gate.key,
+						gate.checkKey,
+						gate.cmdKey,
+					)
 
 					return (
 						<div key={gate.key} className="flex flex-col gap-1 mb-2">
@@ -349,15 +352,22 @@ export const VerificationSettings = ({
 									<div className="flex-1 relative">
 										<Input
 											value={command}
-											placeholder={hardcodedDefault}
-											onChange={(e: any) =>
-												onVerificationGateChange?.(gate.cmdKey, e.target.value)
-											}
+											placeholder={placeholder || "Enter command..."}
+											onChange={(e: any) => {
+												const val = e.target.value
+												// When user clears the value, remove the experiment key entirely
+												// so it falls back to auto-detected default
+												if (val === "") {
+													onVerificationGateChange?.(gate.cmdKey, "")
+												} else {
+													onVerificationGateChange?.(gate.cmdKey, val)
+												}
+											}}
 											disabled={!masterEnabled}
 											style={{ width: "100%" }}
 										/>
 									</div>
-									{/* Source badge */}
+									{/* Source badge — show auto-detected source when no user override */}
 									{sourceLabel && !isOverride && (
 										<span className="text-xs text-vscode-descriptionForeground whitespace-nowrap">
 											{sourceLabel}
@@ -382,19 +392,4 @@ export const VerificationSettings = ({
 			</div>
 		</Section>
 	)
-}
-
-function getHardcodedDefault(gate: string): string {
-	switch (gate) {
-		case "build":
-			return "npm run build"
-		case "lint":
-			return "npm run lint"
-		case "type-check":
-			return "npm run typecheck"
-		case "tests":
-			return "npm test"
-		default:
-			return ""
-	}
 }

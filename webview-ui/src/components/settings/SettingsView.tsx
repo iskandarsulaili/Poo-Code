@@ -35,6 +35,7 @@ import {
 import {
 	type ProviderSettings,
 	type ExperimentId,
+	type Experiments,
 	type TelemetrySetting,
 	DEFAULT_CHECKPOINT_TIMEOUT_SECONDS,
 	ImageGenerationProvider,
@@ -339,6 +340,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 	const onVerificationGateChange = useCallback((key: string, value: boolean | string | number) => {
 		setCachedState((prevState) => {
 			setChangeDetected(true)
+			// When a string command value is cleared (""), delete the key so
+			// the UI falls through to the auto-detected default rather than
+			// storing an empty string override that blocks adaptive detection.
+			if (value === "") {
+				const { [key]: _removed, ...rest } = prevState.experiments as Record<string, unknown>
+				return { ...prevState, experiments: rest as Experiments }
+			}
 			return { ...prevState, experiments: { ...prevState.experiments, [key]: value } }
 		})
 	}, [])
