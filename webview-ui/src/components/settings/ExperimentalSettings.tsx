@@ -1,6 +1,12 @@
 import { HTMLAttributes } from "react"
 
-import type { Experiments, ImageGenerationProvider, ModeConfig, VerificationLevel } from "@roo-code/types"
+import type {
+	AutoDetectedProfile,
+	Experiments,
+	ImageGenerationProvider,
+	ModeConfig,
+	VerificationLevel,
+} from "@roo-code/types"
 
 import { EXPERIMENT_IDS, experimentConfigsMap } from "@roo/experiments"
 
@@ -54,6 +60,8 @@ type ExperimentalSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	verificationTestCommand?: string
 	verificationTimeoutMs?: number
 	onVerificationGateChange?: (key: string, value: boolean | string | number) => void
+	autoDetectedProfile?: AutoDetectedProfile
+	autoDetectingVerification?: boolean
 }
 
 // ── Category definitions ──────────────────────────────────────────────
@@ -553,6 +561,8 @@ export const ExperimentalSettings = ({
 	verificationTestCommand,
 	verificationTimeoutMs,
 	onVerificationGateChange,
+	autoDetectedProfile,
+	autoDetectingVerification,
 	className,
 	...props
 }: ExperimentalSettingsProps) => {
@@ -612,11 +622,7 @@ export const ExperimentalSettings = ({
 
 			<Section>
 				{CATEGORIES.map((category) => (
-					<CategoryGroup
-						key={category.key}
-						category={category}
-						renderInline={renderExperiment}
-					/>
+					<CategoryGroup key={category.key} category={category} renderInline={renderExperiment} />
 				))}
 
 				{/* Standalone experiments not in any category */}
@@ -647,6 +653,8 @@ export const ExperimentalSettings = ({
 					verificationTimeoutMs={verificationTimeoutMs}
 					onVerificationGateChange={onVerificationGateChange}
 					setExperimentEnabled={setExperimentEnabled}
+					autoDetectedProfile={autoDetectedProfile}
+					autoDetectingVerification={autoDetectingVerification}
 				/>
 			</Section>
 		</div>

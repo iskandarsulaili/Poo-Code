@@ -38,6 +38,37 @@ export const experimentIdsSchema = z.enum(experimentIds)
 export type ExperimentId = z.infer<typeof experimentIdsSchema>
 
 /**
+ * Auto-detected verification profile — serializable DTO sent to the webview.
+ */
+
+export interface CommandSource {
+	command: string | null
+	source:
+		| "package.json"
+		| "cargo"
+		| "go-mod"
+		| "gradle"
+		| "maven"
+		| "dotnet"
+		| "zig"
+		| "deno"
+		| "mix"
+		| "gemfile"
+		| "pyproject"
+		| "detected"
+		| "fallback"
+		| null
+}
+
+export interface AutoDetectedProfile {
+	language: string | null
+	build: CommandSource
+	lint: CommandSource
+	typeCheck: CommandSource
+	test: CommandSource
+}
+
+/**
  * Experiments
  */
 

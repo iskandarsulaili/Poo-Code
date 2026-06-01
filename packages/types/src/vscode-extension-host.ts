@@ -4,7 +4,7 @@ import type { GlobalSettings, RooCodeSettings } from "./global-settings.js"
 import type { ProviderSettings, ProviderSettingsEntry } from "./provider-settings.js"
 import type { HistoryItem } from "./history.js"
 import type { ModeConfig, PromptComponent } from "./mode.js"
-import type { Experiments } from "./experiment.js"
+import type { Experiments, AutoDetectedProfile } from "./experiment.js"
 import type { ClineMessage, QueuedMessage } from "./message.js"
 import type { MarketplaceItem, MarketplaceInstalledMetadata, InstallMarketplaceItemOptions } from "./marketplace.js"
 import type { TodoItem } from "./todo.js"
@@ -432,6 +432,12 @@ export type ExtensionState = Pick<
 	 * (captured during async getStateToPostToWebview) from overwriting newer messages.
 	 */
 	clineMessagesSeq?: number
+
+	/** NEW: Auto-detected verification profile from project files */
+	autoDetectedProfile?: AutoDetectedProfile
+
+	/** NEW: Whether auto-detection is still in progress */
+	autoDetectingVerification?: boolean
 }
 
 export interface Command {

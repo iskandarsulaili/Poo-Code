@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import type { Logger } from "./types"
+import type { AutoDetectedProfile, CommandSource } from "@roo-code/types"
 
 /** Describes a detected project language / tech stack */
 export interface ProjectProfile {
@@ -9,6 +10,15 @@ export interface ProjectProfile {
 	lintCommand?: string
 	typeCheckCommand?: string
 	testCommand?: string
+	/** Source indicator for each command — where was it detected from */
+	commandSources: {
+		buildCommand: string | null
+		lintCommand: string | null
+		typeCheckCommand: string | null
+		testCommand: string | null
+	}
+	/** The manifest file that triggered detection (e.g. "package.json") */
+	detectedFrom: string | null
 }
 
 export interface VerificationResult {
@@ -93,6 +103,13 @@ const LANG_SIGNATURES: Array<{
 						? "npx tsc --noEmit"
 						: undefined,
 				testCommand: hasTestScript ? "npm test" : undefined,
+				commandSources: {
+					buildCommand: hasBuildScript ? "package.json" : null,
+					lintCommand: hasLintScript ? "package.json" : null,
+					typeCheckCommand: hasTypeCheckScript || hasTS ? "package.json" : null,
+					testCommand: hasTestScript ? "package.json" : null,
+				},
+				detectedFrom: "package.json",
 			}
 		},
 	},
@@ -105,6 +122,13 @@ const LANG_SIGNATURES: Array<{
 			lintCommand: "cargo clippy",
 			typeCheckCommand: "cargo check",
 			testCommand: "cargo test",
+			commandSources: {
+				buildCommand: "cargo",
+				lintCommand: "cargo",
+				typeCheckCommand: "cargo",
+				testCommand: "cargo",
+			},
+			detectedFrom: "Cargo.toml",
 		}),
 	},
 	// --- Python ---
@@ -129,6 +153,13 @@ const LANG_SIGNATURES: Array<{
 				lintCommand: hasBlack ? "flake8 ." : undefined,
 				typeCheckCommand: hasMypy ? "mypy ." : undefined,
 				testCommand: hasPytest ? "pytest" : "python -m unittest",
+				commandSources: {
+					buildCommand: isPdm && hasBuildScript ? "pyproject" : null,
+					lintCommand: hasBlack ? "pyproject" : null,
+					typeCheckCommand: hasMypy ? "pyproject" : null,
+					testCommand: hasPytest ? "pyproject" : null,
+				},
+				detectedFrom: "pyproject.toml",
 			}
 		},
 	},
@@ -139,8 +170,15 @@ const LANG_SIGNATURES: Array<{
 			language: "Go",
 			buildCommand: "go build ./...",
 			lintCommand: "go vet ./...",
-			typeCheckCommand: undefined, // Go type-checks at compile time
+			typeCheckCommand: undefined,
 			testCommand: "go test ./...",
+			commandSources: {
+				buildCommand: "go-mod",
+				lintCommand: "go-mod",
+				typeCheckCommand: null,
+				testCommand: "go-mod",
+			},
+			detectedFrom: "go.mod",
 		}),
 	},
 	// --- Java / Gradle ---
@@ -156,6 +194,13 @@ const LANG_SIGNATURES: Array<{
 					lintCommand: "./gradlew check",
 					typeCheckCommand: undefined,
 					testCommand: "./gradlew test",
+					commandSources: {
+						buildCommand: "gradle",
+						lintCommand: "gradle",
+						typeCheckCommand: null,
+						testCommand: "gradle",
+					},
+					detectedFrom: "build.gradle",
 				}
 			}
 			if (isMaven) {
@@ -165,6 +210,13 @@ const LANG_SIGNATURES: Array<{
 					lintCommand: "mvn checkstyle:check",
 					typeCheckCommand: undefined,
 					testCommand: "mvn test",
+					commandSources: {
+						buildCommand: "maven",
+						lintCommand: "maven",
+						typeCheckCommand: null,
+						testCommand: "maven",
+					},
+					detectedFrom: "pom.xml",
 				}
 			}
 			return null
@@ -181,6 +233,13 @@ const LANG_SIGNATURES: Array<{
 				lintCommand: hasRubocop ? "bundle exec rubocop" : undefined,
 				typeCheckCommand: (await fileExists(cwd, "rbs")) ? "bundle exec rbs validate" : undefined,
 				testCommand: "bundle exec rspec",
+				commandSources: {
+					buildCommand: "gemfile",
+					lintCommand: hasRubocop ? "gemfile" : null,
+					typeCheckCommand: (await fileExists(cwd, "rbs")) ? "gemfile" : null,
+					testCommand: "gemfile",
+				},
+				detectedFrom: "Gemfile",
 			}
 		},
 	},
@@ -193,6 +252,13 @@ const LANG_SIGNATURES: Array<{
 			lintCommand: "mix credo",
 			typeCheckCommand: undefined,
 			testCommand: "mix test",
+			commandSources: {
+				buildCommand: "mix",
+				lintCommand: "mix",
+				typeCheckCommand: null,
+				testCommand: "mix",
+			},
+			detectedFrom: "mix.exs",
 		}),
 	},
 	// --- Deno ---
@@ -204,6 +270,13 @@ const LANG_SIGNATURES: Array<{
 			lintCommand: "deno lint",
 			typeCheckCommand: "deno check",
 			testCommand: "deno test",
+			commandSources: {
+				buildCommand: "deno",
+				lintCommand: "deno",
+				typeCheckCommand: "deno",
+				testCommand: "deno",
+			},
+			detectedFrom: "deno.json",
 		}),
 	},
 	// --- .NET / C# ---
@@ -215,6 +288,13 @@ const LANG_SIGNATURES: Array<{
 			lintCommand: "dotnet format --verify-no-changes",
 			typeCheckCommand: undefined,
 			testCommand: "dotnet test",
+			commandSources: {
+				buildCommand: "dotnet",
+				lintCommand: "dotnet",
+				typeCheckCommand: null,
+				testCommand: "dotnet",
+			},
+			detectedFrom: "*.csproj",
 		}),
 	},
 	// --- Zig ---
@@ -226,6 +306,13 @@ const LANG_SIGNATURES: Array<{
 			lintCommand: "zig fmt --check",
 			typeCheckCommand: "zig build",
 			testCommand: "zig test",
+			commandSources: {
+				buildCommand: "zig",
+				lintCommand: "zig",
+				typeCheckCommand: "zig",
+				testCommand: "zig",
+			},
+			detectedFrom: "build.zig",
 		}),
 	},
 ]
@@ -353,6 +440,41 @@ export class VerificationEngine {
 				this.config.checkTypes ? this.config.typeCheckCommand : "off"
 			}, tests=${this.config.checkTests ? this.config.testCommand : "off"}`,
 		)
+	}
+
+	/**
+	 * Return the auto-detected profile as a serializable DTO for the webview.
+	 */
+	getAutoProfile(): AutoDetectedProfile {
+		if (!this.autoProfiled) {
+			// No auto-detection has been run yet; return a "detecting" state
+			return {
+				language: null,
+				build: { command: null, source: null },
+				lint: { command: null, source: null },
+				typeCheck: { command: null, source: null },
+				test: { command: null, source: null },
+			}
+		}
+		return {
+			language: this.autoProfiled.language,
+			build: {
+				command: this.autoProfiled.buildCommand ?? null,
+				source: this.autoProfiled.commandSources.buildCommand as CommandSource["source"],
+			},
+			lint: {
+				command: this.autoProfiled.lintCommand ?? null,
+				source: this.autoProfiled.commandSources.lintCommand as CommandSource["source"],
+			},
+			typeCheck: {
+				command: this.autoProfiled.typeCheckCommand ?? null,
+				source: this.autoProfiled.commandSources.typeCheckCommand as CommandSource["source"],
+			},
+			test: {
+				command: this.autoProfiled.testCommand ?? null,
+				source: this.autoProfiled.commandSources.testCommand as CommandSource["source"],
+			},
+		}
 	}
 
 	setEnabled(enabled: boolean): void {

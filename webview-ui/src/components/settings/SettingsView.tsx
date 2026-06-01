@@ -218,6 +218,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		kaizenRemoteName,
 		kaizenCommitTemplate,
 		customModes,
+		autoDetectedProfile,
+		autoDetectingVerification,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -1009,6 +1011,8 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 							<ExperimentalSettings
 								setExperimentEnabled={setExperimentEnabled}
 								experiments={experiments}
+								autoDetectedProfile={autoDetectedProfile}
+								autoDetectingVerification={autoDetectingVerification}
 								apiConfiguration={apiConfiguration}
 								setApiConfigurationField={setApiConfigurationField}
 								imageGenerationProvider={imageGenerationProvider}

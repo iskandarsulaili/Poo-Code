@@ -36,6 +36,7 @@ import {
 	type ToolUsage,
 	type ExtensionMessage,
 	type ExtensionState,
+	type AutoDetectedProfile,
 	type MarketplaceInstalledMetadata,
 	RooCodeEventName,
 	requestyDefaultModelId,
@@ -289,18 +290,22 @@ export class ClineProvider
 			const verificationEngine = new VerificationEngine(
 				{ appendLine: (message: string) => this.log(message) },
 				{
-					checkBuild: true,
-					buildCommand: "pnpm build",
-					checkLint: true,
-					lintCommand: "pnpm lint",
-					checkTypes: true,
-					typeCheckCommand: "pnpm check-types",
-					checkTests: true,
-					testCommand: "pnpm test",
+					checkBuild: experiments.verificationCheckBuild ?? true,
+					buildCommand: experiments.verificationBuildCommand,
+					checkLint: experiments.verificationCheckLint ?? true,
+					lintCommand: experiments.verificationLintCommand,
+					checkTypes: experiments.verificationCheckTypes ?? true,
+					typeCheckCommand: experiments.verificationTypeCheckCommand,
+					checkTests: experiments.verificationCheckTests ?? true,
+					testCommand: experiments.verificationTestCommand,
 					mandatory: true,
-					gateTimeoutMs: 120_000,
+					gateTimeoutMs: experiments.verificationTimeoutMs ?? 120_000,
 				},
 			)
+			// Fill any remaining gaps via auto-detection
+			;(async () => {
+				await verificationEngine.applyAutoProfile()
+			})()
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
 			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")
 		}
@@ -2469,6 +2474,7 @@ export class ClineProvider
 				}
 			})(),
 			...zooCodeState,
+			autoDetectedProfile: this.selfImprovingManager?.getAutoDetectedProfile() ?? undefined,
 			debug: vscode.workspace.getConfiguration(Package.name).get<boolean>("debug", false),
 		}
 	}

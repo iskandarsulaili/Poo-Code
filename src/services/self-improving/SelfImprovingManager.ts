@@ -13,7 +13,7 @@ import type {
 	SelfImprovingScope,
 	TaskEventInfo,
 } from "./types"
-import type { ProviderSettings } from "@roo-code/types"
+import type { AutoDetectedProfile, ProviderSettings } from "@roo-code/types"
 import { experimentDefault } from "../../shared/experiments"
 import { LearningStore } from "./LearningStore"
 import { FeedbackCollector } from "./FeedbackCollector"
@@ -200,6 +200,14 @@ export class SelfImprovingManager {
 
 		// Auto-detect project and fill any remaining gaps
 		await this.verificationEngine.applyAutoProfile()
+	}
+
+	/**
+	 * Return the auto-detected verification profile (language, commands, sources).
+	 * Used by ClineProvider to expose to the webview UI.
+	 */
+	getAutoDetectedProfile(): AutoDetectedProfile {
+		return this.verificationEngine.getAutoProfile()
 	}
 
 	/**
