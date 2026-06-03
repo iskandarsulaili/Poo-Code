@@ -197,7 +197,7 @@ const KanbanColumn = React.memo(function KanbanColumn({ status, cards, onStatusC
 		[status, onDrop],
 	)
 
-	const statusLabel = t(`kanban.status.${status}` as any, status)
+	const statusLabel = t(`kanban.status.${status}` as any, status as any)
 
 	return (
 		<div
