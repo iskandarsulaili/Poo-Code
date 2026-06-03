@@ -58,7 +58,7 @@ export class ProfileStore {
 
 		const updated: ProfileConfig = {
 			...profile,
-			createdAt: existing?.createdAt ?? now,
+			createdAt: existing?.createdAt ?? profile.createdAt ?? now,
 			updatedAt: now,
 		}
 

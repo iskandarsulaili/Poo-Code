@@ -302,7 +302,6 @@ export class FullTextIndex {
 	 */
 	private async loadBetterSqlite3(): Promise<any> {
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
 			// @ts-ignore - optional dep, caught in try-catch
 			return await import("better-sqlite3")
 		} catch {
