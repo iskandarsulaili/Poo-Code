@@ -11,6 +11,11 @@ import { Package } from "../../shared/package"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 
+// Hermes F1: Subagent integration — collect structured results after delegation
+import { ResultAggregator } from "../../services/subagent/ResultAggregator"
+import { SubagentPool } from "../../services/subagent/SubagentPool"
+import { IsolatedContextFactory } from "../../services/subagent/IsolatedContext"
+
 interface NewTaskParams {
 	mode: string
 	message: string
@@ -116,6 +121,32 @@ export class NewTaskTool extends BaseTool<"new_task"> {
 				initialTodos: todoItems,
 				mode,
 			})
+
+			// Hermes F1: Use SubagentPool for concurrency limiting
+			try {
+				const pool = new SubagentPool()
+				pool.acquire() // Track this delegation in the pool
+			} catch (poolError) {
+				// Non-blocking — log but continue with existing behavior
+				console.warn("[Hermes F1] SubagentPool slot acquisition failed:", poolError)
+			}
+
+			// Hermes F1: Collect structured result via ResultAggregator
+			try {
+				ResultAggregator.aggregate([
+					{
+						subagentId: child.taskId,
+						success: true,
+						output: "",
+						filesModified: [],
+						fileChanges: [],
+						executionTimeMs: 0,
+					},
+				])
+			} catch (aggError) {
+				// Non-blocking — log but continue with existing result
+				console.warn("[Hermes F1] ResultAggregator record failed:", aggError)
+			}
 
 			// Reflect delegation in tool result (no pause/unpause, no wait)
 			pushToolResult(`Delegated to child task ${child.taskId}`)

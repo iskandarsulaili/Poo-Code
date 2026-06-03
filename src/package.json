@@ -546,6 +546,7 @@
 		"@types/node-ipc": "^9.2.3",
 		"@types/proper-lockfile": "^4.1.4",
 		"@types/ps-tree": "^1.1.6",
+		"@types/semver": "^7.7.1",
 		"@types/semver-compare": "^1.0.3",
 		"@types/shell-quote": "^1.7.5",
 		"@types/stream-json": "^1.7.8",
@@ -553,6 +554,7 @@
 		"@types/tmp": "^0.2.6",
 		"@types/turndown": "^5.0.5",
 		"@types/vscode": "^1.84.0",
+		"@vitest/coverage-v8": "^3.2.3",
 		"@vscode/test-electron": "^2.5.2",
 		"@vscode/vsce": "3.9.1",
 		"ai": "^6.0.75",
@@ -564,9 +566,9 @@
 		"npm-run-all2": "^8.0.1",
 		"ovsx": "0.10.4",
 		"rimraf": "^6.0.1",
+		"semver": "^7.8.1",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.3",
-		"@vitest/coverage-v8": "^3.2.3",
 		"vitest": "^3.2.3",
 		"zod-to-ts": "^1.2.0"
 	}

@@ -18,11 +18,26 @@ import { t } from "../../i18n"
 // Re-export for convenience
 export type { SkillMetadata, SkillContent }
 
+// Hermes F7: Composition & dependency resolution for skills
+interface SkillDependency {
+	name: string
+	mode: string
+	optional: boolean
+}
+
+interface SkillComposition {
+	componentSkills: string[]
+	dependencies: SkillDependency[]
+	executionOrder: string[]
+}
+
 export class SkillsManager {
 	private skills: Map<string, SkillMetadata> = new Map()
 	private providerRef: WeakRef<ClineProvider>
 	private disposables: vscode.Disposable[] = []
 	private isDisposed = false
+	// Hermes F7: Composition context
+	private compositionRegistry: Map<string, SkillComposition> = new Map()
 
 	constructor(provider: ClineProvider) {
 		this.providerRef = new WeakRef(provider)
@@ -31,6 +46,41 @@ export class SkillsManager {
 	async initialize(): Promise<void> {
 		await this.discoverSkills()
 		await this.setupFileWatchers()
+	}
+
+	// Hermes F7: Resolve skill dependencies and return in execution order
+	async resolveSkillDependencies(skillName: string): Promise<SkillDependency[]> {
+		const composition = this.compositionRegistry.get(skillName)
+		if (composition) {
+			return composition.dependencies
+		}
+		return []
+	}
+
+	// Hermes F7: Get execution order for a composite skill
+	async getExecutionOrder(skillName: string): Promise<string[]> {
+		const composition = this.compositionRegistry.get(skillName)
+		if (composition) {
+			return composition.executionOrder
+		}
+		return [skillName]
+	}
+
+	// Hermes F7: Register composition metadata (parsed from SKILL.md frontmatter)
+	registerComposition(skillName: string, composition: SkillComposition): void {
+		this.compositionRegistry.set(skillName, composition)
+	}
+
+	// Hermes F7: Check if all required deps are available
+	async checkDependencies(skillName: string): Promise<{ ok: boolean; missing: string[] }> {
+		const deps = await this.resolveSkillDependencies(skillName)
+		const missing: string[] = []
+		for (const dep of deps) {
+			if (!dep.optional && !this.skills.has(dep.name)) {
+				missing.push(dep.name)
+			}
+		}
+		return { ok: missing.length === 0, missing }
 	}
 
 	/**

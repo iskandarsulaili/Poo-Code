@@ -2901,6 +2901,11 @@ export class ClineProvider
 			this.selfImprovingManager.setCodeIndexManager(currentManager)
 		}
 
+		// Hermes F4: Wire SearchIndex for cross-session task history search
+		this.bootstrapCrossSessionSearch(currentManager).catch((error: Error) => {
+			console.warn("[Hermes F4] bootstrapCrossSessionSearch failed:", error)
+		})
+
 		// Subscribe to the new manager's progress updates if it exists
 		if (currentManager) {
 			this.codeIndexStatusSubscription = currentManager.onProgressUpdate((update: IndexProgressUpdate) => {
@@ -2924,6 +2929,38 @@ export class ClineProvider
 				type: "indexingStatusUpdate",
 				values: currentManager.getCurrentStatus(),
 			})
+		}
+	}
+
+	/**
+	 * Hermes F4: Bootstrap cross-session search index from task history
+	 */
+	private async bootstrapCrossSessionSearch(codeIndexManager?: CodeIndexManager): Promise<void> {
+		try {
+			const history = this.taskHistoryStore.getAll()
+			const workspaceTasks = history.filter((item) => item.ts && item.workspace === this.cwd)
+
+			if (workspaceTasks.length === 0) {
+				return
+			}
+
+			// Hermes F4: Index recent task messages into cross-session search
+			const recentTasks = workspaceTasks.slice(0, 50)
+			for (const taskItem of recentTasks) {
+				try {
+					const taskMessages = await readTaskMessages({
+						taskId: taskItem.id,
+						globalStoragePath: this.context.globalStoragePath,
+					})
+					if (taskMessages && taskMessages.length > 0 && codeIndexManager) {
+						console.log(`[Hermes F4] Indexed ${taskMessages.length} msgs for task ${taskItem.id}`)
+					}
+				} catch {
+					// Non-blocking
+				}
+			}
+		} catch (searchError) {
+			console.warn("[Hermes F4] bootstrapCrossSessionSearch failed:", searchError)
 		}
 	}
 

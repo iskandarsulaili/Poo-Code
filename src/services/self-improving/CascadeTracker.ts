@@ -1,5 +1,9 @@
 import { ErrorCategory } from "./ErrorClassifier"
 
+// Hermes F3: SemanticMemory integration for pattern learning from cascade events
+import { SemanticMemory } from "../memory/SemanticMemory"
+import { MemoryTier } from "../memory/types"
+
 interface ErrorEvent {
 	timestamp: number
 	toolName: string
@@ -49,7 +53,7 @@ export class CascadeTracker {
 			this.activeCascade.chain.push(event)
 		} else {
 			// Cascade expired or too long — archive and start new
-			this.activeCascade.isActive = false
+			this.archiveCascadeToMemory()
 			this.activeCascade = {
 				rootError: event,
 				chain: [event],
@@ -79,26 +83,53 @@ export class CascadeTracker {
 		if (!cascade || cascade.chain.length < 2) {
 			return null
 		}
+		const tools = [...new Set(cascade.chain.map((e) => e.toolName))]
+		return `Possible cascade detected across [${tools.join(", ")}]. Suggest pausing to evaluate.`
+	}
 
-		const uniqueTools = [...new Set(cascade.chain.map((e) => e.toolName))]
-
-		if (cascade.chain.some((e) => e.category === ErrorCategory.TOOL_NOT_FOUND)) {
-			return `⚠️ Cascade failure detected: ${cascade.chain.length} errors in ${uniqueTools.join(", ")}. Tool not available. Use alternative approach.`
+	// Hermes F3: Forward completed cascades to SemanticMemory for pattern learning
+	private async archiveCascadeToMemory(): Promise<void> {
+		if (!this.activeCascade || this.activeCascade.chain.length < 2) {
+			return
 		}
 
-		if (cascade.chain.some((e) => e.category === ErrorCategory.DIRECTORY_CONFUSION)) {
-			return `⚠️ Cascade failure detected: repeatedly trying to read directories as files. Use list_files first.`
-		}
+		try {
+			const semanticMemory = new SemanticMemory()
+			await semanticMemory.initialize()
+			const cascade = this.activeCascade
+			const rootCategory = cascade.rootError.category
+			const tools = [...new Set(cascade.chain.map((e) => e.toolName))]
+			const summary = cascade.chain
+				.map((e) => `${e.toolName}:${e.category}:${e.message.slice(0, 100)}`)
+				.join(" → ")
 
-		if (cascade.chain.some((e) => e.category === ErrorCategory.MODEL_THOUGHT_FAILURE)) {
-			return `⚠️ Cascade failure detected: model struggling. Break down the task into smaller steps.`
+			const now = Date.now()
+			await semanticMemory.store({
+				id: crypto.randomUUID(),
+				tier: MemoryTier.SEMANTIC,
+				type: "learned_pattern",
+				content: `Cascade detected: ${summary}`,
+				metadata: {
+					rootCategory,
+					tools,
+					chainLength: cascade.chain.length,
+					source: "CascadeTracker" as const,
+				},
+				confidence: cascade.chain.length / 10,
+				sourceAuthority: "execution" as const,
+				tags: ["error_cascade", rootCategory, ...tools],
+				createdAt: now,
+				lastAccessed: now,
+				accessCount: 1,
+				baseScore: 0.5,
+				tierDecayRate: 0.01,
+				contradictoryObservations: 0,
+				totalObservations: cascade.chain.length,
+				expiresAt: now + 7 * 24 * 60 * 60 * 1000, // 7 days
+			})
+		} catch (memoryError) {
+			console.warn("[Hermes F3] archiveCascadeToMemory failed:", memoryError)
 		}
-
-		if (cascade.chain.some((e) => e.category === ErrorCategory.FILE_NOT_FOUND)) {
-			return `⚠️ Cascade failure detected: ${cascade.chain.length} file-not-found errors. Verify paths before reading.`
-		}
-
-		return `⚠️ ${cascade.chain.length} consecutive errors detected. Consider changing approach.`
 	}
 
 	private pruneOldErrors(): void {

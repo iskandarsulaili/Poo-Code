@@ -6,6 +6,10 @@ import { type Mode, FileRestrictionError, getModeBySlug, getGroupName } from "..
 import { EXPERIMENT_IDS } from "../../shared/experiments"
 import { TOOL_GROUPS, ALWAYS_AVAILABLE_TOOLS, TOOL_ALIASES } from "../../shared/tools"
 
+// Hermes F6: Guardrails — cascade-detection-aware validation
+import { CascadeTracker } from "../../services/self-improving/CascadeTracker"
+import { ErrorClassifier, ErrorCategory } from "../../services/self-improving/ErrorClassifier"
+
 /**
  * Checks if a tool name is a valid, known tool.
  * Note: This does NOT check if the tool is allowed for a specific mode,
@@ -49,19 +53,34 @@ export function validateToolUse(
 		)
 	}
 
-	// Then check if the tool is allowed for the current mode
-	if (
-		!isToolAllowedForMode(
-			toolName,
-			mode,
-			customModes ?? [],
-			toolRequirements,
-			toolParams,
-			experiments,
-			includedTools,
-		)
-	) {
-		throw new Error(`Tool "${toolName}" is not allowed in ${mode} mode.`)
+	// Hermes F6: Guardrails — feed tool validation errors to CascadeTracker for pattern detection
+	try {
+		const cascadeTracker = new CascadeTracker()
+		const errorClassifier = new ErrorClassifier()
+		// Check if tool is allowed for the current mode
+		if (
+			!isToolAllowedForMode(
+				toolName,
+				mode,
+				customModes ?? [],
+				toolRequirements,
+				toolParams,
+				experiments,
+				includedTools,
+			)
+		) {
+			const category =
+				toolName === "edit_file" || toolName === "apply_diff"
+					? ErrorCategory.EDIT_CONFLICT
+					: ErrorCategory.TOOL_FAILURE
+			cascadeTracker.recordError(toolName, category, `Tool "${toolName}" is not allowed in ${mode} mode.`)
+			throw new Error(`Tool "${toolName}" is not allowed in ${mode} mode.`)
+		}
+	} catch (error) {
+		// Re-throw guardrail errors; swallow CascadeTracker failures
+		if (error instanceof Error) {
+			throw error
+		}
 	}
 }
 

@@ -16,6 +16,9 @@ import { GlobalFileNames } from "../../shared/globalFileNames"
 import { ensureSettingsDirectoryExists } from "../../utils/globalContext"
 import { t } from "../../i18n"
 
+// Hermes F9: ProfileStore for persistent profile configurations
+import { ProfileStore } from "../../services/profiles/ProfileStore"
+
 const ROOMODES_FILENAME = ".roomodes"
 
 // Type definitions for import/export functionality
@@ -59,6 +62,16 @@ export class CustomModesManager {
 		private readonly context: vscode.ExtensionContext,
 		private readonly onUpdate: () => Promise<void>,
 	) {
+		// Hermes F9: ProfileStore persistence bootstrap
+		setTimeout(async () => {
+			try {
+				const profileStore = new ProfileStore({ baseDir: this.context.globalStoragePath })
+				await profileStore.initialize()
+			} catch (profileError) {
+				console.warn("[Hermes F9] ProfileStore init failed:", profileError)
+			}
+		}, 0)
+
 		this.watchCustomModesFiles().catch((error) => {
 			console.error("[CustomModesManager] Failed to setup file watchers:", error)
 		})

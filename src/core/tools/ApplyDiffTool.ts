@@ -229,6 +229,39 @@ export class ApplyDiffTool extends BaseTool<"apply_diff"> {
 				await task.fileContextTracker.trackFileContext(relPath, "roo_edited" as RecordSource)
 			}
 
+			// Hermes F5: Post-write verification after successful diff
+			if (diffResult.success && absolutePath) {
+				setTimeout(async () => {
+					try {
+						const { PostWriteVerifier } = await import("../../services/verification/PostWriteVerifier")
+						const { SyntaxChecker } = await import("../../services/verification/SyntaxChecker")
+						const verifier = new PostWriteVerifier()
+						const syntaxChecker = new SyntaxChecker()
+						const fileExt = path.extname(absolutePath)
+						if (fileExt === ".ts" || fileExt === ".js" || fileExt === ".tsx" || fileExt === ".jsx") {
+							const fileContent = await fs.readFile(absolutePath, "utf-8")
+							const syntaxResult = await syntaxChecker.check(absolutePath, fileContent)
+							if (!syntaxResult.valid) {
+								console.warn(
+									`[Hermes F5] Syntax warning in ${relPath}: ${syntaxResult.errors?.[0]?.message}`,
+								)
+							}
+							const verifierResult = await verifier.verify({
+								filePath: absolutePath,
+								content: fileContent,
+							})
+							if (!verifierResult.success) {
+								const msg =
+									verifierResult.newErrors?.[0]?.message ?? verifierResult.warnings?.[0] ?? "unknown"
+								console.warn(`[Hermes F5] Verification warning in ${relPath}: ${msg}`)
+							}
+						}
+					} catch (vError) {
+						console.warn("[Hermes F5] Post-write verification failed:", vError)
+					}
+				}, 0)
+			}
+
 			// Used to determine if we should wait for busy terminal to update before sending api request
 			task.didEditFile = true
 			let partFailHint = ""

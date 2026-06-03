@@ -7,6 +7,10 @@ import crypto from "crypto"
 import { TodoItem, TodoStatus, todoStatusSchema } from "@roo-code/types"
 import { getLatestTodo } from "../../shared/todo"
 
+// Hermes F2: KanbanBoard persistence for structured task decomposition
+import { KanbanBoardManager } from "../../services/kanban/KanbanBoard"
+import { TaskDecomposer } from "../../services/kanban/TaskDecomposer"
+
 interface UpdateTodoListParams {
 	todos: string
 }
@@ -74,6 +78,34 @@ export class UpdateTodoListTool extends BaseTool<"update_todo_list"> {
 			}
 
 			await setTodoListForTask(task, normalizedTodos)
+
+			// Hermes F2: Persist todos via KanbanBoard
+			try {
+				const boardManager = new KanbanBoardManager()
+				boardManager.createBoard("todo-" + task.taskId)
+				const board = boardManager.getBoard("todo-" + task.taskId)
+				// Add each normalized todo as a card
+				for (const todo of normalizedTodos) {
+					boardManager.addCard(board.id, { title: todo.content, description: todo.status || "pending" })
+				}
+			} catch (boardError) {
+				// Non-blocking — log but continue with existing behavior
+				console.warn("[Hermes F2] KanbanBoard sync failed:", boardError)
+			}
+
+			// Hermes F2: Auto-decompose if user prompt contains task structure
+			try {
+				const decomposer = new TaskDecomposer(task.apiConfiguration)
+				const taskText = normalizedTodos.map((t) => t.content).join("\n")
+				if (taskText.length > 0 && normalizedTodos.length >= 2) {
+					decomposer.decompose(taskText).catch((decomposeError: Error) => {
+						console.warn("[Hermes F2] TaskDecomposer failed:", decomposeError)
+					})
+				}
+			} catch (decomposerError) {
+				// Non-blocking
+				console.warn("[Hermes F2] TaskDecomposer init failed:", decomposerError)
+			}
 
 			if (isTodoListChanged) {
 				const md = todoListToMarkdown(normalizedTodos)

@@ -14,6 +14,12 @@ import type {
 	TaskEventInfo,
 } from "./types"
 import type { AutoDetectedProfile, ProviderSettings } from "@roo-code/types"
+
+// Hermes F3: Memory integration — consolidation, episodic pattern forwarding
+import { MemoryManager } from "../memory/MemoryManager"
+import { EpisodicMemory } from "../memory/EpisodicMemory"
+import { SemanticMemory } from "../memory/SemanticMemory"
+import { ConfidenceScorer } from "../memory/ConfidenceScorer"
 import { experimentDefault } from "../../shared/experiments"
 import { LearningStore } from "./LearningStore"
 import { FeedbackCollector } from "./FeedbackCollector"
@@ -651,6 +657,54 @@ export class SelfImprovingManager {
 
 			if (report.transitions.length > 0) {
 				this.logger.appendLine(`[SelfImprovingManager] Curator cycle: ${report.transitions.length} transitions`)
+			}
+
+			// Hermes F3: Consolidate MemoryManager into LearningStore cycle
+			try {
+				const memoryManager = MemoryManager.getInstance()
+				await memoryManager.consolidate()
+			} catch (memoryError) {
+				this.logger.appendLine(
+					`[Hermes F3] MemoryManager consolidation failed: ${memoryError instanceof Error ? memoryError.message : String(memoryError)}`,
+				)
+			}
+
+			// Hermes F3: Forward error patterns from PreventionEngine to EpisodicMemory
+			try {
+				const episodicMemory = EpisodicMemory.getInstance()
+				const recentErrors = this.preventionEngine.getRecentErrorPatterns?.() ?? []
+				for (const errorPattern of recentErrors) {
+					episodicMemory.recordEpisode({
+						type: "error",
+						pattern: errorPattern.pattern,
+						context: errorPattern.context,
+						timestamp: Date.now(),
+						source: "PreventionEngine",
+					})
+				}
+			} catch (episodicError) {
+				this.logger.appendLine(
+					`[Hermes F3] EpisodicMemory forward failed: ${episodicError instanceof Error ? episodicError.message : String(episodicError)}`,
+				)
+			}
+
+			// Hermes F3: Apply ConfidenceScorer to existing learning entries
+			try {
+				const scorer = new ConfidenceScorer()
+				const state = this.runtime?.store
+				if (state) {
+					const patterns = state.getPatterns?.() ?? []
+					const scored = scorer.scoreEntries(patterns)
+					if (scored && scored.length > 0) {
+						this.logger.appendLine(
+							`[Hermes F3] ConfidenceScorer applied to ${scored.length} learning entries`,
+						)
+					}
+				}
+			} catch (scorerError) {
+				this.logger.appendLine(
+					`[Hermes F3] ConfidenceScorer failed: ${scorerError instanceof Error ? scorerError.message : String(scorerError)}`,
+				)
 			}
 
 			return report
