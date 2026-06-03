@@ -55,231 +55,40 @@ const PRIORITY_COLORS: Record<CardPriority, string> = {
 	critical: "var(--vscode-errorForeground)",
 }
 
-// ─── Sub-Components ───────────────────────────────────────────────────────
-
-interface CardProps {
-	card: KanbanCard
-	onStatusChange: (cardId: string, status: CardStatus) => void
-}
-
-const KanbanCardDisplay = React.memo(function KanbanCardDisplay({ card, onStatusChange }: CardProps) {
-	const handleDragStart = useCallback(
-		(e: React.DragEvent) => {
-			e.dataTransfer.setData("text/plain", card.id)
-			e.dataTransfer.effectAllowed = "move"
-		},
-		[card.id],
-	)
-
-	return (
-		<div
-			className="kanban-card"
-			draggable
-			onDragStart={handleDragStart}
-			style={{
-				background: "var(--vscode-sideBar-background)",
-				border: "1px solid var(--vscode-widget-border)",
-				borderRadius: "6px",
-				padding: "10px 12px",
-				marginBottom: "8px",
-				cursor: "grab",
-				transition: "box-shadow 0.15s ease",
-			}}>
-			<div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-				<span
-					style={{
-						display: "inline-flex",
-						alignItems: "center",
-						justifyContent: "center",
-						width: "20px",
-						height: "20px",
-						borderRadius: "4px",
-						fontSize: "11px",
-						fontWeight: 700,
-						color: "#fff",
-						background: PRIORITY_COLORS[card.priority],
-					}}>
-					{PRIORITY_LABELS[card.priority]}
-				</span>
-				<span style={{ fontWeight: 600, fontSize: "13px", lineHeight: "18px" }}>{card.title}</span>
-			</div>
-			{card.description && (
-				<p
-					style={{
-						margin: 0,
-						fontSize: "12px",
-						color: "var(--vscode-descriptionForeground)",
-						lineHeight: "16px",
-						display: "-webkit-box",
-						WebkitLineClamp: 2,
-						WebkitBoxOrient: "vertical",
-						overflow: "hidden",
-					}}>
-					{card.description}
-				</p>
-			)}
-			{card.labels && card.labels.length > 0 && (
-				<div style={{ display: "flex", gap: "4px", marginTop: "6px", flexWrap: "wrap" }}>
-					{card.labels.map((label) => (
-						<span
-							key={label}
-							style={{
-								fontSize: "10px",
-								padding: "1px 6px",
-								borderRadius: "3px",
-								background: "var(--vscode-badge-background)",
-								color: "var(--vscode-badge-foreground)",
-							}}>
-							{label}
-						</span>
-					))}
-				</div>
-			)}
-			{/* Status change buttons */}
-			<div style={{ display: "flex", gap: "4px", marginTop: "8px" }}>
-				{CARD_STATUS_FLOW.filter(
-					(s) =>
-						s !== card.status &&
-						!(s === "blocked" && card.status !== "todo" && card.status !== "in_progress"),
-				).map((targetStatus) => (
-					<button
-						key={targetStatus}
-						onClick={() => onStatusChange(card.id, targetStatus)}
-						title={`Move to ${targetStatus}`}
-						style={{
-							fontSize: "10px",
-							padding: "2px 6px",
-							borderRadius: "3px",
-							border: `1px solid ${STATUS_COLORS[targetStatus]}`,
-							background: "transparent",
-							color: STATUS_COLORS[targetStatus],
-							cursor: "pointer",
-						}}>
-						{targetStatus === "todo"
-							? "📋"
-							: targetStatus === "in_progress"
-								? "🔨"
-								: targetStatus === "in_review"
-									? "👁️"
-									: targetStatus === "done"
-										? "✅"
-										: "🚫"}
-					</button>
-				))}
-			</div>
-		</div>
-	)
-})
-
-interface ColumnProps {
-	status: CardStatus
-	cards: KanbanCard[]
-	onStatusChange: (cardId: string, status: CardStatus) => void
-	onDrop: (cardId: string, status: CardStatus) => void
-}
-
-const KanbanColumn = React.memo(function KanbanColumn({ status, cards, onStatusChange, onDrop }: ColumnProps) {
-	const { t } = useAppTranslation()
-
-	const handleDragOver = useCallback((e: React.DragEvent) => {
-		e.preventDefault()
-		e.dataTransfer.dropEffect = "move"
-	}, [])
-
-	const handleDrop = useCallback(
-		(e: React.DragEvent) => {
-			e.preventDefault()
-			const cardId = e.dataTransfer.getData("text/plain")
-			if (cardId) {
-				onDrop(cardId, status)
-			}
-		},
-		[status, onDrop],
-	)
-
-	const statusLabel = t(`kanban.status.${status}` as any, status as any)
-
-	return (
-		<div
-			className="kanban-column"
-			onDragOver={handleDragOver}
-			onDrop={handleDrop}
-			style={{
-				flex: 1,
-				minWidth: "220px",
-				maxWidth: "320px",
-				background: "var(--vscode-editor-background)",
-				borderRadius: "8px",
-				display: "flex",
-				flexDirection: "column",
-				maxHeight: "100%",
-			}}>
-			{/* Column header */}
-			<div
-				style={{
-					padding: "10px 12px",
-					fontWeight: 600,
-					fontSize: "13px",
-					borderBottom: `3px solid ${STATUS_COLORS[status]}`,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-				}}>
-				<span>{statusLabel}</span>
-				<span
-					style={{
-						fontSize: "11px",
-						color: "var(--vscode-descriptionForeground)",
-						background: "var(--vscode-badge-background)",
-						padding: "1px 7px",
-						borderRadius: "10px",
-					}}>
-					{cards.length}
-				</span>
-			</div>
-
-			{/* Card list */}
-			<div
-				style={{
-					flex: 1,
-					overflowY: "auto",
-					padding: "8px",
-				}}>
-				{cards.length === 0 ? (
-					<p
-						style={{
-							textAlign: "center",
-							color: "var(--vscode-descriptionForeground)",
-							fontSize: "12px",
-							padding: "20px 0",
-							margin: 0,
-						}}>
-						{status === "todo" ? "➕ Add a card..." : "—"}
-					</p>
-				) : (
-					cards.map((card) => <KanbanCardDisplay key={card.id} card={card} onStatusChange={onStatusChange} />)
-				)}
-			</div>
-		</div>
-	)
-})
-
-// ─── Main Board Component ─────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────
 
 interface KanbanBoardViewProps {
 	board: KanbanBoard
-	onBoardUpdate?: (board: KanbanBoard) => void
+	onCardStatusChange: (boardId: string, cardId: string, newStatus: CardStatus) => void
 }
 
-export function KanbanBoardView({ board, onBoardUpdate: _onBoardUpdate }: KanbanBoardViewProps) {
-	const [localBoard, setLocalBoard] = useState(board)
+// ─── Board Component ──────────────────────────────────────────────────────
+
+const KanbanBoardView: React.FC<KanbanBoardViewProps> = ({ board, onCardStatusChange }) => {
+	const { t } = useAppTranslation()
+	const [localBoard, setLocalBoard] = useState<KanbanBoard>(board)
 
 	useEffect(() => {
 		setLocalBoard(board)
 	}, [board])
 
-	const handleStatusChange = useCallback(
+	const cardsByStatus = useMemo(() => {
+		const grouped: Record<CardStatus, KanbanCard[]> = {
+			todo: [],
+			in_progress: [],
+			in_review: [],
+			done: [],
+			blocked: [],
+		}
+		for (const card of localBoard.cards) {
+			grouped[card.status].push(card)
+		}
+		return grouped
+	}, [localBoard.cards])
+
+	const handleCardStatusChange = useCallback(
 		(cardId: string, newStatus: CardStatus) => {
+			onCardStatusChange(localBoard.id, cardId, newStatus)
 			setLocalBoard((prev) => ({
 				...prev,
 				cards: prev.cards.map((c) =>
@@ -292,89 +101,191 @@ export function KanbanBoardView({ board, onBoardUpdate: _onBoardUpdate }: Kanban
 				boardId: board.id,
 				cardId,
 				status: newStatus,
-			})
+			} as any)
 		},
-		[board.id],
+		[board.id, localBoard.id, onCardStatusChange],
 	)
-
-	const handleDrop = useCallback(
-		(cardId: string, targetStatus: CardStatus) => {
-			handleStatusChange(cardId, targetStatus)
-		},
-		[handleStatusChange],
-	)
-
-	// Group cards by status
-	const columns = useMemo(() => {
-		const grouped: Record<CardStatus, KanbanCard[]> = {
-			todo: [],
-			in_progress: [],
-			in_review: [],
-			done: [],
-			blocked: [],
-		}
-		for (const card of localBoard.cards) {
-			if (grouped[card.status]) {
-				grouped[card.status].push(card)
-			} else {
-				grouped.todo.push(card)
-			}
-		}
-		return grouped
-	}, [localBoard.cards])
-
-	const { t } = useAppTranslation()
 
 	return (
-		<div className="kanban-board" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-			{/* Board header */}
-			<div
-				style={{
-					padding: "12px 16px",
-					borderBottom: "1px solid var(--vscode-widget-border)",
-				}}>
-				<h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>{localBoard.name}</h2>
-				{localBoard.description && (
-					<p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--vscode-descriptionForeground)" }}>
-						{localBoard.description}
-					</p>
-				)}
+		<div className="kanban-board">
+			<div className="kanban-board-header">
+				<h3>{localBoard.name}</h3>
+				{localBoard.description && <p>{localBoard.description}</p>}
 			</div>
-
-			{/* Columns */}
-			<div
-				style={{
-					flex: 1,
-					display: "flex",
-					gap: "12px",
-					padding: "12px",
-					overflowX: "auto",
-					overflowY: "hidden",
-				}}>
+			<div className="kanban-columns">
 				{CARD_STATUS_FLOW.map((status) => (
 					<KanbanColumn
 						key={status}
 						status={status}
-						cards={columns[status]}
-						onStatusChange={handleStatusChange}
-						onDrop={handleDrop}
+						t={t}
+						cards={cardsByStatus[status]}
+						onCardStatusChange={handleCardStatusChange}
 					/>
 				))}
 			</div>
-
-			{/* Footer */}
 			<div
 				style={{
-					padding: "8px 16px",
-					borderTop: "1px solid var(--vscode-widget-border)",
+					marginTop: "8px",
 					fontSize: "11px",
 					color: "var(--vscode-descriptionForeground)",
 					display: "flex",
 					justifyContent: "space-between",
 				}}>
-				<span>{t("kanban.totalCards", `${localBoard.cards.length} cards`)}</span>
-				<span>{t("kanban.lastUpdated", `Updated ${new Date(localBoard.updatedAt).toLocaleString()}`)}</span>
+				<span>{t("kanban.totalCards", { count: localBoard.cards.length })}</span>
+				<span>{t("kanban.lastUpdated", { time: new Date(localBoard.updatedAt).toLocaleString() })}</span>
 			</div>
 		</div>
 	)
 }
+
+// ─── Column Component ─────────────────────────────────────────────────────
+
+interface KanbanColumnProps {
+	status: CardStatus
+	t: (key: string, options?: Record<string, any>) => string
+	cards: KanbanCard[]
+	onCardStatusChange: (cardId: string, newStatus: CardStatus) => void
+}
+
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ status, t, cards, onCardStatusChange }) => {
+	const handleDragOver = useCallback((e: React.DragEvent) => {
+		e.preventDefault()
+		e.dataTransfer.dropEffect = "move"
+	}, [])
+
+	const handleDrop = useCallback(
+		(e: React.DragEvent) => {
+			e.preventDefault()
+			const cardId = e.dataTransfer.getData("text/plain")
+			if (cardId) {
+				onCardStatusChange(cardId, status)
+			}
+		},
+		[status, onCardStatusChange],
+	)
+
+	const statusLabel = t(`kanban.status.${status}`)
+
+	return (
+		<div
+			className="kanban-column"
+			onDragOver={handleDragOver}
+			onDrop={handleDrop}
+			style={{
+				flex: 1,
+				minWidth: "220px",
+				backgroundColor: "var(--vscode-editor-background)",
+				borderRadius: "6px",
+				padding: "8px",
+			}}>
+			<div
+				style={{
+					fontWeight: 600,
+					fontSize: "12px",
+					textTransform: "uppercase",
+					color: STATUS_COLORS[status],
+					marginBottom: "8px",
+					padding: "4px 8px",
+				}}>
+				{statusLabel} ({cards.length})
+			</div>
+			<div className="kanban-cards">
+				{cards.map((card) => (
+					<KanbanCardComponent key={card.id} card={card} onStatusChange={onCardStatusChange} />
+				))}
+			</div>
+		</div>
+	)
+}
+
+// ─── Card Component ───────────────────────────────────────────────────────
+
+interface KanbanCardComponentProps {
+	card: KanbanCard
+	onStatusChange: (cardId: string, newStatus: CardStatus) => void
+}
+
+const KanbanCardComponent: React.FC<KanbanCardComponentProps> = ({ card, onStatusChange }) => {
+	const handleDragStart = useCallback(
+		(e: React.DragEvent) => {
+			e.dataTransfer.setData("text/plain", card.id)
+			e.dataTransfer.effectAllowed = "move"
+		},
+		[card.id],
+	)
+
+	const nextStatus = useMemo(() => {
+		const idx = CARD_STATUS_FLOW.indexOf(card.status)
+		if (idx >= 0 && idx < CARD_STATUS_FLOW.length - 1) {
+			return CARD_STATUS_FLOW[idx + 1]
+		}
+		return null
+	}, [card.status])
+
+	const handleAdvance = useCallback(() => {
+		if (nextStatus) {
+			onStatusChange(card.id, nextStatus)
+		}
+	}, [card.id, nextStatus, onStatusChange])
+
+	return (
+		<div
+			className="kanban-card"
+			draggable
+			onDragStart={handleDragStart}
+			style={{
+				backgroundColor: "var(--vscode-sideBar-background)",
+				borderRadius: "4px",
+				padding: "8px",
+				marginBottom: "6px",
+				cursor: "grab",
+				border: "1px solid var(--vscode-widget-border)",
+			}}>
+			<div style={{ fontWeight: 500, fontSize: "13px", marginBottom: "4px" }}>{card.title}</div>
+			{card.description && (
+				<div
+					style={{
+						fontSize: "11px",
+						color: "var(--vscode-descriptionForeground)",
+						marginBottom: "4px",
+						overflow: "hidden",
+						textOverflow: "ellipsis",
+						whiteSpace: "nowrap",
+					}}>
+					{card.description}
+				</div>
+			)}
+			<div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+				<span
+					style={{
+						fontSize: "10px",
+						fontWeight: 700,
+						color: PRIORITY_COLORS[card.priority],
+						backgroundColor: "var(--vscode-badge-background)",
+						padding: "1px 4px",
+						borderRadius: "3px",
+					}}>
+					{PRIORITY_LABELS[card.priority]}
+				</span>
+				{nextStatus && (
+					<button
+						onClick={handleAdvance}
+						style={{
+							fontSize: "10px",
+							padding: "1px 6px",
+							cursor: "pointer",
+							border: "1px solid var(--vscode-button-border, transparent)",
+							borderRadius: "3px",
+							backgroundColor: "var(--vscode-button-background)",
+							color: "var(--vscode-button-foreground)",
+							marginLeft: "auto",
+						}}>
+						Advance
+					</button>
+				)}
+			</div>
+		</div>
+	)
+}
+
+export default KanbanBoardView
