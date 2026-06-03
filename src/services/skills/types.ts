@@ -5,7 +5,6 @@
  * Supports skill composition, dependency resolution, and platform filtering.
  */
 
-import type { SkillMetadata } from "@zoodotdev/types"
 
 /**
  * Composition mode — how skills are chained together.
@@ -139,7 +138,9 @@ export interface NodeVersionConstraint {
 /**
  * Extended skill metadata including composition and dep info.
  */
-export interface EnhancedSkillMeta extends SkillMetadata {
+export interface EnhancedSkillMeta {
+	/** Skill name */
+	name: string
 	/** Skill version */
 	version: string
 	/** Category path (e.g., "testing/unit") */

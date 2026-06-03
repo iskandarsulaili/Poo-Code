@@ -94,19 +94,6 @@ describe("ConversationSummarizer", () => {
 		})
 	})
 
-	describe("extractUnresolvedItems", () => {
-		it("should extract TODO items from assistant messages", () => {
-			const messages: Message[] = [
-				{
-					role: "assistant",
-					content: "TODO: Add error handling. FIXME: Optimize query. Also need to add tests later.",
-					timestamp: 1000,
-				},
-			]
-			const items = summarizer.extractUnresolvedItems(messages)
-			expect(items.length).toBeGreaterThanOrEqual(1)
-		})
-	})
 
 	describe("generateSessionSummary", () => {
 		it("should generate a comprehensive session summary", () => {

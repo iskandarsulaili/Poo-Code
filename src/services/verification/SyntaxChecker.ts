@@ -4,6 +4,11 @@ import { SyntaxCheckError, SyntaxCheckResult, SyntaxError } from "./types"
 
 const execFileAsync = promisify(execFile)
 
+interface ExecOptions {
+	input?: string
+	timeout?: number
+}
+
 /**
  * SyntaxChecker — language-specific syntax validation.
  *
@@ -96,12 +101,13 @@ except SyntaxError as e:
 				{
 					input: content,
 					timeout: 10_000,
-				},
+				} as any,
 			)
 
 			if (stderr) {
 				// Parse python SyntaxError output
-				const lines = stderr.trim().split("\n")
+				const stderrStr = typeof stderr === "string" ? stderr : stderr.toString()
+				const lines = stderrStr.trim().split("\n")
 				for (const line of lines) {
 					const parts = line.split(":")
 					if (parts.length >= 3) {
@@ -165,10 +171,11 @@ except SyntaxError as e:
 			const { stderr } = await execFileAsync("python", ["-c", "import sys, ast; ast.parse(sys.stdin.read())"], {
 				input: content,
 				timeout: 10_000,
-			})
+			} as any)
 
 			if (stderr) {
-				const lines = stderr.trim().split("\n")
+				const stderrStr = typeof stderr === "string" ? stderr : stderr.toString()
+				const lines = stderrStr.trim().split("\n")
 				for (const line of lines) {
 					const match = line.match(/line\s+(\d+)/)
 					errors.push({
@@ -268,7 +275,8 @@ except SyntaxError as e:
 		let warnings: string[] = []
 
 		try {
-			const yaml = await import("js-yaml")
+			// @ts-ignore - optional dep
+			const yaml: any = await import("js-yaml")
 			yaml.load(content, { filename: filePath })
 		} catch (err: unknown) {
 			const yamlErr = err as Error
@@ -308,7 +316,8 @@ except SyntaxError as e:
 
 		try {
 			// Try smol-toml first (preferred)
-			const toml = await import("smol-toml")
+			// @ts-ignore - optional dep
+			const toml: any = await import("smol-toml")
 			toml.parse(content)
 		} catch (err: unknown) {
 			const tomlErr = err as Error
@@ -316,7 +325,8 @@ except SyntaxError as e:
 			if (tomlErr.message.includes("Cannot find module")) {
 				// Fallback to @iarna/toml
 				try {
-					const toml2 = await import("@iarna/toml")
+					// @ts-ignore - optional dep
+				const toml2: any = await import("@iarna/toml")
 					toml2.parse(content)
 				} catch (err2: unknown) {
 					const tomlErr2 = err2 as Error

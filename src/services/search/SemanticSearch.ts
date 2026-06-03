@@ -10,7 +10,7 @@ import { IndexEntry, SearchFilters, SearchQuery, SearchResult, SearchMode, Seman
  * In hybrid mode, combines FTS score with semantic score.
  */
 export class SemanticSearch {
-	private index: Map<string, { text: string; embedding: number[]; metadata: IndexEntry }> = new Map()
+	private _index: Map<string, { text: string; embedding: number[]; metadata: IndexEntry }> = new Map()
 	private initialized = false
 	private idfCache: Map<string, number> = new Map()
 	private documentCount = 0
@@ -40,7 +40,7 @@ export class SemanticSearch {
 	async index(text: string, metadata: IndexEntry): Promise<void> {
 		const embedding = await this.embed(text)
 		const id = `${metadata.sessionId}:${Date.now()}`
-		this.index.set(id, { text, embedding, metadata })
+		this._index.set(id, { text, embedding, metadata })
 		this.documentCount++
 
 		// Update IDF cache with new tokens
@@ -61,7 +61,7 @@ export class SemanticSearch {
 
 		const scored: Array<{ result: SearchResult; score: number }> = []
 
-		for (const [, entry] of this.index.entries()) {
+		for (const [, entry] of this._index.entries()) {
 			const similarity = this.cosineSimilarity(queryEmbedding, entry.embedding)
 
 			if (similarity < 0.05) continue // Relevance floor
@@ -98,13 +98,13 @@ export class SemanticSearch {
 	 */
 	async remove(sessionId: string): Promise<void> {
 		const toDelete: string[] = []
-		for (const [id, entry] of this.index.entries()) {
+		for (const [id, entry] of this._index.entries()) {
 			if (entry.metadata.sessionId === sessionId) {
 				toDelete.push(id)
 			}
 		}
 		for (const id of toDelete) {
-			this.index.delete(id)
+			this._index.delete(id)
 			this.documentCount--
 		}
 	}
@@ -120,14 +120,14 @@ export class SemanticSearch {
 	 * Count indexed documents.
 	 */
 	async count(): Promise<number> {
-		return this.index.size
+		return this._index.size
 	}
 
 	/**
 	 * Shutdown.
 	 */
 	async shutdown(): Promise<void> {
-		this.index.clear()
+		this._index.clear()
 		this.idfCache.clear()
 		this.documentCount = 0
 		this.initialized = false

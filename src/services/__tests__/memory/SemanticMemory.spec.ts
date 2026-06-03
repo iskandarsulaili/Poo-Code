@@ -17,13 +17,13 @@ describe("SemanticMemory", () => {
 				evidenceCount: 10,
 				confidence: 0.85,
 				lastReinforced: Date.now(),
-				category: "ux_preference",
+				category: "preference",
 				metadata: {},
 			})
 			expect(stored.id).toBeDefined()
 			expect(stored.description).toBe("Users prefer dark mode")
 
-			const results = await memory.queryPatterns({ category: "ux_preference" })
+			const results = await memory.queryPatterns({ category: "preference" })
 			expect(results.length).toBeGreaterThanOrEqual(1)
 			expect(results[0].description).toContain("dark mode")
 		})
@@ -81,7 +81,7 @@ describe("SemanticMemory", () => {
 				evidenceCount: 3,
 				confidence: 0.6,
 				lastReinforced: Date.now(),
-				category: "code_pattern",
+				category: "learned_skill",
 				metadata: {},
 			})
 
@@ -90,7 +90,7 @@ describe("SemanticMemory", () => {
 				evidenceCount: 5,
 				confidence: 0.8,
 				lastReinforced: Date.now(),
-				category: "code_pattern",
+				category: "learned_skill",
 				metadata: {},
 			})
 

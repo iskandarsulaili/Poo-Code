@@ -278,7 +278,7 @@ export class PatchParser {
 	/**
 	 * Validate a single operation structure.
 	 */
-	private validateOperation(op: Record<string, unknown>, index: number): asserts op is PatchOperation {
+	private validateOperation(op: Record<string, unknown>, index: number): void {
 		if (!op || typeof op !== "object") {
 			throw new PatcherError(`Operation ${index} must be an object`, "INVALID_PATCH_FORMAT")
 		}

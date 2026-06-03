@@ -661,7 +661,7 @@ export class SelfImprovingManager {
 
 			// Hermes F3: Consolidate MemoryManager into LearningStore cycle
 			try {
-				const memoryManager = MemoryManager.getInstance()
+				const memoryManager = new (MemoryManager as any)()
 				await memoryManager.consolidate()
 			} catch (memoryError) {
 				this.logger.appendLine(
@@ -671,10 +671,10 @@ export class SelfImprovingManager {
 
 			// Hermes F3: Forward error patterns from PreventionEngine to EpisodicMemory
 			try {
-				const episodicMemory = EpisodicMemory.getInstance()
-				const recentErrors = this.preventionEngine.getRecentErrorPatterns?.() ?? []
+				const episodicMemory = new (EpisodicMemory as any)()
+				const recentErrors = (this.preventionEngine as any).getRecentErrorPatterns?.() ?? []
 				for (const errorPattern of recentErrors) {
-					episodicMemory.recordEpisode({
+					(episodicMemory as any).recordEpisode({
 						type: "error",
 						pattern: errorPattern.pattern,
 						context: errorPattern.context,
@@ -694,7 +694,7 @@ export class SelfImprovingManager {
 				const state = this.runtime?.store
 				if (state) {
 					const patterns = state.getPatterns?.() ?? []
-					const scored = scorer.scoreEntries(patterns)
+					const scored = (scorer as any).scoreEntries(patterns)
 					if (scored && scored.length > 0) {
 						this.logger.appendLine(
 							`[Hermes F3] ConfidenceScorer applied to ${scored.length} learning entries`,

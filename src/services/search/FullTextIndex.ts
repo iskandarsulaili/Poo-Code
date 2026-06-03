@@ -11,7 +11,7 @@ import { FullTextError, IndexEntry, SearchFilters, SearchQuery, SearchResult, Se
  * Falls back to in-memory Map-based index when better-sqlite3 is unavailable.
  */
 export class FullTextIndex {
-	private db: import("better-sqlite3").Database | null = null
+	private db: any = null
 	private memoryIndex: Map<string, { content: string; metadata: IndexEntry }> = new Map()
 	private initialized = false
 	private dbPath: string
@@ -300,8 +300,10 @@ export class FullTextIndex {
 	/**
 	 * Dynamic import of better-sqlite3 (avoids hard dependency at module level).
 	 */
-	private async loadBetterSqlite3(): Promise<typeof import("better-sqlite3")> {
+	private async loadBetterSqlite3(): Promise<any> {
 		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			// @ts-ignore - optional dep, caught in try-catch
 			return await import("better-sqlite3")
 		} catch {
 			throw new Error("better-sqlite3 not available")
