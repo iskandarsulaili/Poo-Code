@@ -299,6 +299,8 @@ export class ClineProvider
 					mandatory: true,
 					gateTimeoutMs: experiments.verificationTimeoutMs ?? 120_000,
 				},
+				true,
+				apiConfiguration ?? undefined,
 			)
 			// Auto-detection and cwd are applied lazily in AttemptCompletionTool.execute()
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)

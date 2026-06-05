@@ -14,6 +14,7 @@ function escapeXml(value: string): string {
 /**
  * Generate the skills section for the system prompt.
  * Only includes skills relevant to the current mode.
+ * Skills are grouped by category with rich metadata (version, author, tags, related skills).
  * Format matches the modes section style.
  *
  * @param skillsManager - The SkillsManager instance
@@ -29,77 +30,70 @@ export async function getSkillsSection(
 	const skills = skillsManager.getSkillsForMode(currentMode)
 	if (skills.length === 0) return ""
 
-	const skillsXml = skills
-		.map((skill) => {
+	// Group skills by category
+	const byCategory = new Map<string, typeof skills>()
+	for (const skill of skills) {
+		const cat = skill.category || "general"
+		if (!byCategory.has(cat)) byCategory.set(cat, [])
+		byCategory.get(cat)!.push(skill)
+	}
+
+	// Build categorized skill entries
+	const skillEntries: string[] = []
+	for (const [category, catSkills] of byCategory) {
+		skillEntries.push(`  <category name="${escapeXml(category)}">`)
+		for (const skill of catSkills) {
 			const name = escapeXml(skill.name)
 			const description = escapeXml(skill.description)
 			const locationLine = `\n    <location>${escapeXml(skill.path)}</location>`
-			return `  <skill>\n    <name>${name}</name>\n    <description>${description}</description>${locationLine}\n  </skill>`
-		})
-		.join("\n")
+
+			// Optional rich metadata
+			let metaLines = ""
+			if (skill.version) metaLines += `\n    <version>${escapeXml(skill.version)}</version>`
+			if (skill.author) metaLines += `\n    <author>${escapeXml(skill.author)}</author>`
+			if (skill.tags && skill.tags.length > 0)
+				metaLines += `\n    <tags>${skill.tags.map((t: string) => escapeXml(t)).join(", ")}</tags>`
+			if (skill.relatedSkills && skill.relatedSkills.length > 0)
+				metaLines += `\n    <related_skills>${skill.relatedSkills.map((r: string) => escapeXml(r)).join(", ")}</related_skills>`
+
+			skillEntries.push(
+				`  <skill>\n    <name>${name}</name>\n    <description>${description}</description>${locationLine}${metaLines}\n  </skill>`,
+			)
+		}
+		skillEntries.push(`  </category>`)
+	}
 
 	return `====
 
 AVAILABLE SKILLS
 
 <available_skills>
-${skillsXml}
+${skillEntries.join("\n")}
 </available_skills>
 
-<mandatory_skill_check>
-REQUIRED PRECONDITION
+AUTOMATIC SKILL MANAGEMENT
 
-Before producing ANY user-facing response, you MUST perform a skill applicability check.
+You have a "skill_manage" tool available to create, update, patch, merge, or delete skills directly.
 
-Step 1: Skill Evaluation
-- Evaluate the user's request against ALL available skill <description> entries in <available_skills>.
-- Determine whether at least one skill clearly and unambiguously applies.
+WHEN TO CREATE A SKILL:
+- You solved a complex task (5+ tool calls) with a reusable approach
+- You discovered a non-trivial workflow, overcame a tricky error, or were corrected
+- The user says "save that as a skill" or "remember how to do X"
 
-Step 2: Branching Decision
+WHEN TO PATCH A SKILL:
+- You loaded a skill and found outdated steps, wrong commands, or missing edge cases
+- The user corrected your style, format, or approach
+- Install/workflow failures that the skill didn't cover
 
-<if_skill_applies>
-- Select EXACTLY ONE skill.
-- Prefer the most specific skill when multiple skills match.
-- Use the skill tool to load the skill by name.
-- Load the skill's instructions fully into context BEFORE continuing.
-- Follow the skill instructions precisely.
-- Do NOT respond outside the skill-defined flow.
-</if_skill_applies>
+WHEN TO MERGE SKILLS:
+- Two skills overlap significantly and should be consolidated
+- A skill is too narrow and belongs inside a broader umbrella skill
 
-<if_no_skill_applies>
-- Proceed with a normal response.
-- Do NOT load any SKILL.md files.
-</if_no_skill_applies>
+Use skill_manage action="list" to see all available skills grouped by category.
+Use skill_manage action="create" to save a new skill with rich metadata (name, description, category, version, author, tags, relatedSkills).
+Use skill_manage action="patch" with old_string+new_string for targeted edits to a skill's SKILL.md.
+Use skill_manage action="edit" with full content for major rewrites.
+Use skill_manage action="merge" with target+absorb to consolidate overlapping skills.
 
-CONSTRAINTS:
-- Do NOT load every skill up front.
-- Load skills ONLY after a skill is selected.
-- Do NOT reload a skill whose instructions already appear in this conversation.
-- Do NOT skip this check.
-- FAILURE to perform this check is an error.
-</mandatory_skill_check>
-
-<linked_file_handling>
-- When a skill is loaded, ONLY the skill instructions are present.
-- Files linked from the skill are NOT loaded automatically.
-- The model MUST explicitly decide to read a linked file based on task relevance.
-- Do NOT assume the contents of linked files unless they have been explicitly read.
-- Prefer reading the minimum necessary linked file.
-- Avoid reading multiple linked files unless required.
-- Treat linked files as progressive disclosure, not mandatory context.
-</linked_file_handling>
-
-<context_notes>
-- The skill list is already filtered for the current mode: "${currentMode}".
-- Mode-specific skills may come from skills-${currentMode}/ with project-level overrides taking precedence over global skills.
-</context_notes>
-
-<internal_verification>
-This section is for internal control only.
-Do NOT include this section in user-facing output.
-
-After completing the evaluation, internally confirm:
-<skill_check_completed>true|false</skill_check_completed>
-</internal_verification>
-`
+After difficult/iterative tasks, offer to save the approach as a skill. Skills accumulate over time, making the agent better at your specific tasks and environment.`
 }

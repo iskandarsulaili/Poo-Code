@@ -33,6 +33,7 @@ import { newTaskTool } from "../tools/NewTaskTool"
 import { updateTodoListTool } from "../tools/UpdateTodoListTool"
 import { runSlashCommandTool } from "../tools/RunSlashCommandTool"
 import { skillTool } from "../tools/SkillTool"
+import { skillManageTool } from "../tools/SkillManageTool"
 import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
@@ -879,6 +880,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "skill":
 					await skillTool.handle(cline, block as ToolUse<"skill">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "skill_manage":
+					await skillManageTool.handle(cline, block as ToolUse<"skill_manage">, {
 						askApproval,
 						handleError,
 						pushToolResult,

@@ -53,6 +53,21 @@ export const toolParamNames = [
 	"query",
 	"args",
 	"skill", // skill tool parameter
+	"action", // skill_manage actions
+	"target", // skill_merge target
+	"absorb", // skills to absorb
+	"old_string", // skill_manage patch
+	"new_string", // skill_manage patch
+	"replace_all", // skill_manage patch
+	"description", // skill_manage create
+	"source", // skill_manage create
+	"category", // skill_manage category
+	"version", // skill_manage version
+	"author", // skill_manage author
+	"tags", // skill_manage tags
+	"relatedSkills", // skill_manage related skills
+	"name", // skill_manage name param
+	"mode_slugs", // skill_manage mode slugs
 	"start_line",
 	"end_line",
 	"todos",
@@ -111,6 +126,24 @@ export type NativeToolArgs = {
 	generate_image: GenerateImageParams
 	run_slash_command: { command: string; args?: string }
 	skill: { skill: string; args?: string }
+	skill_manage: {
+		action: "create" | "patch" | "edit" | "delete" | "merge" | "list"
+		name: string
+		description?: string
+		content?: string
+		source?: "global" | "project"
+		mode_slugs?: string[]
+		category?: string
+		version?: string
+		author?: string
+		tags?: string[]
+		related_skills?: string[]
+		old_string?: string
+		new_string?: string
+		replace_all?: boolean
+		target?: string // merge target
+		absorb?: string[] // skills to absorb into target
+	}
 	search_files: { path: string; regex: string; file_pattern?: string | null }
 	switch_mode: { mode_slug: string; reason: string }
 	update_todo_list: { todos: string }
@@ -253,6 +286,31 @@ export interface SkillToolUse extends ToolUse<"skill"> {
 	params: Partial<Pick<Record<ToolParamName, string>, "skill" | "args">>
 }
 
+export interface SkillManageToolUse extends ToolUse<"skill_manage"> {
+	name: "skill_manage"
+	params: Partial<
+		Pick<
+			Record<ToolParamName, string>,
+			| "action"
+			| "name"
+			| "description"
+			| "content"
+			| "source"
+			| "mode_slugs"
+			| "category"
+			| "version"
+			| "author"
+			| "tags"
+			| "relatedSkills"
+			| "old_string"
+			| "new_string"
+			| "replace_all"
+			| "target"
+			| "absorb"
+		>
+	>
+}
+
 export interface GenerateImageToolUse extends ToolUse<"generate_image"> {
 	name: "generate_image"
 	params: Partial<Pick<Record<ToolParamName, string>, "prompt" | "path" | "image">>
@@ -288,6 +346,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	update_todo_list: "update todo list",
 	run_slash_command: "run slash command",
 	skill: "load skill",
+	skill_manage: "manage skills (create/patch/edit/delete/merge)",
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
 } as const
@@ -322,6 +381,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"update_todo_list",
 	"run_slash_command",
 	"skill",
+	"skill_manage",
 ] as const
 
 /**

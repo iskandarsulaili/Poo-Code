@@ -2585,6 +2585,44 @@ Choose an alternative approach now.]`
 					),
 				)
 
+				// Attempt autonomous recovery via ResilienceService before asking the user
+				try {
+					const recoveryResult = await this.resilienceService?.attemptRecovery?.(
+						"Zoo is having trouble with consecutive mistakes",
+						{
+							consecutiveMistakeCount: this.consecutiveMistakeCount,
+							taskId: this.taskId,
+						},
+					)
+
+					if (recoveryResult?.recovered && recoveryResult?.correctionPrompt) {
+						// Autonomous recovery generated a correction prompt — inject it as user message
+						currentUserContent.push({
+							type: "text" as const,
+							text: recoveryResult.correctionPrompt,
+						})
+						await this.say("user_feedback", recoveryResult.correctionPrompt)
+
+						console.log(
+							`[Task] Autonomous recovery injected correction prompt (mistakes: ${this.consecutiveMistakeCount})`,
+						)
+						this.consecutiveMistakeCount = 0
+						continue // Retry the API request with the correction prompt
+					}
+
+					if (recoveryResult?.recovered && recoveryResult?.delay !== undefined) {
+						// Backoff delay already applied inside attemptRecovery — just retry
+						this.consecutiveMistakeCount = 0
+						continue
+					}
+				} catch (recoveryError) {
+					console.log(
+						`[Task] Autonomous recovery threw: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+					)
+					// Fall through to ask the user
+				}
+
+				// Fallback: ask the user for guidance
 				const { response, text, images } = await this.ask(
 					"mistake_limit_reached",
 					t("common:errors.mistake_limit_guidance"),
@@ -3806,6 +3844,59 @@ Choose an alternative approach now.]`
 							// Remove the last user message that we added earlier
 							this.apiConversationHistory.pop()
 						}
+					}
+
+					// Attempt autonomous recovery via ResilienceService before falling back
+					try {
+						const recoveryResult = await this.resilienceService?.attemptRecovery?.(
+							"The language model returned no assistant messages (empty response)",
+							{
+								consecutiveMistakeCount: this.consecutiveNoAssistantMessagesCount,
+								taskId: this.taskId,
+							},
+						)
+
+						if (recoveryResult?.recovered && recoveryResult?.correctionPrompt) {
+							// Autonomous recovery generated a correction prompt — inject it and retry
+							console.log(
+								`[Task] Autonomous recovery injected correction prompt for empty response (attempt ${this.consecutiveNoAssistantMessagesCount})`,
+							)
+
+							// Reset the counter since we're taking corrective action
+							this.consecutiveNoAssistantMessagesCount = 0
+
+							// Push the correction prompt as user content for the retry
+							stack.push({
+								userContent: [
+									...currentUserContent,
+									{ type: "text" as const, text: recoveryResult.correctionPrompt },
+								],
+								includeFileDetails: false,
+								retryAttempt: (currentItem.retryAttempt ?? 0) + 1,
+								userMessageWasRemoved: true,
+							})
+
+							continue
+						}
+
+						if (recoveryResult?.recovered && recoveryResult?.delay !== undefined) {
+							// Backoff delay already applied inside attemptRecovery — retry
+							console.log(`[Task] Autonomous recovery applied backoff delay for empty response`)
+
+							stack.push({
+								userContent: currentUserContent,
+								includeFileDetails: false,
+								retryAttempt: (currentItem.retryAttempt ?? 0) + 1,
+								userMessageWasRemoved: true,
+							})
+
+							continue
+						}
+					} catch (recoveryError) {
+						console.log(
+							`[Task] Autonomous recovery threw during empty response: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+						)
+						// Fall through to existing behavior
 					}
 
 					// Check if we should auto-retry or prompt the user

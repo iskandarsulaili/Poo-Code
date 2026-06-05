@@ -124,6 +124,53 @@ const mockFs = {
 		return Promise.resolve()
 	}),
 
+	readdir: vi.fn().mockImplementation(async (dirPath: string) => {
+		const entries: string[] = []
+
+		// Add files belonging to this directory
+		for (const filePath of mockFiles.keys()) {
+			const lastSep = filePath.lastIndexOf("/")
+			const dir = lastSep >= 0 ? filePath.substring(0, lastSep) : ""
+			if (dir === dirPath) {
+				entries.push(filePath.substring(lastSep + 1))
+			}
+		}
+
+		// Add subdirectories belonging to this directory
+		for (const dir of mockDirectories) {
+			if (dir === dirPath) continue
+			const lastSep = dir.lastIndexOf("/")
+			const parentDir = lastSep >= 0 ? dir.substring(0, lastSep) : ""
+			if (parentDir === dirPath) {
+				entries.push(dir.substring(lastSep + 1))
+			}
+		}
+
+		return entries
+	}),
+
+	stat: vi.fn().mockImplementation(async (path: string) => {
+		const isDir = mockDirectories.has(path)
+		const isFile = mockFiles.has(path)
+
+		if (isDir) {
+			return {
+				isDirectory: () => true,
+				isFile: () => false,
+			}
+		}
+		if (isFile) {
+			return {
+				isDirectory: () => false,
+				isFile: () => true,
+			}
+		}
+
+		const error = new Error(`ENOENT: no such file or directory, stat '${path}'`)
+		;(error as any).code = "ENOENT"
+		throw error
+	}),
+
 	access: vi.fn().mockImplementation(async (path: string) => {
 		// Check if the path exists in either files or directories
 		if (mockFiles.has(path) || mockDirectories.has(path) || path.startsWith("/test")) {

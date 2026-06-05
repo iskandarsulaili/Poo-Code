@@ -141,8 +141,23 @@ export class SkillsManager {
 				const stats = await fs.stat(entryPath).catch(() => null)
 				if (!stats?.isDirectory()) continue
 
-				// Load skill metadata - the skill name comes from the entry name (symlink name if symlinked)
-				await this.loadSkillMetadata(entryPath, source, mode, entryName)
+				// Check if this entry is a category directory (has SKILL.md-less sub-directories)
+				// or a skill directory (directly contains SKILL.md)
+				const hasDirectSkillMd = await fileExists(path.join(entryPath, "SKILL.md"))
+				if (hasDirectSkillMd) {
+					// Direct skill directory
+					await this.loadSkillMetadata(entryPath, source, mode, entryName)
+				} else {
+					// Category directory — scan one level deeper
+					const subEntries = await fs.readdir(entryPath).catch(() => [])
+					for (const subEntryName of subEntries) {
+						const subEntryPath = path.join(entryPath, subEntryName)
+						const subStats = await fs.stat(subEntryPath).catch(() => null)
+						if (!subStats?.isDirectory()) continue
+
+						await this.loadSkillMetadata(subEntryPath, source, mode, subEntryName)
+					}
+				}
 			}
 		} catch {
 			// Directory doesn't exist or can't be read - this is fine
@@ -236,6 +251,16 @@ export class SkillsManager {
 				source,
 				mode: primaryMode, // Deprecated: kept for backward compatibility
 				modeSlugs, // New: array of mode slugs, undefined = any mode
+				// Rich frontmatter support
+				category: typeof frontmatter.category === "string" ? frontmatter.category : undefined,
+				version: typeof frontmatter.version === "string" ? frontmatter.version : undefined,
+				author: typeof frontmatter.author === "string" ? frontmatter.author : undefined,
+				tags: Array.isArray(frontmatter.tags)
+					? frontmatter.tags.filter((t: unknown) => typeof t === "string")
+					: undefined,
+				relatedSkills: Array.isArray(frontmatter.related_skills)
+					? frontmatter.related_skills.filter((r: unknown) => typeof r === "string")
+					: undefined,
 			})
 		} catch (error) {
 			console.error(`Failed to load skill at ${skillDir}:`, error)
@@ -508,6 +533,7 @@ Add your skill instructions here.
 		description: string,
 		content: string,
 		modeSlugs?: string[],
+		category?: string,
 	): Promise<string> {
 		// Validate skill name
 		const validation = this.validateSkillName(name)
@@ -539,7 +565,7 @@ Add your skill instructions here.
 		}
 
 		const skillsDir = path.join(baseDir, "skills")
-		const skillDir = path.join(skillsDir, name)
+		const skillDir = category ? path.join(skillsDir, category, name) : path.join(skillsDir, name)
 		const skillMdPath = path.join(skillDir, "SKILL.md")
 
 		if (await fileExists(skillMdPath)) {

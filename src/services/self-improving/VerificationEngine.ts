@@ -2,6 +2,8 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import type { Logger } from "./types"
 import type { AutoDetectedProfile, CommandSource } from "@roo-code/types"
+import type { ProviderSettings } from "@roo-code/types"
+import { singleCompletionHandler } from "../../utils/single-completion-handler"
 
 /** Describes a detected project language / tech stack */
 export interface ProjectProfile {
@@ -69,50 +71,14 @@ const DEFAULT_CONFIG: VerificationConfig = {
 
 /**
  * Map of well-known project files to their language profile.
- * Uses the most-specific match first (prefers sub-stack over generic).
+ * Uses a scoring system to pick the best match in multi-language projects.
+ * More specific markers (Cargo.toml, go.mod, build.gradle.kts) are preferred
+ * over generic ones (package.json) to avoid false JS/TS detection.
  */
 const LANG_SIGNATURES: Array<{
 	files: string[]
 	fn: (cwd: string) => Promise<ProjectProfile | null>
 }> = [
-	// --- Node / JS/TS ---
-	{
-		files: ["package.json", "tsconfig.json", "next.config.js", "nuxt.config.ts", "svelte.config.js"],
-		fn: async (cwd) => {
-			const hasPackage = await fileExists(cwd, "package.json")
-			if (!hasPackage) return null
-			const hasTS = await fileExists(cwd, "tsconfig.json")
-			const hasBuildScript = await hasScript(cwd, "build")
-			const hasLintScript = await hasScript(cwd, "lint")
-			const hasTypeCheckScript =
-				(await hasScript(cwd, "typecheck")) ||
-				(await hasScript(cwd, "type-check")) ||
-				(await hasScript(cwd, "types"))
-			const hasTestScript = await hasScript(cwd, "test")
-			return {
-				language: hasTS ? "TypeScript" : "JavaScript",
-				buildCommand: hasBuildScript ? "npm run build" : undefined,
-				lintCommand: hasLintScript ? "npm run lint" : undefined,
-				typeCheckCommand: hasTypeCheckScript
-					? (await hasScript(cwd, "typecheck"))
-						? "npm run typecheck"
-						: (await hasScript(cwd, "type-check"))
-							? "npm run type-check"
-							: "npm run types"
-					: hasTS
-						? "npx tsc --noEmit"
-						: undefined,
-				testCommand: hasTestScript ? "npm test" : undefined,
-				commandSources: {
-					buildCommand: hasBuildScript ? "package.json" : null,
-					lintCommand: hasLintScript ? "package.json" : null,
-					typeCheckCommand: hasTypeCheckScript || hasTS ? "package.json" : null,
-					testCommand: hasTestScript ? "package.json" : null,
-				},
-				detectedFrom: "package.json",
-			}
-		},
-	},
 	// --- Rust ---
 	{
 		files: ["Cargo.toml"],
@@ -222,6 +188,29 @@ const LANG_SIGNATURES: Array<{
 			return null
 		},
 	},
+	// --- Kotlin ---
+	{
+		files: ["build.gradle.kts"],
+		fn: async (cwd) => {
+			const hasKtlint = (await fileExists(cwd, ".ktlint")) || (await hasScript(cwd, "ktlint"))
+			const hasGradlew = await fileExists(cwd, "gradlew")
+			const gradleCmd = hasGradlew ? "./gradlew" : "gradle"
+			return {
+				language: "Kotlin",
+				buildCommand: `${gradleCmd} build`,
+				lintCommand: hasKtlint ? "ktlint ." : `${gradleCmd} ktlintCheck`,
+				typeCheckCommand: undefined,
+				testCommand: `${gradleCmd} test`,
+				commandSources: {
+					buildCommand: "gradle-kotlin",
+					lintCommand: hasKtlint ? "ktlint" : "gradle-kotlin",
+					typeCheckCommand: null,
+					testCommand: "gradle-kotlin",
+				},
+				detectedFrom: "build.gradle.kts",
+			}
+		},
+	},
 	// --- Ruby ---
 	{
 		files: ["Gemfile"],
@@ -315,6 +304,44 @@ const LANG_SIGNATURES: Array<{
 			detectedFrom: "build.zig",
 		}),
 	},
+	// --- Node / JS/TS ---
+	{
+		files: ["package.json", "tsconfig.json", "next.config.js", "nuxt.config.ts", "svelte.config.js"],
+		fn: async (cwd) => {
+			const hasPackage = await fileExists(cwd, "package.json")
+			if (!hasPackage) return null
+			const hasTS = await fileExists(cwd, "tsconfig.json")
+			const hasBuildScript = await hasScript(cwd, "build")
+			const hasLintScript = await hasScript(cwd, "lint")
+			const hasTypeCheckScript =
+				(await hasScript(cwd, "typecheck")) ||
+				(await hasScript(cwd, "type-check")) ||
+				(await hasScript(cwd, "types"))
+			const hasTestScript = await hasScript(cwd, "test")
+			return {
+				language: hasTS ? "TypeScript" : "JavaScript",
+				buildCommand: hasBuildScript ? "npm run build" : undefined,
+				lintCommand: hasLintScript ? "npm run lint" : undefined,
+				typeCheckCommand: hasTypeCheckScript
+					? (await hasScript(cwd, "typecheck"))
+						? "npm run typecheck"
+						: (await hasScript(cwd, "type-check"))
+							? "npm run type-check"
+							: "npm run types"
+					: hasTS
+						? "npx tsc --noEmit"
+						: undefined,
+				testCommand: hasTestScript ? "npm test" : undefined,
+				commandSources: {
+					buildCommand: hasBuildScript ? "package.json" : null,
+					lintCommand: hasLintScript ? "package.json" : null,
+					typeCheckCommand: hasTypeCheckScript || hasTS ? "package.json" : null,
+					testCommand: hasTestScript ? "package.json" : null,
+				},
+				detectedFrom: "package.json",
+			}
+		},
+	},
 ]
 
 async function fileExists(dir: string, name: string): Promise<boolean> {
@@ -358,6 +385,7 @@ export class VerificationEngine {
 		private readonly logger?: Logger,
 		config?: Partial<VerificationConfig>,
 		enabled: boolean = true,
+		private readonly apiConfiguration?: ProviderSettings,
 	) {
 		this.config = { ...DEFAULT_CONFIG, ...config }
 		this.enabled = enabled
@@ -365,48 +393,217 @@ export class VerificationEngine {
 
 	/**
 	 * Auto-detect the project language profile from the working directory.
-	 * Detects Node/JS/TS, Rust, Python, Go, Java/Gradle, Ruby, Elixir, Deno, C#, Zig.
-	 * Returns null if no known project files are found.
+	 * Tries LLM-based detection first (if API is configured), falls back to
+	 * signature-based detection for known project markers.
+	 * Returns null if no project can be detected.
 	 */
 	async autoDetectProject(cwd?: string): Promise<ProjectProfile | null> {
 		const dir = cwd || this.config.cwd
-		if (!dir) return null // Never fall back to process.cwd()
+		if (!dir) return null
+
+		// Try LLM-based detection first (if API is configured)
+		if (this.apiConfiguration?.apiProvider) {
+			try {
+				this.logger?.appendLine("[VerificationEngine] Attempting LLM-based project detection...")
+				const llmProfile = await this.autoDetectWithLLM(dir)
+				if (llmProfile) {
+					this.logger?.appendLine(
+						`[VerificationEngine] LLM auto-detected project: ${llmProfile.language} (from ${llmProfile.detectedFrom})`,
+					)
+					this.autoProfiled = llmProfile
+					return llmProfile
+				}
+			} catch (err) {
+				this.logger?.appendLine(
+					`[VerificationEngine] LLM detection failed: ${err instanceof Error ? err.message : String(err)}. Falling back to signature detection.`,
+				)
+			}
+		}
+
+		// Fall back to signature-based detection
+		return this.autoDetectWithSignatures(dir)
+	}
+
+	/**
+	 * Signature-based project detection using known file markers and a scoring system.
+	 * More specific markers (Cargo.toml, go.mod, build.gradle.kts) score higher
+	 * than generic ones (package.json) to avoid false JS/TS detection.
+	 */
+	private async autoDetectWithSignatures(dir: string): Promise<ProjectProfile | null> {
+		let bestProfile: { profile: ProjectProfile; score: number } | null = null
+
 		for (const sig of LANG_SIGNATURES) {
 			for (const filePattern of sig.files) {
+				let matchFound = false
 				if (filePattern.includes("*")) {
 					// Glob-like — check if any file matches
 					try {
 						const entries = await fs.readdir(dir)
-						const match = entries.find((e) => e.endsWith(filePattern.slice(1)))
-						if (match) {
-							const profile = await sig.fn(dir)
-							if (profile) {
-								this.autoProfiled = profile
-								this.logger?.appendLine(
-									`[VerificationEngine] Auto-detected project: ${profile.language} (from ${match})`,
-								)
-								return profile
-							}
-						}
+						matchFound = entries.some((e) => e.endsWith(filePattern.slice(1)))
 					} catch {
 						continue
 					}
 				} else {
-					if (await fileExists(dir, filePattern)) {
-						const profile = await sig.fn(dir)
-						if (profile) {
-							this.autoProfiled = profile
-							this.logger?.appendLine(
-								`[VerificationEngine] Auto-detected project: ${profile.language} (from ${filePattern})`,
-							)
-							return profile
+					matchFound = await fileExists(dir, filePattern)
+				}
+
+				if (matchFound) {
+					const profile = await sig.fn(dir)
+					if (profile) {
+						// Score: JS/TS gets penalty to prevent false matches in multi-lang repos
+						let score = 10
+						if (profile.language === "TypeScript" || profile.language === "JavaScript") {
+							score = 5
+						}
+						// Bonus for more specific language markers
+						if (filePattern === "Cargo.toml") score += 10
+						if (filePattern === "go.mod") score += 10
+						if (filePattern === "build.gradle.kts") {
+							score += 10
+							// Kotlin gets additional specificity over Java/Gradle for .kts
+							if (profile.language === "Kotlin") score += 3
+						}
+						if (filePattern === "gradlew") score += 8
+						if (filePattern === "pyproject.toml") score += 8
+						if (filePattern === "build.zig") score += 10
+						if (filePattern === "mix.exs") score += 8
+						if (filePattern === "Gemfile") score += 6
+						if (filePattern === "deno.json" || filePattern === "deno.jsonc") score += 8
+						if (filePattern === "*.csproj") score += 8
+
+						if (!bestProfile || score > bestProfile.score) {
+							bestProfile = { profile, score }
 						}
 					}
 				}
 			}
 		}
+
+		if (bestProfile) {
+			this.autoProfiled = bestProfile.profile
+			this.logger?.appendLine(
+				`[VerificationEngine] Auto-detected project: ${bestProfile.profile.language} (score: ${bestProfile.score})`,
+			)
+			return bestProfile.profile
+		}
+
 		this.logger?.appendLine("[VerificationEngine] No recognizable project files detected")
 		return null
+	}
+
+	/**
+	 * LLM-based project detection. Reads project files and config contents,
+	 * sends them to the LLM for structured analysis, and parses the JSON response.
+	 */
+	private async autoDetectWithLLM(cwd: string): Promise<ProjectProfile | null> {
+		const entries = await fs.readdir(cwd)
+		const files: string[] = []
+		const dirs: string[] = []
+
+		for (const entry of entries) {
+			try {
+				const stat = await fs.stat(path.join(cwd, entry))
+				if (stat.isDirectory()) {
+					dirs.push(entry)
+				} else {
+					files.push(entry)
+				}
+			} catch {
+				files.push(entry)
+			}
+		}
+
+		// Read commonly-useful config files to give LLM more context
+		const configContents: Record<string, string> = {}
+		const configFiles = [
+			"package.json",
+			"build.gradle.kts",
+			"Cargo.toml",
+			"go.mod",
+			"pyproject.toml",
+			"Gemfile",
+			"Makefile",
+			"CMakeLists.txt",
+			"build.zig",
+			"mix.exs",
+			"composer.json",
+		]
+		for (const cf of configFiles) {
+			if (files.includes(cf)) {
+				try {
+					const content = await fs.readFile(path.join(cwd, cf), "utf-8")
+					configContents[cf] = content.length > 2000 ? content.slice(0, 2000) + "\n... (truncated)" : content
+				} catch {}
+			}
+		}
+
+		const prompt = `You are analyzing a software project to identify its language and toolchain.
+
+Project directory: ${cwd}
+
+Files found:
+${files.map((f) => `  ${f}`).join("\n")}
+
+Subdirectories:
+${dirs.map((d) => `  ${d}/`).join("\n")}
+
+${
+	Object.keys(configContents).length > 0
+		? `Config file contents:\n${Object.entries(configContents)
+				.map(([name, content]) => `--- ${name} ---\n${content}\n`)
+				.join("\n")}`
+		: ""
+}
+
+Based on the project files above, identify:
+1. The primary programming language
+2. The build command (if applicable)
+3. The lint command (if applicable)
+4. The type check command (if applicable, for typed languages)
+5. The test command (if applicable)
+
+Consider ALL files, including subdirectory names that might indicate the project structure. If no build/lint/type check/test commands are applicable, set them to null.
+
+Respond ONLY with a valid JSON object (no markdown, no code fences):
+{
+	 "language": "detected language name",
+	 "buildCommand": "command or null",
+	 "lintCommand": "command or null",
+	 "typeCheckCommand": "command or null",
+	 "testCommand": "command or null",
+	 "commandSources": {
+	   "buildCommand": "short source identifier (tool or manifest name)",
+	   "lintCommand": "source or null",
+	   "typeCheckCommand": "source or null",
+	   "testCommand": "source or null"
+	 },
+	 "detectedFrom": "the primary file that identified this project type"
+}`
+
+		const raw = await singleCompletionHandler(this.apiConfiguration!, prompt)
+
+		// Parse JSON from response (handle potential markdown fences)
+		let jsonStr = raw.trim()
+		if (jsonStr.startsWith("```")) {
+			jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "")
+		}
+
+		const parsed = JSON.parse(jsonStr)
+
+		return {
+			language: parsed.language || "Unknown",
+			buildCommand: parsed.buildCommand || undefined,
+			lintCommand: parsed.lintCommand || undefined,
+			typeCheckCommand: parsed.typeCheckCommand || undefined,
+			testCommand: parsed.testCommand || undefined,
+			commandSources: {
+				buildCommand: parsed.commandSources?.buildCommand || null,
+				lintCommand: parsed.commandSources?.lintCommand || null,
+				typeCheckCommand: parsed.commandSources?.typeCheckCommand || null,
+				testCommand: parsed.commandSources?.testCommand || null,
+			},
+			detectedFrom: parsed.detectedFrom || null,
+		}
 	}
 
 	/**

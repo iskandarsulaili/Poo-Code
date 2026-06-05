@@ -1,5 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { VerificationEngine } from "./VerificationEngine"
+
+// ── Auto-detection tests ──────────────────────────────────────────
+// Mock fs/promises for auto-detection scenarios.
+// Safe — existing verify tests use child_process, not fs/promises.
+vi.mock("fs/promises")
+
+// Mock LLM completion handler — tests that need it will configure the mock inline.
+vi.mock("../../utils/single-completion-handler")
 
 describe("VerificationEngine", () => {
 	let engine: VerificationEngine
@@ -190,6 +198,222 @@ describe("VerificationEngine", () => {
 		it("should allow setting mandatory=false", () => {
 			engine.updateConfig({ mandatory: false })
 			expect(engine.getConfig().mandatory).toBe(false)
+		})
+	})
+
+	describe("auto-detection with scoring", () => {
+		// Mock fs/promises is already applied at the top of the file via vi.mock.
+
+		beforeEach(() => {
+			logger = { appendLine: vi.fn() }
+			engine = new VerificationEngine(logger, {
+				checkBuild: false,
+				checkLint: false,
+				checkTypes: false,
+				checkTests: false,
+				gateTimeoutMs: 5000,
+				mandatory: true,
+			})
+		})
+
+		it("should detect Kotlin from build.gradle.kts without gradlew", async () => {
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			_mockDirectories.add("/workspace/kotlin-simple")
+			_mockFiles.set("/workspace/kotlin-simple/build.gradle.kts", "")
+
+			const profile = await engine.autoDetectProject("/workspace/kotlin-simple")
+
+			expect(profile).not.toBeNull()
+			expect(profile!.language).toBe("Kotlin")
+			expect(profile!.buildCommand).toBe("gradle build")
+			expect(profile!.lintCommand).toBe("gradle ktlintCheck")
+			expect(profile!.testCommand).toBe("gradle test")
+			expect(profile!.detectedFrom).toBe("build.gradle.kts")
+		})
+
+		it("should detect Kotlin and use ./gradlew when gradlew exists", async () => {
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			_mockDirectories.add("/workspace/kotlin-gradlew")
+			_mockFiles.set("/workspace/kotlin-gradlew/build.gradle.kts", "")
+			_mockFiles.set("/workspace/kotlin-gradlew/gradlew", "")
+
+			const profile = await engine.autoDetectProject("/workspace/kotlin-gradlew")
+
+			expect(profile).not.toBeNull()
+			expect(profile!.language).toBe("Kotlin")
+			expect(profile!.buildCommand).toBe("./gradlew build")
+			expect(profile!.testCommand).toBe("./gradlew test")
+		})
+
+		it("should prefer Kotlin over JS/TS in a repo with both build.gradle.kts and package.json", async () => {
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			_mockDirectories.add("/workspace/multi-lang")
+			_mockFiles.set("/workspace/multi-lang/build.gradle.kts", "")
+			_mockFiles.set("/workspace/multi-lang/gradlew", "")
+			_mockFiles.set(
+				"/workspace/multi-lang/package.json",
+				JSON.stringify({
+					scripts: { build: "echo ok", lint: "echo ok", test: "echo ok", typecheck: "echo ok" },
+				}),
+			)
+			_mockFiles.set("/workspace/multi-lang/tsconfig.json", "")
+
+			const profile = await engine.autoDetectProject("/workspace/multi-lang")
+
+			expect(profile).not.toBeNull()
+			expect(profile!.language).toBe("Kotlin")
+			expect(profile!.buildCommand).toBe("./gradlew build")
+		})
+
+		it("should prefer Rust over JS/TS when both Cargo.toml and package.json exist", async () => {
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			_mockDirectories.add("/workspace/rust-ts")
+			_mockFiles.set("/workspace/rust-ts/Cargo.toml", "")
+			_mockFiles.set(
+				"/workspace/rust-ts/package.json",
+				JSON.stringify({
+					scripts: { build: "echo ok", lint: "echo ok" },
+				}),
+			)
+			_mockFiles.set("/workspace/rust-ts/tsconfig.json", "")
+
+			const profile = await engine.autoDetectProject("/workspace/rust-ts")
+
+			expect(profile).not.toBeNull()
+			expect(profile!.language).toBe("Rust")
+			expect(profile!.buildCommand).toBe("cargo build")
+		})
+
+		it("should return null when no project markers exist", async () => {
+			const { _mockDirectories } = (await import("fs/promises")) as any
+			_mockDirectories.add("/workspace/empty-project")
+
+			const profile = await engine.autoDetectProject("/workspace/empty-project")
+			expect(profile).toBeNull()
+		})
+	})
+
+	describe("LLM-based detection", () => {
+		it("should fall back to signatures when no API config provided", async () => {
+			const e = new VerificationEngine(logger, {
+				checkBuild: false,
+				checkLint: false,
+				checkTypes: false,
+				checkTests: false,
+				gateTimeoutMs: 5000,
+				mandatory: true,
+			})
+			// apiConfiguration is undefined, so autoDetectProject should skip LLM
+			// and use signature-based detection
+			const result = await e.autoDetectProject("/tmp/nonexistent")
+			expect(result).toBeNull()
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				"[VerificationEngine] No recognizable project files detected",
+			)
+		})
+
+		it("should use LLM when API config is provided and LLM succeeds", async () => {
+			const { singleCompletionHandler } = await import("../../utils/single-completion-handler")
+			vi.mocked(singleCompletionHandler).mockResolvedValue(
+				JSON.stringify({
+					language: "Kotlin",
+					buildCommand: "./gradlew build",
+					lintCommand: "ktlint .",
+					typeCheckCommand: null,
+					testCommand: "./gradlew test",
+					commandSources: {
+						buildCommand: "gradle",
+						lintCommand: "ktlint",
+						typeCheckCommand: null,
+						testCommand: "gradle",
+					},
+					detectedFrom: "build.gradle.kts",
+				}),
+			)
+
+			const mockApiConfig = { apiProvider: "openai", apiKey: "test" } as any
+			const e = new VerificationEngine(
+				logger,
+				{
+					checkBuild: false,
+					checkLint: false,
+					checkTypes: false,
+					checkTests: false,
+					gateTimeoutMs: 5000,
+					mandatory: true,
+				},
+				true,
+				mockApiConfig,
+			)
+
+			// Set up the project directory with some files to prompt LLM detection
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			const projectPath = "/workspace/llm-project"
+			_mockDirectories.add(projectPath)
+			_mockFiles.set(`${projectPath}/build.gradle.kts`, "")
+			_mockFiles.set(`${projectPath}/settings.gradle.kts`, "")
+			_mockDirectories.add(`${projectPath}/src`)
+
+			const result = await e.autoDetectProject(projectPath)
+
+			expect(result).not.toBeNull()
+			expect(result?.language).toBe("Kotlin")
+			expect(result?.buildCommand).toBe("./gradlew build")
+			expect(result?.lintCommand).toBe("ktlint .")
+			expect(result?.testCommand).toBe("./gradlew test")
+			expect(result?.detectedFrom).toBe("build.gradle.kts")
+			expect(result?.commandSources.buildCommand).toBe("gradle")
+
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				"[VerificationEngine] Attempting LLM-based project detection...",
+			)
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				"[VerificationEngine] LLM auto-detected project: Kotlin (from build.gradle.kts)",
+			)
+		})
+
+		it("should fall back to signatures when LLM call fails", async () => {
+			const { singleCompletionHandler } = await import("../../utils/single-completion-handler")
+			vi.mocked(singleCompletionHandler).mockRejectedValue(new Error("API timeout"))
+
+			const mockApiConfig = { apiProvider: "openai", apiKey: "test" } as any
+			const e = new VerificationEngine(
+				logger,
+				{
+					checkBuild: false,
+					checkLint: false,
+					checkTypes: false,
+					checkTests: false,
+					gateTimeoutMs: 5000,
+					mandatory: true,
+				},
+				true,
+				mockApiConfig,
+			)
+
+			// Set up directory with known markers so signature detection succeeds
+			const { _mockFiles, _mockDirectories } = (await import("fs/promises")) as any
+			const projectPath = "/workspace/llm-fallback"
+			_mockDirectories.add(projectPath)
+			_mockFiles.set(`${projectPath}/Cargo.toml`, "")
+
+			const result = await e.autoDetectProject(projectPath)
+
+			expect(result).not.toBeNull()
+			// Should fall back to signature-based detection (Rust from Cargo.toml)
+			expect(result?.language).toBe("Rust")
+			expect(result?.buildCommand).toBe("cargo build")
+
+			// Verify both LLM attempt and fallback were logged
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				"[VerificationEngine] Attempting LLM-based project detection...",
+			)
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				expect.stringContaining("[VerificationEngine] LLM detection failed:"),
+			)
+			expect(logger.appendLine).toHaveBeenCalledWith(
+				"[VerificationEngine] Auto-detected project: Rust (score: 20)",
+			)
 		})
 	})
 })

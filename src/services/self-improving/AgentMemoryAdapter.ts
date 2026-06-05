@@ -99,36 +99,49 @@ export class AgentMemoryAdapter implements MemoryBackend {
 
 	/**
 	 * Make a POST request to agentmemory API.
+	 * Retries once on timeout/error before marking unavailable.
 	 */
 	private async post<T>(path: string, body: unknown): Promise<T | null> {
 		if (!this.available) return null
 
-		const controller = new AbortController()
-		const timeout = setTimeout(() => controller.abort(), 5000)
+		for (let attempt = 1; attempt <= 2; attempt++) {
+			const controller = new AbortController()
+			const timeout = setTimeout(() => controller.abort(), 15000)
 
-		try {
-			const response = await fetch(`${this.baseUrl}${path}`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(body),
-				signal: controller.signal,
-			})
+			try {
+				const response = await fetch(`${this.baseUrl}${path}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+					signal: controller.signal,
+				})
 
-			if (!response.ok) {
-				this.logger.appendLine(`[AgentMemoryAdapter] POST ${path} failed: ${response.status}`)
+				if (!response.ok) {
+					this.logger.appendLine(`[AgentMemoryAdapter] POST ${path} failed: ${response.status}`)
+					return null
+				}
+
+				return (await response.json()) as T
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error)
+				this.logger.appendLine(`[AgentMemoryAdapter] POST ${path} error (attempt ${attempt}/2): ${message}`)
+
+				if (attempt < 2) {
+					// Brief backoff before retry
+					await new Promise((resolve) => setTimeout(resolve, 500))
+					continue
+				}
+
+				// Both attempts failed — log but don't latch unavailable.
+				// The health check interval handles recovery detection; a single
+				// timeout should not blacklist the server for up to 30s.
 				return null
+			} finally {
+				clearTimeout(timeout)
 			}
-
-			return (await response.json()) as T
-		} catch (error) {
-			this.logger.appendLine(
-				`[AgentMemoryAdapter] POST ${path} error: ${error instanceof Error ? error.message : String(error)}`,
-			)
-			this.available = false
-			return null
-		} finally {
-			clearTimeout(timeout)
 		}
+
+		return null
 	}
 
 	/**

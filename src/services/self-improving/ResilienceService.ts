@@ -48,11 +48,13 @@ export class ResilienceService {
 	private state: RecoveryState
 	private codeIndexAdapter: CodeIndexAdapter | undefined
 	private questionEvaluator: QuestionEvaluatorService | undefined
+	private errorClassifier: ErrorClassifier
 
 	constructor(logger: Logger, config?: Partial<ResilienceConfig>) {
 		this.logger = logger
 		this.config = { ...DEFAULT_CONFIG, ...config }
 		this.state = this.getInitialState()
+		this.errorClassifier = new ErrorClassifier()
 	}
 
 	setCodeIndexAdapter(adapter: CodeIndexAdapter | undefined): void {
@@ -211,6 +213,80 @@ export class ResilienceService {
 
 		const suggestion = this.config.recoveryCommands[index] ?? this.config.recoveryCommands[0]
 		return suggestion
+	}
+
+	/**
+	 * Attempt to autonomously recover from "Zoo is having trouble" or consecutive mistake errors.
+	 * Uses ErrorClassifier to classify the error, applies exponential backoff, and generates a
+	 * self-correction prompt to inject into the conversation for autonomous retry.
+	 *
+	 * @param error - The error message or Error object
+	 * @param context - Context including consecutiveMistakeCount and optional taskId
+	 * @returns Recovery result with recovered flag, optional correctionPrompt, and optional delay
+	 */
+	async attemptRecovery(
+		error: string | Error,
+		context: { consecutiveMistakeCount: number; taskId?: string },
+	): Promise<{ recovered: boolean; correctionPrompt?: string; delay?: number }> {
+		if (!this.config.enabled || !this.config.autoRecover) {
+			return { recovered: false }
+		}
+
+		const errorMessage = typeof error === "string" ? error : error.message
+		this.logger.appendLine(
+			`[Resilience] attemptRecovery called: "${errorMessage.slice(0, 200)}" (mistakes: ${context.consecutiveMistakeCount})`,
+		)
+
+		// Classify the error using ErrorClassifier
+		const classified = this.errorClassifier.classify(errorMessage)
+
+		// Only auto-recover for MODEL_THOUGHT_FAILURE and similar recoverable categories
+		if (!classified.isRecoverable) {
+			this.logger.appendLine(
+				`[Resilience] Error not recoverable (${classified.category}). Falling back to human input.`,
+			)
+			return { recovered: false }
+		}
+
+		// Increment failure count and update state
+		this.state.consecutiveFailures++
+		this.state.lastFailureType = "consecutive_mistake"
+		this.state.lastFailureTime = Date.now()
+		this.state.isInRecoveryMode = true
+
+		// Calculate exponential backoff delay
+		const delay = this.calculateBackoff(this.state.consecutiveFailures)
+
+		// Check if we've exceeded max retries — escalate with a full correction prompt
+		if (this.state.consecutiveFailures > this.config.maxRetries) {
+			this.logger.appendLine(
+				`[Resilience] Max retries (${this.config.maxRetries}) exceeded. Generating self-correction prompt.`,
+			)
+
+			// Build a comprehensive correction prompt with the recovery suggestion
+			const recoverySuggestion = this.getRecoverySuggestion()
+			const correctionPrompt = `[Autonomous Recovery] The previous attempt failed after ${context.consecutiveMistakeCount} consecutive mistakes.
+
+Error Analysis:
+- Category: ${classified.category}
+- Severity: ${classified.severity}/5
+- Suggestion: ${classified.suggestion || "No specific suggestion"}
+
+${recoverySuggestion ? `Recovery Direction: ${recoverySuggestion}` : ""}
+
+Please continue the task with a fresh approach. Simplify your strategy and verify each step before proceeding.`
+
+			// Reset failures since we're generating a correction prompt
+			this.state.consecutiveFailures = 0
+
+			return { recovered: true, correctionPrompt, delay }
+		}
+
+		// Under max retries: just apply backoff delay and retry
+		this.logger.appendLine(`[Resilience] Waiting ${delay}ms before retry #${this.state.consecutiveFailures}`)
+		await new Promise((resolve) => setTimeout(resolve, delay))
+
+		return { recovered: true, delay }
 	}
 
 	/**

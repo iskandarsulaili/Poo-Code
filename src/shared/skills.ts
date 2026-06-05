@@ -1,6 +1,5 @@
 /**
  * Skill metadata for discovery (loaded at startup)
- * Only name and description are required for now
  */
 export interface SkillMetadata {
 	name: string // Required: skill identifier
@@ -18,6 +17,16 @@ export interface SkillMetadata {
 	 * - An array with one or more mode slugs restricts the skill to those modes.
 	 */
 	modeSlugs?: string[]
+	/** Optional category for organizing skills (e.g., "software-development", "devops") */
+	category?: string
+	/** Optional version (semver) */
+	version?: string
+	/** Optional author */
+	author?: string
+	/** Optional tags for discovery */
+	tags?: string[]
+	/** Optional related skill names for cross-referencing */
+	relatedSkills?: string[]
 }
 
 /**
