@@ -157,8 +157,23 @@ describe("AutoModeOrchestrator", () => {
 			await orch.onTaskCompleted(false)
 
 			expect(healer.handleToolError).toHaveBeenCalled()
-			// Should fall through to pattern analysis fallback
-			expect(mockLogger.appendLine).toHaveBeenCalledWith(expect.stringContaining("queued for pattern analysis"))
+			// Should fall through to force recovery continuation
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(expect.stringContaining("Force recovery continuation"))
+			orch.stop()
+		})
+
+		it("should log forceContinue strategy when all strategies exhausted", async () => {
+			const orch = new AutoModeOrchestrator(mockLogger as any)
+			orch.setPatternAnalyzer({} as any)
+			// No recorded failures — autoHeal will have failureCount=1 (incremented internally)
+			// and no strategies match → falls through to Strategy 5
+			await orch.onTaskCompleted(false)
+
+			// Should log force recovery continuation
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(expect.stringContaining("Force recovery continuation"))
+			expect(mockLogger.appendLine).toHaveBeenCalledWith(
+				expect.stringContaining("continuing with alternative approach"),
+			)
 			orch.stop()
 		})
 	})

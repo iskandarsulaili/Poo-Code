@@ -80,21 +80,46 @@ export async function checkAutoApproval({
 	if (ask === "followup") {
 		if (state.alwaysAllowFollowupQuestions === true) {
 			try {
-				const suggestion = (JSON.parse(text || "{}") as FollowUpData).suggest?.[0]
+				const data = JSON.parse(text || "{}") as FollowUpData
+				const suggestion = data.suggest?.[0]
 
+				// Validate that the suggestion has a non-empty answer
 				if (
-					suggestion &&
-					typeof state.followupAutoApproveTimeoutMs === "number" &&
-					state.followupAutoApproveTimeoutMs > 0
+					suggestion?.answer &&
+					typeof suggestion.answer === "string" &&
+					suggestion.answer.trim().length > 0
 				) {
-					return {
-						decision: "timeout",
-						timeout: state.followupAutoApproveTimeoutMs,
-						fn: () => ({ askResponse: "messageResponse", text: suggestion.answer }),
+					if (
+						typeof state.followupAutoApproveTimeoutMs === "number" &&
+						state.followupAutoApproveTimeoutMs > 0
+					) {
+						return {
+							decision: "timeout",
+							timeout: state.followupAutoApproveTimeoutMs,
+							fn: () => ({ askResponse: "messageResponse", text: suggestion.answer }),
+						}
+					} else {
+						return { decision: "ask" }
 					}
 				} else {
-					return { decision: "ask" }
+					// Fallback: try to find first suggestion with non-empty answer
+					const nonEmptySuggestion = data.suggest?.find(
+						(s: any) => s?.answer && typeof s.answer === "string" && s.answer.trim().length > 0,
+					)
+					if (
+						nonEmptySuggestion &&
+						typeof state.followupAutoApproveTimeoutMs === "number" &&
+						state.followupAutoApproveTimeoutMs > 0
+					) {
+						return {
+							decision: "timeout",
+							timeout: state.followupAutoApproveTimeoutMs,
+							fn: () => ({ askResponse: "messageResponse", text: nonEmptySuggestion.answer }),
+						}
+					}
 				}
+				// If no valid suggestion, fall through to ask the user
+				return { decision: "ask" }
 			} catch (error) {
 				return { decision: "ask" }
 			}

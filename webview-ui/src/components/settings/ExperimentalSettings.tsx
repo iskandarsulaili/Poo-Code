@@ -87,6 +87,8 @@ const CATEGORIES: ExperimentCategory[] = [
 			"SELF_IMPROVING_CODE_INDEX",
 			"ONE_SHOT_ORCHESTRATOR",
 			"KAIZEN_ORCHESTRATOR",
+			"SELF_IMPROVING_SPECIALIZED_SKILLS",
+			"TASK_PATTERN_LEARNING",
 		],
 	},
 	{
@@ -105,7 +107,13 @@ const CATEGORIES: ExperimentCategory[] = [
 		key: "infrastructure",
 		labelKey: "settings:experimental.categories.infrastructure",
 		descriptionKey: "settings:experimental.categories.infrastructureDescription",
-		experimentKeys: ["PREVENTION_ENGINE", "CASCADE_TRACKER", "RESILIENCE_SERVICE", "TOOL_ERROR_HEALER"],
+		experimentKeys: [
+			"PREVENTION_ENGINE",
+			"CASCADE_TRACKER",
+			"RESILIENCE_SERVICE",
+			"TOOL_ERROR_HEALER",
+			"RECOVERY_CONTEXT",
+		],
 	},
 	{
 		key: "ui",
@@ -134,30 +142,8 @@ const CATEGORIES: ExperimentCategory[] = [
 	},
 ]
 
-// Experiments that are handled inline (not rendered via the generic loop)
-const INLINE_KEYS = new Set([
-	"SELF_IMPROVING",
-	"SELF_IMPROVING_AUTO_SKILLS",
-	"SELF_IMPROVING_AUTO_MODE",
-	"SELF_IMPROVING_REVIEW_TEAM",
-	"SELF_IMPROVING_FULL_TRUST",
-	"SELF_IMPROVING_QUESTION_EVALUATION",
-	"SELF_IMPROVING_PROMPT_QUALITY",
-	"SELF_IMPROVING_TOOL_PREFERENCE",
-	"SELF_IMPROVING_SKILL_MERGE",
-	"SELF_IMPROVING_PERSIST_COUNTS",
-	"SELF_IMPROVING_CODE_INDEX",
-	"ONE_SHOT_ORCHESTRATOR",
-	"KAIZEN_ORCHESTRATOR",
-	"PREVENTION_ENGINE",
-	"CASCADE_TRACKER",
-	"RESILIENCE_SERVICE",
-	"TOOL_ERROR_HEALER",
-	"VERIFICATION_ENGINE",
-	"REQUIREMENTS_VERIFICATION",
-	"IMAGE_GENERATION",
-	"CUSTOM_TOOLS",
-])
+// Compute flat set of all experiment keys covered by any category
+const allCategoryKeys = new Set<string>(CATEGORIES.flatMap((cat) => cat.experimentKeys))
 
 // ── Sub-components ────────────────────────────────────────────────────
 
@@ -420,6 +406,18 @@ const SelfImprovingSection = ({
 						checkboxTestId="experimental-self-improving-code-index-checkbox"
 					/>
 					<ExperimentalFeature
+						experimentKey="SELF_IMPROVING_SPECIALIZED_SKILLS"
+						enabled={experiments[EXPERIMENT_IDS.SELF_IMPROVING_SPECIALIZED_SKILLS] ?? false}
+						onChange={(enabled) =>
+							setExperimentEnabled(EXPERIMENT_IDS.SELF_IMPROVING_SPECIALIZED_SKILLS, enabled)
+						}
+					/>
+					<ExperimentalFeature
+						experimentKey="TASK_PATTERN_LEARNING"
+						enabled={experiments[EXPERIMENT_IDS.TASK_PATTERN_LEARNING] ?? false}
+						onChange={(enabled) => setExperimentEnabled(EXPERIMENT_IDS.TASK_PATTERN_LEARNING, enabled)}
+					/>
+					<ExperimentalFeature
 						experimentKey="ONE_SHOT_ORCHESTRATOR"
 						enabled={experiments[EXPERIMENT_IDS.ONE_SHOT_ORCHESTRATOR] ?? false}
 						onChange={(enabled) => setExperimentEnabled(EXPERIMENT_IDS.ONE_SHOT_ORCHESTRATOR, enabled)}
@@ -613,13 +611,23 @@ export const ExperimentalSettings = ({
 			</SectionHeader>
 
 			<Section>
-				{CATEGORIES.map((category) => (
-					<CategoryGroup key={category.key} category={category} renderInline={renderExperiment} />
-				))}
+				{CATEGORIES.map((category) => {
+					const existingKeys = category.experimentKeys.filter(
+						(key) => experimentConfigsMap[key as keyof typeof experimentConfigsMap] !== undefined,
+					)
+					if (existingKeys.length === 0) return null
+					return (
+						<CategoryGroup
+							key={category.key}
+							category={{ ...category, experimentKeys: existingKeys }}
+							renderInline={renderExperiment}
+						/>
+					)
+				})}
 
 				{/* Standalone experiments not in any category */}
 				{Object.entries(experimentConfigsMap)
-					.filter(([key]) => !INLINE_KEYS.has(key))
+					.filter(([key]) => !allCategoryKeys.has(key))
 					.map(([key]) => (
 						<div key={key}>{renderExperiment(key)}</div>
 					))}

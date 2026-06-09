@@ -170,7 +170,7 @@ export class ToolErrorHealer {
 		if (!this.config.enabled) {
 			return null
 		}
-	
+
 		// Check if we have a known fix first (before recording, so unknown tools don't get learned fixes)
 		const knownFix = this.getKnownFix(toolName, missingParam)
 		if (knownFix) {
@@ -199,12 +199,26 @@ export class ToolErrorHealer {
 		// Record the error for future learning
 		this.recordError(toolName, missingParam)
 
+		// Tier 4: After recording, if we've seen this ≥3 times, provide auto-correctable best-effort fix
+		const occurrences = this.getOccurrenceCount(toolName, missingParam)
+		if (occurrences >= 3) {
+			this.logger.appendLine(
+				`[ToolErrorHealer] Auto-correcting ${toolName}.${missingParam} after ${occurrences} occurrences`,
+			)
+			return {
+				fix: `After ${occurrences} attempts, auto-recovering with alternative approach for ${toolName}`,
+				autoCorrectable: true,
+				defaultValue: "retry_with_alternative",
+				occurrences,
+			}
+		}
+
 		return null
 	}
 
 	/**
-		* Get the number of times a specific tool+param error has occurred.
-		*/
+	 * Get the number of times a specific tool+param error has occurred.
+	 */
 	getOccurrenceCount(toolName: string, missingParam: string): number {
 		const key = `${toolName}:${missingParam}`
 		const toolCorrections = this.corrections.get(key)

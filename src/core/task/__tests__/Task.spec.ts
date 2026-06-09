@@ -1539,9 +1539,81 @@ describe("Cline", () => {
 					corrected: true,
 				})
 				expect(handleResponseSpy).toHaveBeenCalledWith("messageResponse", "here is the correction", [])
+			})
+		})
 
-				resolveCorrection?.()
-				await submitPromise
+		describe("handleWebviewAskResponse", () => {
+			it("should block empty messageResponse and convert to ask with empty text", () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+				})
+
+				task.handleWebviewAskResponse("messageResponse", "", [])
+
+				// Should have been converted to ask with empty text (routes to user prompt)
+				expect(task.askResponse).toBe("ask")
+				expect(task.askResponseText).toBe("")
+				expect(task.askResponseImages).toEqual([])
+			})
+
+			it("should block empty messageResponse when text is undefined", () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+				})
+
+				task.handleWebviewAskResponse("messageResponse", undefined, undefined)
+
+				expect(task.askResponse).toBe("ask")
+				expect(task.askResponseText).toBe("")
+			})
+
+			it("should block empty messageResponse when text is whitespace-only", () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+				})
+
+				task.handleWebviewAskResponse("messageResponse", "   ", [])
+
+				expect(task.askResponse).toBe("ask")
+				expect(task.askResponseText).toBe("")
+			})
+
+			it("should NOT block non-empty messageResponse", () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+				})
+
+				task.handleWebviewAskResponse("messageResponse", "valid response content", [])
+
+				expect(task.askResponse).toBe("messageResponse")
+				expect(task.askResponseText).toBe("valid response content")
+			})
+
+			it("should NOT block yesButtonClicked with empty text (approval)", () => {
+				const task = new Task({
+					provider: mockProvider,
+					apiConfiguration: mockApiConfig,
+					task: "test task",
+					startTask: false,
+				})
+
+				// yesButtonClicked should not be blocked by the empty messageResponse guard
+				task.handleWebviewAskResponse("yesButtonClicked", "", [])
+
+				expect(task.askResponse).toBe("yesButtonClicked")
+				expect(task.askResponseText).toBe("")
 			})
 		})
 	})

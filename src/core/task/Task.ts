@@ -1265,16 +1265,28 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 							console.error(
 								`[Task] Question evaluated: chose #${evaluation.selectedIndex + 1} via ${evaluation.evaluatedBy}: "${evaluation.selectedText.substring(0, 60)}..."`,
 							)
-							// If evaluation returned empty result, fall back to default first choice
-							// This prevents empty responses when Full Trust + Auto-approve Question are enabled
-							if (evaluation.selectedText && evaluation.selectedText.trim().length > 0) {
+							const selectedText = evaluation.selectedText?.trim()
+							if (selectedText) {
 								this.handleWebviewAskResponse("messageResponse", evaluation.selectedText)
 								this.autoApprovalTimeoutRef = undefined
 								return
 							}
-							console.error(
-								`[Task] Question evaluation returned empty result, falling back to first choice`,
+							// Fallback to approval function
+							if (approval.fn) {
+								const { askResponse, text: responseText, images } = approval.fn()
+								// Still validate that fallback has non-empty text
+								if (responseText?.trim()) {
+									this.handleWebviewAskResponse(askResponse, responseText, images)
+									this.autoApprovalTimeoutRef = undefined
+									return
+								}
+							}
+							this.logger?.warn?.(
+								"QuestionEvaluator returned empty response, falling back to user prompt",
 							)
+							this.handleWebviewAskResponse("ask", "")
+							this.autoApprovalTimeoutRef = undefined
+							return
 						}
 					} catch (error) {
 						console.error(`[Task] Question evaluation failed, falling back to first choice: ${error}`)
@@ -1282,8 +1294,14 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				}
 				// Fallback: first choice
 				const { askResponse, text: responseText, images } = approval.fn()
+				if (!responseText || responseText.trim().length === 0) {
+					// Fallback: ask the user instead of sending empty response
+					this.logger?.warn?.("Auto-approval attempted to send empty response, falling back to user prompt")
+					this.handleWebviewAskResponse("ask", "")
+					this.autoApprovalTimeoutRef = undefined
+					return
+				}
 				this.handleWebviewAskResponse(askResponse, responseText, images)
-				this.autoApprovalTimeoutRef = undefined
 			}, approval.timeout)
 			timeouts.push(this.autoApprovalTimeoutRef)
 		}
@@ -1408,6 +1426,13 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	}
 
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
+		// Final safety guard: never send empty messageResponse
+		if (askResponse === "messageResponse" && (!text || text.trim().length === 0)) {
+			this.logger?.warn?.("Blocked empty messageResponse in handleWebviewAskResponse")
+			askResponse = "ask"
+			text = "" // empty text routes to user prompt
+		}
+
 		// Clear any pending auto-approval timeout when user responds
 		this.cancelAutoApprovalTimeout()
 
@@ -2619,27 +2644,20 @@ Choose an alternative approach now.]`
 					console.log(
 						`[Task] Autonomous recovery threw: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
 					)
-					// Fall through to ask the user
+					// Fall through to auto-recovery
 				}
 
-				// Fallback: ask the user for guidance
-				const { response, text, images } = await this.ask(
-					"mistake_limit_reached",
-					t("common:errors.mistake_limit_guidance"),
-				)
-
-				if (response === "messageResponse") {
-					currentUserContent.push(
-						...[
-							{ type: "text" as const, text: formatResponse.tooManyMistakes(text) },
-							...formatResponse.imageBlocks(images),
-						],
-					)
-
-					await this.say("user_feedback", text, images)
-				}
-
+				// Auto-recovery: continue despite consecutive mistakes instead of asking user
+				this.logger?.warn?.("Auto-recovery: continuing despite consecutive mistakes")
 				this.consecutiveMistakeCount = 0
+				// Inject context correction into conversation
+				const correctionPrompt = "Previous attempts encountered errors. Continuing with a different approach."
+				currentUserContent.push({
+					type: "text" as const,
+					text: correctionPrompt,
+				})
+				await this.say("user_feedback", correctionPrompt)
+				continue // Retry the API request with the correction prompt
 			}
 
 			// Getting verbose details is an expensive operation, it uses ripgrep to

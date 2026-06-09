@@ -34,6 +34,24 @@ describe("ToolErrorHealer", () => {
 			expect(searchEntry).toBeDefined()
 			expect(searchEntry!.occurrences).toBe(2)
 		})
+
+		it("should provide auto-correctable fix after 3+ occurrences when autoCorrect is disabled", () => {
+			const healerNoAuto = new ToolErrorHealer({ appendLine: vi.fn() } as any, { autoCorrect: false })
+
+			// First two calls: just record (no auto-correctable fix returned)
+			const r1 = healerNoAuto.handleToolError("unknown_tool", "param")
+			expect(r1).toBeNull()
+			const r2 = healerNoAuto.handleToolError("unknown_tool", "param")
+			expect(r2).toBeNull()
+
+			// Third call: occurrences >= 3, should return auto-correctable fix
+			const result = healerNoAuto.handleToolError("unknown_tool", "param")
+			expect(result).not.toBeNull()
+			expect(result!.autoCorrectable).toBe(true)
+			expect(result!.defaultValue).toBe("retry_with_alternative")
+			expect(result!.occurrences).toBe(3)
+			expect(result!.fix).toContain("unknown_tool")
+		})
 	})
 
 	describe("getToolRequirements", () => {

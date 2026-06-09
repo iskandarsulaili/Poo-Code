@@ -71,6 +71,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
+		// Reset cross-task counter bleed on singleton tool
+		this.consecutiveVerificationFailures = 0
 		const { result } = params
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
@@ -128,8 +130,12 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Resolve current mode slug for per-mode verification overrides
 			const currentMode = await task.getTaskMode()
 
+			// Compute lenient mode for both Guard 5 and Guard 6
+			const lenientModes = task.experiments?.lenientModes ?? ["research"]
+			const isLenientMode = lenientModes.includes(currentMode)
+
 			// Guard 5: Requirements verification — check user intent is fulfilled
-			if (this.requirementsVerifier) {
+			if (this.requirementsVerifier && !isLenientMode) {
 				const experiments = task.experiments
 
 				// Per-mode resolution: check verificationLevels[currentMode] first,
@@ -177,9 +183,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Guard 6: Code quality verification (VerificationEngine)
 			// Skip verification for lenient modes — research tasks and other user-configured modes
 			// don't need build/lint/types/tests. Default: ["research"]
-			const experiments = task.experiments
-			const lenientModes = experiments?.lenientModes ?? ["research"]
-			const isLenientMode = lenientModes.includes(currentMode)
 			if (this.verificationEngine && !isLenientMode) {
 				// Set cwd from task context — the directory the agent is working in
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)

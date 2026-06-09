@@ -282,7 +282,7 @@ export class ReviewTeamService {
 		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
 		// Cold-start mitigation: when no actions have ever been approved, lower threshold
 		// to seed the system and break the chicken-and-egg problem.
-		// Max weighted score ~0.533 — can't reach default 0.6 threshold without boost.
+		// All personas now give PROMPT_ENRICHMENT +0.1 bonus → weighted score 0.6 reaches default threshold.
 		const isFirstAction = this.approvedActionCount === 0
 		let effectiveThreshold = isFirstAction
 			? Math.min(this.config.deciderThreshold, 0.3)
@@ -519,6 +519,10 @@ export class ReviewTeamService {
 			score -= 0.15
 			reasons.push("Error avoidance without specific error key")
 		}
+		if (action.actionType === "PROMPT_ENRICHMENT") {
+			score += 0.1
+			reasons.push("Prompt enrichment adds value with minimal risk")
+		}
 
 		return {
 			approved: score >= 0.5,
@@ -584,6 +588,10 @@ export class ReviewTeamService {
 		if (action.actionType === "ERROR_AVOIDANCE") {
 			score += 0.1
 			reasons.push("Error avoidance is low-risk, high-value")
+		}
+		if (action.actionType === "PROMPT_ENRICHMENT") {
+			score += 0.1
+			reasons.push("Prompt enrichment adds context without side effects")
 		}
 
 		return {

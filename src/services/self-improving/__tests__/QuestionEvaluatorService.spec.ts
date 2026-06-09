@@ -70,6 +70,58 @@ describe("QuestionEvaluatorService", () => {
 		})
 	})
 
+	describe("resolveSelectedText (via evaluateBestChoice)", () => {
+		it("should return non-empty text when preferred choice has valid text", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [
+				{ text: "valid answer", mode: null },
+				{ text: "also valid", mode: null },
+			])
+			expect(result.selectedText).toBe("valid answer")
+		})
+
+		it("should return empty string when all choices are empty strings", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [
+				{ text: "", mode: null },
+				{ text: "", mode: null },
+			])
+			expect(result.selectedText).toBe("")
+		})
+
+		it("should return empty string when all choices are whitespace-only", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [
+				{ text: "   ", mode: null },
+				{ text: "\t\n", mode: null },
+			])
+			expect(result.selectedText).toBe("")
+		})
+
+		it("should return empty string when choices array is empty", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [])
+			expect(result.selectedText).toBe("")
+		})
+
+		it("should return fallback string when preferred index has empty text but later index has valid text", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [
+				{ text: "", mode: null },
+				{ text: "second choice valid", mode: null },
+			])
+			// The fallback path picks index 0, but resolveSelectedText scans for first non-empty
+			expect(result.selectedText).toBe("second choice valid")
+			expect(result.selectedIndex).toBe(0)
+		})
+
+		it("should return empty string when single choice is empty", async () => {
+			const disabled = new QuestionEvaluatorService({ appendLine: vi.fn() } as any, { enabled: false })
+			const result = await disabled.evaluateBestChoice("test question", [{ text: "", mode: null }])
+			expect(result.selectedText).toBe("")
+		})
+	})
+
 	describe("getStatus", () => {
 		it("should return status object", () => {
 			const status = service.getStatus()

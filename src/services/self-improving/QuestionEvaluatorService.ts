@@ -543,14 +543,16 @@ export class QuestionEvaluatorService {
 	 * timeout would have selected anyway.
 	 */
 	private resolveSelectedText(choices: { text: string; mode: string | null }[], preferredIndex: number): string {
-		const preferred = choices[preferredIndex]?.text
-		if (preferred && preferred.trim().length > 0) {
-			return preferred
+		// Try selected index first
+		if (choices[preferredIndex]?.text?.trim()) {
+			return choices[preferredIndex].text.trim()
 		}
-		const fallback = choices[0]?.text
-		if (fallback && fallback.trim().length > 0) {
-			return fallback
+		// Scan all choices for first non-empty
+		const nonEmpty = choices.find((c) => c?.text?.trim())
+		if (nonEmpty?.text?.trim()) {
+			return nonEmpty.text.trim()
 		}
+		// Last resort — signal caller to ask user instead
 		return ""
 	}
 
