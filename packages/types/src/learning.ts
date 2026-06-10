@@ -106,6 +106,8 @@ export const learnedPatternSchema = z.object({
 	patternType: patternTypeSchema,
 	state: patternStateSchema,
 	summary: z.string(),
+	content: z.string().optional(),
+	impact: z.number().min(0).max(1).optional(),
 	confidenceScore: z.number().min(0).max(1),
 	frequency: z.number().int().min(0),
 	successRate: z.number().min(0).max(1),
