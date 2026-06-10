@@ -81,6 +81,7 @@ import { Section } from "./Section"
 import PromptsSettings from "./PromptsSettings"
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
+import { ReviewTeamThresholdSlider } from "./ReviewTeamThresholdSlider"
 import { UISettings } from "./UISettings"
 import ModesView from "../modes/ModesView"
 import McpView from "../mcp/McpView"
@@ -221,6 +222,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		customModes,
 		autoDetectedProfile,
 		autoDetectingVerification,
+		deciderThreshold,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -323,6 +325,13 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			return { ...prevState, experiments: { ...prevState.experiments, lenientModes: modes } }
 		})
 	}, [])
+	const setDeciderThreshold = useCallback(
+		(value: number) => {
+			setCachedState((prev) => ({ ...prev, deciderThreshold: value }))
+		},
+		[setCachedState],
+	)
+
 	const setVerificationLevel = useCallback((level: "strict" | "lenient" | "bypass") => {
 		setCachedState((prevState) => {
 			setChangeDetected(true)
@@ -537,6 +546,7 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					kaizenAutoPush: kaizenAutoPush ?? true,
 					kaizenRemoteName: kaizenRemoteName ?? "origin",
 					kaizenCommitTemplate: kaizenCommitTemplate ?? "kaizen: {description}",
+					deciderThreshold,
 				},
 			})
 
@@ -1016,46 +1026,54 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 
 						{/* Experimental Section */}
 						{renderTab === "experimental" && (
-							<ExperimentalSettings
-								setExperimentEnabled={setExperimentEnabled}
-								experiments={experiments}
-								autoDetectedProfile={autoDetectedProfile}
-								autoDetectingVerification={autoDetectingVerification}
-								apiConfiguration={apiConfiguration}
-								setApiConfigurationField={setApiConfigurationField}
-								imageGenerationProvider={imageGenerationProvider}
-								openRouterImageApiKey={openRouterImageApiKey}
-								openRouterImageGenerationSelectedModel={openRouterImageGenerationSelectedModel}
-								memoryBackend={memoryBackend}
-								agentMemoryUrl={agentMemoryUrl}
-								selfImprovingScope={selfImprovingScope}
-								selfImprovingAutoSkillsScope={selfImprovingAutoSkillsScope}
-								setImageGenerationProvider={setImageGenerationProvider}
-								setOpenRouterImageApiKey={setOpenRouterImageApiKey}
-								setImageGenerationSelectedModel={setImageGenerationSelectedModel}
-								setMemoryBackend={setMemoryBackend}
-								setAgentMemoryUrl={setAgentMemoryUrl}
-								setSelfImprovingScope={setSelfImprovingScope}
-								setSelfImprovingAutoSkillsScope={setSelfImprovingAutoSkillsScope}
-								setLenientModes={setLenientModes}
-								verificationLevel={
-									experiments.verificationLevel as "strict" | "lenient" | "bypass" | undefined
-								}
-								setVerificationLevel={setVerificationLevel}
-								verificationLevels={
-									experiments.verificationLevels as
-										| Record<string, "strict" | "lenient" | "bypass">
-										| undefined
-								}
-								setVerificationLevels={setVerificationLevels}
-								customModes={customModes}
-								verificationCheckBuild={experiments.verificationCheckBuild as boolean | undefined}
-								verificationCheckLint={experiments.verificationCheckLint as boolean | undefined}
-								verificationCheckTypes={experiments.verificationCheckTypes as boolean | undefined}
-								verificationCheckTests={experiments.verificationCheckTests as boolean | undefined}
-								verificationTimeoutMs={experiments.verificationTimeoutMs as number | undefined}
-								onVerificationGateChange={onVerificationGateChange}
-							/>
+							<>
+								<ExperimentalSettings
+									setExperimentEnabled={setExperimentEnabled}
+									experiments={experiments}
+									autoDetectedProfile={autoDetectedProfile}
+									autoDetectingVerification={autoDetectingVerification}
+									apiConfiguration={apiConfiguration}
+									setApiConfigurationField={setApiConfigurationField}
+									imageGenerationProvider={imageGenerationProvider}
+									openRouterImageApiKey={openRouterImageApiKey}
+									openRouterImageGenerationSelectedModel={openRouterImageGenerationSelectedModel}
+									memoryBackend={memoryBackend}
+									agentMemoryUrl={agentMemoryUrl}
+									selfImprovingScope={selfImprovingScope}
+									selfImprovingAutoSkillsScope={selfImprovingAutoSkillsScope}
+									setImageGenerationProvider={setImageGenerationProvider}
+									setOpenRouterImageApiKey={setOpenRouterImageApiKey}
+									setImageGenerationSelectedModel={setImageGenerationSelectedModel}
+									setMemoryBackend={setMemoryBackend}
+									setAgentMemoryUrl={setAgentMemoryUrl}
+									setSelfImprovingScope={setSelfImprovingScope}
+									setSelfImprovingAutoSkillsScope={setSelfImprovingAutoSkillsScope}
+									setLenientModes={setLenientModes}
+									verificationLevel={
+										experiments.verificationLevel as "strict" | "lenient" | "bypass" | undefined
+									}
+									setVerificationLevel={setVerificationLevel}
+									verificationLevels={
+										experiments.verificationLevels as
+											| Record<string, "strict" | "lenient" | "bypass">
+											| undefined
+									}
+									setVerificationLevels={setVerificationLevels}
+									customModes={customModes}
+									verificationCheckBuild={experiments.verificationCheckBuild as boolean | undefined}
+									verificationCheckLint={experiments.verificationCheckLint as boolean | undefined}
+									verificationCheckTypes={experiments.verificationCheckTypes as boolean | undefined}
+									verificationCheckTests={experiments.verificationCheckTests as boolean | undefined}
+									verificationTimeoutMs={experiments.verificationTimeoutMs as number | undefined}
+									onVerificationGateChange={onVerificationGateChange}
+								/>
+								<Section>
+									<ReviewTeamThresholdSlider
+										deciderThreshold={deciderThreshold ?? 0.5}
+										setDeciderThreshold={setDeciderThreshold}
+									/>
+								</Section>
+							</>
 						)}
 
 						{/* KAIZEN Section */}

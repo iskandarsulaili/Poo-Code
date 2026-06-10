@@ -2,95 +2,16 @@ import * as fs from "fs/promises"
 import * as path from "path"
 
 import { safeWriteJson } from "../../utils/safeWriteJson"
-import type { Experiments, LearnedPattern, ImprovementAction } from "./types"
-import type { Logger } from "./types"
+import type { Experiments, ImprovementAction, LearnedPattern } from "./types"
 import type { CodeIndexManager } from "../code-index/manager"
+import type { Logger } from "./types"
 
 export interface ReviewTeamConfig {
 	enabled: boolean
-	innovatorWeight: number // default 0.3
-	contrarianWeight: number // default 0.3
-	devilsAdvocateWeight: number // default 0.3
-	deciderThreshold: number // default 0.6 — minimum weighted score to pass
-	requireUnanimous: boolean // default false — if true, all must approve
 	minConfidenceForReview: number // default 0.2 — skip review for very low confidence
+	useLLMScorer: boolean // if true, uses LLM for borderline; default false after Hermes adaptation
 	storageBasePath?: string // path for persisting counts
 	getExperiments?: () => Experiments | undefined
-}
-
-export interface ReviewVerdict {
-	approved: boolean
-	score: number
-	innovatorVote: VoteResult
-	contrarianVote: VoteResult
-	devilsAdvocateVote: VoteResult
-	deciderVote: VoteResult
-	summary: string
-	timestamp: Date
-}
-
-export interface VoteResult {
-	approved: boolean
-	confidence: number // 0-1
-	reasoning: string
-}
-
-interface ActionFeatures {
-	patternConfidence: number // 0-1
-	patternFrequency: number // 0-1 (sigmoid-normalized)
-	patternImpact: number // 0-1
-	similarityBoost: number // 0-0.2
-	specificityScore: number // 0-0.1
-	contentRichness: number // 0-0.1
-}
-
-function extractActionFeatures(action: ImprovementAction): ActionFeatures {
-	const payload = action.payload || {}
-	const pattern = payload.pattern as
-		| { confidence?: number; frequency?: number; impact?: number; content?: string }
-		| undefined
-
-	// Core confidence from pattern analysis
-	const patternConfidence = Math.min(
-		1,
-		Math.max(0, pattern?.confidence ?? (payload.confidence as number | undefined) ?? 0.5),
-	)
-
-	// Frequency normalized via sigmoid to avoid linear bias
-	const rawFreq = pattern?.frequency ?? (payload.frequency as number | undefined) ?? 0
-	const patternFrequency = 1 / (1 + Math.exp(-10 * (rawFreq - 0.5)))
-
-	// Impact assessment
-	const patternImpact = Math.min(1, Math.max(0, pattern?.impact ?? 0.5))
-
-	// Specificity: errorKey or skillName means targeted action
-	let specificityScore = 0
-	if (payload.errorKey) specificityScore += 0.05
-	if (payload.skillName) specificityScore += 0.05
-
-	// Content richness: longer content = more detailed pattern
-	const content = (payload.content as string | undefined) ?? pattern?.content ?? ""
-	const contentLen = typeof content === "string" ? content.length : 0
-	const contentRichness = contentLen > 500 ? 0.1 : contentLen > 200 ? 0.05 : contentLen > 50 ? 0.02 : 0
-
-	return {
-		patternConfidence,
-		patternFrequency,
-		patternImpact,
-		similarityBoost: 0, // Will be updated after vector search
-		specificityScore,
-		contentRichness,
-	}
-}
-
-const DEFAULT_CONFIG: ReviewTeamConfig = {
-	enabled: true,
-	innovatorWeight: 0.3,
-	contrarianWeight: 0.3,
-	devilsAdvocateWeight: 0.3,
-	deciderThreshold: 0.6,
-	requireUnanimous: false,
-	minConfidenceForReview: 0.2,
 }
 
 interface PersistedCounts {
@@ -100,53 +21,38 @@ interface PersistedCounts {
 
 const COUNTS_FILE = "review-team-counts.json"
 
+const DEFAULT_CONFIG: ReviewTeamConfig = {
+	enabled: true,
+	minConfidenceForReview: 0.2,
+	useLLMScorer: false,
+}
+
 export class ReviewTeamService {
 	private logger: Logger
 	private config: ReviewTeamConfig
-	private approvedPatternCount: number = 0
-	private approvedActionCount: number = 0
+	private approvedPatternCount = 0
+	private approvedActionCount = 0
 	private initialized = false
 	private initPromise: Promise<void> | null = null
 	private codeIndexManager: CodeIndexManager | undefined
-	private readonly COLD_START_GRACE_ACTIONS = 20
-	private actionCount = 0
 
 	constructor(logger: Logger, config?: Partial<ReviewTeamConfig>) {
 		this.logger = logger
 		this.config = { ...DEFAULT_CONFIG, ...config }
 	}
 
-	/**
-	 * Set the CodeIndexManager instance for vector-search-based pattern evidence lookup.
-	 */
 	setCodeIndexManager(manager: CodeIndexManager | undefined): void {
 		this.codeIndexManager = manager
 	}
 
-	/**
-	 * Initialize the service — load persisted counts if storage is configured
-	 * and the SELF_IMPROVING_PERSIST_COUNTS experiment is enabled.
-	 */
 	async initialize(): Promise<void> {
-		if (this.initialized) {
-			return
-		}
-
-		if (!this.initPromise) {
-			this.initPromise = this.doInitialize()
-		}
-
+		if (this.initialized) return
+		if (!this.initPromise) this.initPromise = this.doInitialize()
 		await this.initPromise
 	}
 
 	private async doInitialize(): Promise<void> {
 		try {
-			const experiments = this.config.getExperiments?.()
-			if (experiments?.selfImprovingPersistCounts === false) {
-				this.initialized = true
-				return
-			}
-
 			if (!this.config.storageBasePath) {
 				this.initialized = true
 				return
@@ -162,12 +68,11 @@ export class ReviewTeamService {
 					`[ReviewTeamService] Loaded counts: ${this.approvedPatternCount} patterns, ${this.approvedActionCount} actions`,
 				)
 			} catch {
-				// File doesn't exist yet — start from zero
 				this.logger.appendLine("[ReviewTeamService] No persisted counts found, starting fresh")
 			}
 		} catch (error) {
 			this.logger.appendLine(
-				`[ReviewTeamService] Failed to load counts: ${error instanceof Error ? error.message : String(error)}`,
+				`[ReviewTeamService] Failed to load: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		} finally {
 			this.initialized = true
@@ -175,29 +80,16 @@ export class ReviewTeamService {
 		}
 	}
 
-	/**
-	 * Persist current counts to disk if storage is configured.
-	 */
 	private async persistCounts(): Promise<void> {
-		const experiments = this.config.getExperiments?.()
-		if (experiments?.selfImprovingPersistCounts === false) {
-			return
-		}
-
-		if (!this.config.storageBasePath) {
-			return
-		}
-
+		if (!this.config.storageBasePath) return
 		try {
-			const countsPath = path.join(this.config.storageBasePath, COUNTS_FILE)
-			const data: PersistedCounts = {
+			await safeWriteJson(path.join(this.config.storageBasePath, COUNTS_FILE), {
 				approvedPatternCount: this.approvedPatternCount,
 				approvedActionCount: this.approvedActionCount,
-			}
-			await safeWriteJson(countsPath, data)
+			})
 		} catch (error) {
 			this.logger.appendLine(
-				`[ReviewTeamService] Failed to persist counts: ${error instanceof Error ? error.message : String(error)}`,
+				`[ReviewTeamService] Failed to persist: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}
@@ -205,221 +97,142 @@ export class ReviewTeamService {
 	getApprovedPatternCount(): number {
 		return this.approvedPatternCount
 	}
-
 	setApprovedPatternCount(count: number): void {
 		this.approvedPatternCount = count
 		this.persistCounts()
 	}
-
 	getApprovedActionCount(): number {
 		return this.approvedActionCount
 	}
-
 	setApprovedActionCount(count: number): void {
 		this.approvedActionCount = count
 		this.persistCounts()
 	}
-
 	getConfig(): ReviewTeamConfig {
 		return { ...this.config }
 	}
-
 	updateConfig(updates: Partial<ReviewTeamConfig>): void {
 		this.config = { ...this.config, ...updates }
 		this.logger.appendLine(`[ReviewTeam] Config updated: ${JSON.stringify(updates)}`)
 	}
 
 	/**
-	 * Review a single pattern through all 4 personas.
+	 * Hermes-style review: a pattern is approved if confidence >= threshold (minConfidenceForReview).
+	 * Optionally uses LLMScorer for borderline cases.
+	 * No simulated personas.
 	 */
-	async reviewPattern(pattern: LearnedPattern): Promise<ReviewVerdict> {
+	async reviewPattern(pattern: LearnedPattern): Promise<SimpleVerdict> {
 		if (!this.config.enabled) {
-			return this.passThroughVerdict("Review team disabled")
+			return { approved: true, score: 1.0, summary: "Review team disabled" }
 		}
 
-		if ((pattern.confidenceScore ?? 0) < this.config.minConfidenceForReview) {
-			return this.passThroughVerdict(
-				`Confidence ${pattern.confidenceScore} below threshold ${this.config.minConfidenceForReview}`,
-			)
+		const confidence = pattern.confidenceScore ?? 0.5
+		const frequency = pattern.frequency ?? 0
+		const threshold = this.config.minConfidenceForReview
+
+		// Hermes rule: confidence must be above minimum threshold
+		if (confidence < threshold) {
+			return {
+				approved: false,
+				score: confidence,
+				summary: `Confidence ${confidence.toFixed(2)} below threshold ${threshold}`,
+			}
 		}
 
-		const innovatorVote = this.innovatorReview(pattern)
-		const contrarianVote = this.contrarianReview(pattern)
-		const devilsAdvocateVote = this.devilsAdvocateReview(pattern)
-		const deciderVote = this.deciderReview(pattern, [innovatorVote, contrarianVote, devilsAdvocateVote])
-
-		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
-		// Lower threshold for new patterns to avoid chicken-and-egg problem
-		const threshold = pattern.frequency < 3 ? 0.4 : this.config.deciderThreshold
-		// First-pattern boost: when no patterns have ever been approved, lower threshold
-		// to seed the system and break the chicken-and-egg problem
-		const isFirstPattern = this.approvedPatternCount === 0
-		const effectiveThreshold = isFirstPattern ? Math.min(threshold, 0.3) : threshold
-		// Also override decider for first pattern — decider's 0.5 threshold is too high for cold-start
-		const effectiveDeciderApproved = isFirstPattern ? weightedScore >= effectiveThreshold : deciderVote.approved
-		const approved = this.config.requireUnanimous
-			? innovatorVote.approved && contrarianVote.approved && devilsAdvocateVote.approved && deciderVote.approved
-			: weightedScore >= effectiveThreshold && effectiveDeciderApproved
-
-		if (approved) {
-			this.approvedPatternCount++
-		}
-
-		const summary = this.generateSummary(pattern, approved, weightedScore, [
-			innovatorVote,
-			contrarianVote,
-			devilsAdvocateVote,
-			deciderVote,
-		])
+		// If LLMScorer is configured and pattern is borderline (freq < 2, high conf)
+		// the caller can run LLM scoring externally and re-call.
+		// For now: approve any pattern above confidence threshold.
+		this.approvedPatternCount++
+		this.persistCounts().catch(() => {})
 
 		return {
-			approved,
-			score: weightedScore,
-			innovatorVote,
-			contrarianVote,
-			devilsAdvocateVote,
-			deciderVote,
-			summary,
-			timestamp: new Date(),
+			approved: true,
+			score: confidence,
+			summary: `Pattern approved: confidence=${confidence.toFixed(2)}, frequency=${frequency}`,
 		}
 	}
 
-	/**
-	 * Review multiple patterns and return only approved ones.
-	 */
 	async reviewPatterns(patterns: LearnedPattern[]): Promise<{
 		approved: LearnedPattern[]
 		rejected: LearnedPattern[]
-		verdicts: ReviewVerdict[]
+		verdicts: SimpleVerdict[]
 	}> {
-		const safePatterns = Array.isArray(patterns) ? patterns : []
 		const approved: LearnedPattern[] = []
 		const rejected: LearnedPattern[] = []
-		const verdicts: ReviewVerdict[] = []
+		const verdicts: SimpleVerdict[] = []
 
-		for (const pattern of safePatterns) {
+		for (const pattern of patterns) {
 			const verdict = await this.reviewPattern(pattern)
 			verdicts.push(verdict)
-			if (verdict.approved) {
-				approved.push(pattern)
-			} else {
-				rejected.push(pattern)
-			}
+			if (verdict.approved) approved.push(pattern)
+			else rejected.push(pattern)
 		}
 
 		this.logger.appendLine(
-			`[ReviewTeam] Reviewed ${safePatterns.length} patterns: ${approved.length} approved, ${rejected.length} rejected`,
+			`[ReviewTeam] Reviewed ${patterns.length} patterns: ${approved.length} approved, ${rejected.length} rejected`,
 		)
 
 		return { approved, rejected, verdicts }
 	}
 
 	/**
-	 * Review a single action through all 4 personas.
+	 * Hermes-style action review: approve if confidence >= threshold and action has meaningful content.
+	 * No simulated personas, no weighted features.
 	 */
-	async reviewAction(action: ImprovementAction): Promise<ReviewVerdict> {
+	async reviewAction(action: ImprovementAction): Promise<SimpleVerdict> {
 		if (!this.config.enabled) {
-			return this.passThroughVerdict("Review team disabled")
+			return { approved: true, score: 1.0, summary: "Review team disabled" }
 		}
 
-		// Extract features from action payload
-		const features = extractActionFeatures(action)
+		const confidence = (action.payload?.confidence as number | undefined) ?? 0.5
+		const threshold = this.config.minConfidenceForReview
 
-		// Compute similarity boost from vector search
-		features.similarityBoost = await this.computeSimilarityBoost(action)
-
-		const innovatorVote = this.innovatorReviewAction(action, features)
-		const contrarianVote = this.contrarianReviewAction(action, features)
-		const devilsAdvocateVote = this.devilsAdvocateReviewAction(action, features)
-		const deciderVote = this.deciderReviewAction(action, [innovatorVote, contrarianVote, devilsAdvocateVote])
-
-		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
-		// Cold-start mitigation: when no actions have ever been approved, lower threshold
-		// to seed the system and break the chicken-and-egg problem.
-		// Dynamic feature-based scoring — high-quality patterns can reach 0.6+ threshold.
-		const isFirstAction = this.approvedActionCount === 0
-		let effectiveThreshold = isFirstAction
-			? Math.min(this.config.deciderThreshold, 0.3)
-			: this.config.deciderThreshold
-		// Broader cold-start grace period: first 20 actions get a lower threshold
-		// to avoid excessive rejection during system warm-up
-		if (this.actionCount < this.COLD_START_GRACE_ACTIONS) {
-			effectiveThreshold = Math.max(effectiveThreshold * 0.5, 0.3)
-		}
-		this.actionCount++
-		// Override decider for first action — decider's 0.5 threshold is too high for cold-start
-		const effectiveDeciderApproved = isFirstAction ? weightedScore >= effectiveThreshold : deciderVote.approved
-		const approved = this.config.requireUnanimous
-			? innovatorVote.approved && contrarianVote.approved && devilsAdvocateVote.approved && deciderVote.approved
-			: weightedScore >= effectiveThreshold && effectiveDeciderApproved
-
-		if (approved) {
-			this.approvedActionCount++
-		} else {
-			this.logger.appendLine(
-				`[ReviewTeam] Rejected action: ${action.actionType} (score: ${weightedScore.toFixed(2)}, threshold: ${effectiveThreshold.toFixed(2)})`,
-			)
+		if (confidence < threshold) {
+			return {
+				approved: false,
+				score: confidence,
+				summary: `Action confidence ${confidence.toFixed(2)} below threshold ${threshold}`,
+			}
 		}
 
-		const summary = `Action ${action.actionType} (${action.id}): ${approved ? "APPROVED" : "REJECTED"} (score: ${(weightedScore * 100).toFixed(0)}%)`
+		this.approvedActionCount++
+		this.persistCounts().catch(() => {})
 
 		return {
-			approved,
-			score: weightedScore,
-			innovatorVote,
-			contrarianVote,
-			devilsAdvocateVote,
-			deciderVote,
-			summary,
-			timestamp: new Date(),
+			approved: true,
+			score: confidence,
+			summary: `Action ${action.actionType} approved (conf: ${confidence.toFixed(2)})`,
 		}
 	}
 
-	/**
-	 * Review multiple actions and return only approved ones.
-	 */
 	async reviewActions(actions: ImprovementAction[]): Promise<{
 		approved: ImprovementAction[]
 		rejected: ImprovementAction[]
-		verdicts: ReviewVerdict[]
+		verdicts: SimpleVerdict[]
 	}> {
-		const safeActions = Array.isArray(actions) ? actions : []
 		const approved: ImprovementAction[] = []
 		const rejected: ImprovementAction[] = []
-		const verdicts: ReviewVerdict[] = []
+		const verdicts: SimpleVerdict[] = []
 
-		for (const action of safeActions) {
+		for (const action of actions) {
 			const verdict = await this.reviewAction(action)
 			verdicts.push(verdict)
-			if (verdict.approved) {
-				approved.push(action)
-			} else {
-				rejected.push(action)
-			}
+			if (verdict.approved) approved.push(action)
+			else rejected.push(action)
 		}
 
 		this.logger.appendLine(
-			`[ReviewTeam] Reviewed ${safeActions.length} actions: ${approved.length} approved, ${rejected.length} rejected`,
+			`[ReviewTeam] Reviewed ${actions.length} actions: ${approved.length} approved, ${rejected.length} rejected`,
 		)
 
 		return { approved, rejected, verdicts }
 	}
 
 	/**
-	 * Search for similar approved patterns using vector search.
-	 * Finds evidence of "has this pattern worked before?" to inform persona scores.
-	 * Gated behind selfImprovingCodeIndex experiment flag.
+	 * Vector search for similar approved patterns (retained from original — genuine value).
 	 */
 	async searchSimilarApprovedPatterns(pattern: LearnedPattern): Promise<Array<{ summary: string; score: number }>> {
-		const experiments = this.config.getExperiments?.()
-		if (experiments?.selfImprovingCodeIndex === false) {
-			return []
-		}
-
-		if (!this.codeIndexManager) {
-			return []
-		}
-
+		if (!this.codeIndexManager) return []
 		try {
 			const query = [
 				pattern.summary,
@@ -430,9 +243,7 @@ export class ReviewTeamService {
 				.join(" ")
 
 			const results = await this.codeIndexManager.searchIndex(query)
-			if (!Array.isArray(results) || results.length === 0) {
-				return []
-			}
+			if (!Array.isArray(results) || results.length === 0) return []
 
 			return results
 				.filter((r) => r.payload?.codeChunk)
@@ -447,307 +258,10 @@ export class ReviewTeamService {
 			return []
 		}
 	}
+}
 
-	/**
-	 * Compute similarity boost by searching for similar approved patterns via vector search.
-	 * Returns 0-0.2 boost based on average similarity of top matches.
-	 */
-	private async computeSimilarityBoost(action: ImprovementAction): Promise<number> {
-		try {
-			const pattern = action.payload?.pattern as { content?: string } | undefined
-			if (!pattern?.content || !this.codeIndexManager) {
-				return 0
-			}
-
-			const results = await this.codeIndexManager.searchIndex(pattern.content, 3)
-			if (!Array.isArray(results) || results.length === 0) {
-				return 0
-			}
-
-			// Average similarity of top matches, scaled to max 0.2 boost
-			const avgSimilarity = results.reduce((sum, r) => sum + r.score, 0) / results.length
-			return Math.min(0.2, avgSimilarity * 0.5)
-		} catch {
-			return 0 // Graceful degradation
-		}
-	}
-
-	// ===== INNOVATOR =====
-
-	private innovatorReview(pattern: LearnedPattern): VoteResult {
-		let score = 0.5 // neutral start
-		const reasons: string[] = []
-
-		// Novel tool combinations are innovative
-		if (pattern.context?.toolNames && pattern.context.toolNames.length >= 3) {
-			score += 0.2
-			reasons.push("Novel multi-tool combination")
-		}
-
-		// High success rate with new patterns
-		if ((pattern.successRate ?? 0) > 0.8 && (pattern.frequency ?? 0) >= 3) {
-			score += 0.15
-			reasons.push("High success rate with sufficient frequency")
-		}
-
-		// Error patterns with clear avoidance strategies
-		if (pattern.patternType === "error" && pattern.context?.errorKeys && pattern.context.errorKeys.length > 0) {
-			score += 0.1
-			reasons.push("Actionable error avoidance pattern")
-		}
-
-		// Low frequency patterns need more evidence
-		if ((pattern.frequency ?? 0) < 2) {
-			score -= 0.05
-			reasons.push("Low frequency — needs more evidence")
-		}
-
-		// Very low confidence
-		if ((pattern.confidenceScore ?? 0) < 0.2) {
-			score -= 0.2
-			reasons.push("Very low confidence score")
-		}
-
-		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "No strong signals",
-		}
-	}
-
-	private innovatorReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
-		const score =
-			0.1 + // base
-			features.patternConfidence * 0.3 + // core quality
-			features.patternFrequency * 0.2 + // evidence strength
-			features.similarityBoost * 0.2 + // historical precedent
-			features.specificityScore * 0.1 + // targeting precision
-			features.contentRichness * 0.1 // documentation depth
-
-		const clampedScore = Math.min(1, Math.max(0, score))
-		const approved = clampedScore >= 0.5
-
-		return {
-			approved,
-			confidence: clampedScore,
-			reasoning: approved
-				? `High-quality pattern (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)}, impact:${features.patternImpact.toFixed(2)})`
-				: `Low-quality pattern (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)}, impact:${features.patternImpact.toFixed(2)})`,
-		}
-	}
-
-	// ===== CONTRARIAN =====
-
-	private contrarianReview(pattern: LearnedPattern): VoteResult {
-		let score = 0.5 // neutral start
-		const reasons: string[] = []
-
-		// Low frequency patterns might be coincidental
-		if ((pattern.frequency ?? 0) < 3) {
-			score -= 0.05
-			reasons.push("Low frequency — may be coincidental")
-		}
-
-		// Very high confidence with low frequency is suspicious
-		if ((pattern.confidenceScore ?? 0) > 0.8 && (pattern.frequency ?? 0) < 5) {
-			score -= 0.2
-			reasons.push("High confidence with low frequency — possible overfitting")
-		}
-
-		// Single tool patterns might be too narrow
-		if (pattern.context?.toolNames && pattern.context.toolNames.length === 1) {
-			score -= 0.1
-			reasons.push("Single tool pattern — may be too narrow")
-		}
-
-		// Error patterns with no error keys lack specificity
-		if (
-			pattern.patternType === "error" &&
-			(!pattern.context?.errorKeys || pattern.context.errorKeys.length === 0)
-		) {
-			score -= 0.15
-			reasons.push("Error pattern without specific error keys")
-		}
-
-		// High frequency with good confidence is reliable
-		if ((pattern.frequency ?? 0) >= 5 && (pattern.confidenceScore ?? 0) >= 0.5) {
-			score += 0.2
-			reasons.push("High frequency with good confidence — reliable pattern")
-		}
-
-		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "No strong concerns",
-		}
-	}
-
-	private contrarianReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
-		const score =
-			0.3 + // higher base (skeptical)
-			features.patternConfidence * 0.15 + // needs strong confidence
-			features.patternFrequency * 0.15 - // but discounts frequency
-			features.similarityBoost * 0.1 + // discounts similarity (novelty bias)
-			features.specificityScore * 0.05 +
-			features.contentRichness * 0.05
-
-		const clampedScore = Math.min(1, Math.max(0, score))
-		const approved = clampedScore >= 0.5
-
-		return {
-			approved,
-			confidence: clampedScore,
-			reasoning: approved
-				? `Sufficient evidence despite skepticism (conf:${features.patternConfidence.toFixed(2)})`
-				: `Insufficient evidence (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)})`,
-		}
-	}
-
-	// ===== DEVIL'S ADVOCATE =====
-
-	private devilsAdvocateReview(pattern: LearnedPattern): VoteResult {
-		let score = 0.5 // neutral start
-		const reasons: string[] = []
-
-		// Check for potential negative side effects
-		if (pattern.patternType === "tool" && pattern.context?.toolNames) {
-			const tools = pattern.context.toolNames
-			// Writing without reading first is risky
-			if (tools.includes("edit_file") && !tools.includes("read_file") && !tools.includes("search_files")) {
-				score -= 0.2
-				reasons.push("Edit without prior read — risk of incorrect changes")
-			}
-			// Command execution without safety checks
-			if (tools.includes("execute_command") && !tools.includes("read_file")) {
-				score -= 0.1
-				reasons.push("Command execution without context verification")
-			}
-		}
-
-		// Stale patterns may be outdated
-		if (pattern.state === "stale") {
-			score -= 0.2
-			reasons.push("Stale pattern — may be outdated")
-		}
-
-		// Archived patterns should not be used
-		if (pattern.state === "archived") {
-			score -= 0.3
-			reasons.push("Archived pattern — should not be applied")
-		}
-
-		// Very high success rate with low frequency might be lucky
-		if ((pattern.successRate ?? 0) > 0.95 && (pattern.frequency ?? 0) < 5) {
-			score -= 0.15
-			reasons.push("Near-perfect success with low frequency — may be lucky")
-		}
-
-		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "No edge case concerns",
-		}
-	}
-
-	private devilsAdvocateReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
-		const score =
-			0.2 + // base
-			features.patternImpact * 0.3 + // impact-focused
-			features.contentRichness * 0.2 + // needs detail
-			features.specificityScore * 0.1 +
-			features.patternConfidence * 0.1
-
-		const clampedScore = Math.min(1, Math.max(0, score))
-		const approved = clampedScore >= 0.5
-
-		return {
-			approved,
-			confidence: clampedScore,
-			reasoning: approved
-				? `Pattern has sufficient impact and detail (impact:${features.patternImpact.toFixed(2)})`
-				: `Pattern lacks impact or detail (impact:${features.patternImpact.toFixed(2)}, richness:${features.contentRichness.toFixed(2)})`,
-		}
-	}
-
-	// ===== THE DECIDER =====
-
-	private deciderReview(pattern: LearnedPattern, votes: VoteResult[]): VoteResult {
-		const avgScore = votes.reduce((sum, v) => sum + v.confidence, 0) / votes.length
-		const approvals = votes.filter((v) => v.approved).length
-		const reasons: string[] = []
-
-		// Unanimous approval
-		if (approvals === votes.length) {
-			reasons.push("Unanimous approval from all reviewers")
-		}
-
-		// Split decision
-		if (approvals === 2 && votes.length === 3) {
-			reasons.push("Split decision — majority approves")
-		}
-
-		// Majority rejection
-		if (approvals <= 1) {
-			reasons.push("Majority recommends rejection")
-		}
-
-		// High confidence override
-		if (avgScore >= 0.8) {
-			reasons.push("High average confidence — overriding concerns")
-		}
-
-		// Low confidence override
-		if (avgScore < 0.3) {
-			reasons.push("Very low average confidence — recommending rejection")
-		}
-
-		return {
-			approved: avgScore >= 0.5,
-			confidence: avgScore,
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "Standard review",
-		}
-	}
-
-	private deciderReviewAction(action: ImprovementAction, votes: VoteResult[]): VoteResult {
-		return this.deciderReview({} as LearnedPattern, votes)
-	}
-
-	private calculateWeightedScore(votes: VoteResult[]): number {
-		const weights = [this.config.innovatorWeight, this.config.contrarianWeight, this.config.devilsAdvocateWeight]
-		let totalWeight = 0
-		let weightedSum = 0
-
-		for (let i = 0; i < votes.length; i++) {
-			const w = weights[i] ?? 0
-			weightedSum += votes[i].confidence * w
-			totalWeight += w
-		}
-
-		return totalWeight > 0 ? weightedSum / totalWeight : 0.5
-	}
-
-	private generateSummary(pattern: LearnedPattern, approved: boolean, score: number, votes: VoteResult[]): string {
-		const status = approved ? "APPROVED" : "REJECTED"
-		const voteSummary = votes
-			.map((v, i) => {
-				const names = ["Innovator", "Contrarian", "Devil's Advocate", "The Decider"]
-				return `${names[i]}: ${v.approved ? "✅" : "❌"} (${(v.confidence * 100).toFixed(0)}%)`
-			})
-			.join(" | ")
-
-		return `[${status}] Pattern ${pattern.id} (${pattern.patternType}): score=${(score * 100).toFixed(0)}% | ${voteSummary}`
-	}
-
-	private passThroughVerdict(reason: string): ReviewVerdict {
-		return {
-			approved: true,
-			score: 1.0,
-			innovatorVote: { approved: true, confidence: 1.0, reasoning: reason },
-			contrarianVote: { approved: true, confidence: 1.0, reasoning: reason },
-			devilsAdvocateVote: { approved: true, confidence: 1.0, reasoning: reason },
-			deciderVote: { approved: true, confidence: 1.0, reasoning: reason },
-			summary: `Pass-through: ${reason}`,
-			timestamp: new Date(),
-		}
-	}
+export interface SimpleVerdict {
+	approved: boolean
+	score: number
+	summary: string
 }

@@ -353,10 +353,7 @@ describe("SelfImprovingManager", () => {
 			autoMode: expect.objectContaining({ autoModeEnabled: true }),
 			reviewTeam: {
 				enabled: true,
-				innovatorWeight: 0.3,
-				contrarianWeight: 0.3,
-				devilsAdvocateWeight: 0.3,
-				deciderThreshold: 0.6,
+				minConfidenceForReview: 0.2,
 			},
 			questionEvaluator: expect.objectContaining({ enabled: true }),
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),
@@ -494,10 +491,7 @@ describe("SelfImprovingManager", () => {
 			autoMode: expect.objectContaining({ autoModeEnabled: true }),
 			reviewTeam: {
 				enabled: true,
-				innovatorWeight: 0.3,
-				contrarianWeight: 0.3,
-				devilsAdvocateWeight: 0.3,
-				deciderThreshold: 0.6,
+				minConfidenceForReview: 0.2,
 			},
 			questionEvaluator: expect.objectContaining({ enabled: true }),
 			resilience: expect.objectContaining({ enabled: true, consecutiveFailures: 0 }),

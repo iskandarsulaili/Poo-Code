@@ -749,7 +749,8 @@ export const webviewMessageHandler = async (
 						key === "memoryBackend" ||
 						key === "agentMemoryUrl" ||
 						key === "selfImprovingScope" ||
-						key === "selfImprovingAutoSkillsScope"
+						key === "selfImprovingAutoSkillsScope" ||
+						key === "deciderThreshold"
 					) {
 						selfImprovingSettingsUpdated = true
 					} else if (key === "customSupportPrompts") {

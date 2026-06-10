@@ -167,18 +167,51 @@ export class ImprovementApplier {
 	}
 
 	/**
+	 * Create a standardized action payload with pattern data for feature-based scoring.
+	 * Populates content and pattern fields that extractActionFeatures uses for
+	 * patternConfidence, patternFrequency, patternImpact, and contentRichness scoring.
+	 */
+	private createActionPayload(
+		pattern: LearnedPattern | undefined,
+		extraFields: Record<string, unknown> = {},
+	): Record<string, unknown> {
+		return {
+			content: pattern?.content,
+			pattern: pattern
+				? {
+						content: pattern.content,
+						confidence: pattern.confidenceScore ?? 0.5,
+						frequency: pattern.frequency ?? 0,
+						impact: pattern.impact ?? 0.5,
+						category: pattern.patternType,
+					}
+				: undefined,
+			...extraFields,
+		}
+	}
+
+	/**
 	 * Create a PATTERN_REUSE action when a similar task pattern is found.
 	 */
 	private createPatternReuseAction(match: TaskMatchResult, now: number): ImprovementAction {
-		const pattern = match.pattern!
+		const taskPattern = match.pattern!
+		const impact = taskPattern.outcome === "success" ? 0.8 : 0.2
 		return {
 			id: crypto.randomUUID(),
 			actionType: "PROMPT_ENRICHMENT",
 			target: "system-prompt",
 			payload: {
-				summary: `Similar task detected (confidence: ${(match.confidence * 100).toFixed(0)}%): previous approach used ${pattern.toolsUsed.join(", ")} — ${pattern.approach}`,
+				summary: `Similar task detected (confidence: ${(match.confidence * 100).toFixed(0)}%): previous approach used ${taskPattern.toolsUsed.join(", ")} — ${taskPattern.approach}`,
 				confidence: match.confidence,
-				patternId: `task-pattern:${pattern.patternHash}`,
+				patternId: `task-pattern:${taskPattern.patternHash}`,
+				content: taskPattern.taskDescription,
+				pattern: {
+					content: taskPattern.taskDescription,
+					confidence: match.confidence,
+					frequency: 1,
+					impact,
+					category: "task",
+				},
 			},
 			timestamp: now,
 		}
@@ -266,6 +299,7 @@ export class ImprovementApplier {
 			actionType: "ERROR_AVOIDANCE",
 			target: "task-execution",
 			payload: {
+				...this.createActionPayload(pattern),
 				summary: pattern.summary,
 				errorKeys,
 				confidence: pattern.confidenceScore ?? 0.5,
@@ -283,6 +317,7 @@ export class ImprovementApplier {
 			actionType: "TOOL_PREFERENCE",
 			target: "task-execution",
 			payload: {
+				...this.createActionPayload(pattern),
 				summary: pattern.summary,
 				toolNames,
 				confidence: pattern.confidenceScore ?? 0.5,
@@ -298,6 +333,7 @@ export class ImprovementApplier {
 			actionType: "PROMPT_ENRICHMENT",
 			target: "system-prompt",
 			payload: {
+				...this.createActionPayload(pattern),
 				summary: pattern.summary,
 				confidence: pattern.confidenceScore ?? 0.5,
 				patternId: pattern.id,
@@ -316,6 +352,7 @@ export class ImprovementApplier {
 			actionType: "SKILL_SUGGESTION",
 			target: "review-queue",
 			payload: {
+				...this.createActionPayload(pattern),
 				summary,
 				skillName,
 				confidence: pattern.confidenceScore ?? 0.5,
@@ -342,6 +379,7 @@ export class ImprovementApplier {
 				actionType: "SKILL_UPDATE",
 				target: "skills-manager",
 				payload: {
+					...this.createActionPayload(pattern),
 					skillName,
 					skillId,
 					content: this.buildSkillContent(skillName, summary, toolNames),
@@ -358,6 +396,7 @@ export class ImprovementApplier {
 			actionType: "SKILL_CREATE",
 			target: "skills-manager",
 			payload: {
+				...this.createActionPayload(pattern),
 				skillName,
 				skillId,
 				description: summary,
@@ -462,11 +501,26 @@ ${bulletList}
 				const mergedDescription = `Merged skill combining ${mergeGroup.map((p) => p.summary).join("; ")}`
 				const mergedContent = this.buildMergeSkillContent(umbrellaName, mergedDescription, mergeGroup)
 
+				const repPattern = mergeGroup[0]
+				const repPayload = repPattern
+					? {
+							content: repPattern.content,
+							pattern: {
+								content: repPattern.content,
+								confidence: repPattern.confidenceScore ?? 0.5,
+								frequency: repPattern.frequency ?? 0,
+								impact: repPattern.impact ?? 0.5,
+								category: repPattern.patternType,
+							},
+						}
+					: {}
+
 				actions.push({
 					id: crypto.randomUUID(),
 					actionType: "SKILL_MERGE",
 					target: "skills-manager",
 					payload: {
+						...repPayload,
 						umbrellaName,
 						absorbNames,
 						description: mergedDescription,
@@ -622,6 +676,7 @@ ${bulletList}
 				actionType: "SKILL_CREATE_FROM_SCRATCH",
 				target: "skills-manager",
 				payload: {
+					...this.createActionPayload(pattern),
 					name: skillName,
 					skillId,
 					description,

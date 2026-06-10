@@ -86,6 +86,7 @@ export interface SelfImprovingManagerOptions {
 	getAgentMemoryUrl?: () => string | undefined
 	getSelfImprovingScope?: () => SelfImprovingScope | undefined
 	getAutoSkillsScope?: () => SelfImprovingScope | undefined
+	getDeciderThreshold?: () => number | undefined
 	getWorkspacePath?: () => string | undefined
 	/** Memory backend type: "builtin" (default) or "agentmemory" */
 	memoryBackend?: "builtin" | "agentmemory"

@@ -296,6 +296,7 @@ export type ExtensionState = Pick<
 	| "agentMemoryUrl"
 	| "selfImprovingScope"
 	| "selfImprovingAutoSkillsScope"
+	| "deciderThreshold"
 	| "kaizenFrequency"
 	| "kaizenMiniGoal"
 	| "kaizenLimit"

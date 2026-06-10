@@ -254,6 +254,7 @@ export class ClineProvider
 			getAgentMemoryUrl: () => this.getGlobalStateSafe("agentMemoryUrl"),
 			getSelfImprovingScope: () => this.getGlobalStateSafe("selfImprovingScope"),
 			getAutoSkillsScope: () => this.getGlobalStateSafe("selfImprovingAutoSkillsScope"),
+			getDeciderThreshold: () => this.getGlobalStateSafe("deciderThreshold"),
 			getWorkspacePath: () => this.currentWorkspacePath,
 			skillsManager: this.skillsManager,
 		})

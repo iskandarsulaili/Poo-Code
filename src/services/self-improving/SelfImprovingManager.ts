@@ -73,6 +73,7 @@ export class SelfImprovingManager {
 	private readonly getAgentMemoryUrl: SelfImprovingManagerOptions["getAgentMemoryUrl"]
 	private readonly getSelfImprovingScope: SelfImprovingManagerOptions["getSelfImprovingScope"]
 	private readonly getAutoSkillsScope: SelfImprovingManagerOptions["getAutoSkillsScope"]
+	private readonly getDeciderThreshold: SelfImprovingManagerOptions["getDeciderThreshold"]
 	private readonly getWorkspacePath: SelfImprovingManagerOptions["getWorkspacePath"]
 	private readonly curatorConfig: SelfImprovingManagerOptions["curatorConfig"]
 	private readonly skillsManager: SelfImprovingManagerOptions["skillsManager"]
@@ -118,6 +119,7 @@ export class SelfImprovingManager {
 		this.getAgentMemoryUrl = options.getAgentMemoryUrl
 		this.getSelfImprovingScope = options.getSelfImprovingScope
 		this.getAutoSkillsScope = options.getAutoSkillsScope
+		this.getDeciderThreshold = options.getDeciderThreshold
 		this.getWorkspacePath = options.getWorkspacePath
 		this.curatorConfig = options.curatorConfig
 		this.skillsManager = options.skillsManager
@@ -142,11 +144,8 @@ export class SelfImprovingManager {
 		this.taskSimilarityMatcher = new TaskSimilarityMatcher(this.taskPatternStore)
 		this.questionEvaluator = new QuestionEvaluatorService(this.logger, {
 			enabled: this.getExperiments()?.selfImprovingQuestionEvaluation ?? true,
-			useFullTeam: this.getExperiments()?.selfImprovingReviewTeam ?? true,
 			useHybridScoring: true,
 		})
-		this.questionEvaluator.setReviewTeam(this.reviewTeam)
-		this.questionEvaluator.setAccumulatedScoreStore(this.accumulatedScoreStore)
 
 		// Init dependencies first — needed by AutoModeOrchestrator below
 		this.resilienceService = new ResilienceService(this.logger, {
@@ -399,6 +398,16 @@ export class SelfImprovingManager {
 			this.verificationEngine?.setEnabled(experiments.verificationEngine ?? true)
 			this.requirementsVerifier?.setEnabled(experiments.requirementsVerification ?? true)
 		}
+
+		// Propagate minConfidenceForReview to ReviewTeamService
+		const confidenceThreshold = this.getDeciderThreshold?.()
+		if (confidenceThreshold !== undefined) {
+			this.reviewTeam?.updateConfig({ minConfidenceForReview: confidenceThreshold })
+			this.logger.appendLine(
+				`[SelfImprovingManager] ReviewTeam config updated: minConfidenceForReview=${confidenceThreshold}`,
+			)
+		}
+
 		await this.reconfigureIfNeeded()
 		await this.handleExperimentChange()
 	}
@@ -564,25 +573,11 @@ export class SelfImprovingManager {
 				this.runtime.store.addPattern(pattern)
 			}
 
-			// Review patterns through multi-agent team
-			const { approved: approvedPatterns, rejected: rejectedPatterns } =
-				await this.reviewTeam.reviewPatterns(newPatterns)
-
-			if (rejectedPatterns.length > 0) {
-				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedPatterns.length} patterns`)
-			}
-
-			const actions = this.runtime.improvementApplier.generateActions([...approvedPatterns] as LearnedPattern[])
+			// Hermes adaptation: no 4-persona gating — patterns flow directly to actions
+			const actions = this.runtime.improvementApplier.generateActions([...newPatterns] as LearnedPattern[])
 			const safeActions = Array.isArray(actions) ? actions : []
 			for (const action of safeActions) {
 				this.runtime.store.addAction(action)
-			}
-
-			// Review actions through multi-agent team
-			const { rejected: rejectedActions } = await this.reviewTeam.reviewActions(safeActions)
-
-			if (rejectedActions.length > 0) {
-				this.logger.appendLine(`[SelfImproving] Review team rejected ${rejectedActions.length} actions`)
 			}
 
 			const pendingActions = [...this.runtime.store.getPendingActions()] as ImprovementAction[]
@@ -674,7 +669,7 @@ export class SelfImprovingManager {
 				const episodicMemory = new (EpisodicMemory as any)()
 				const recentErrors = (this.preventionEngine as any).getRecentErrorPatterns?.() ?? []
 				for (const errorPattern of recentErrors) {
-					(episodicMemory as any).recordEpisode({
+					;(episodicMemory as any).recordEpisode({
 						type: "error",
 						pattern: errorPattern.pattern,
 						context: errorPattern.context,
@@ -810,10 +805,7 @@ export class SelfImprovingManager {
 		const curatorStatus = this.curatorService.getStatus()
 		const reviewTeamStatus = {
 			enabled: this.reviewTeam.getConfig().enabled,
-			innovatorWeight: this.reviewTeam.getConfig().innovatorWeight,
-			contrarianWeight: this.reviewTeam.getConfig().contrarianWeight,
-			devilsAdvocateWeight: this.reviewTeam.getConfig().devilsAdvocateWeight,
-			deciderThreshold: this.reviewTeam.getConfig().deciderThreshold,
+			minConfidenceForReview: this.reviewTeam.getConfig().minConfidenceForReview,
 		}
 		const resilienceStatus = this.resilienceService.getStatus()
 		const toolErrorHealerStatus = this.toolErrorHealer.getStatus()

@@ -230,6 +230,9 @@ vi.mock("../SlashCommandsSettings", () => ({
 vi.mock("../UISettings", () => ({
 	UISettings: vi.fn(() => <div>UISettings</div>),
 }))
+vi.mock("../ReviewTeamThresholdSlider", () => ({
+	ReviewTeamThresholdSlider: vi.fn(() => <div>ReviewTeamThresholdSlider</div>),
+}))
 vi.mock("../SectionHeader", () => ({
 	SectionHeader: ({ children }: any) => <div>{children}</div>,
 }))

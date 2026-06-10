@@ -272,6 +272,12 @@ export const globalSettingsSchema = z.object({
 	showWorktreesInHomeScreen: z.boolean().optional(),
 
 	/**
+	 * Minimum weighted score for ReviewTeam to approve an improvement action (0.0–1.0).
+	 * @default 0.5
+	 */
+	deciderThreshold: z.number().min(0).max(1).optional(),
+
+	/**
 	 * List of native tool names to globally disable.
 	 * Tools in this list will be excluded from prompt generation and rejected at execution time.
 	 */

@@ -233,6 +233,9 @@ vi.mock("../SlashCommandsSettings", () => ({
 vi.mock("../UISettings", () => ({
 	UISettings: () => null,
 }))
+vi.mock("../ReviewTeamThresholdSlider", () => ({
+	ReviewTeamThresholdSlider: () => null,
+}))
 
 vi.mock("../SettingsSearch", () => ({
 	SettingsSearch: () => null,
