@@ -81,7 +81,6 @@ import { Section } from "./Section"
 import PromptsSettings from "./PromptsSettings"
 import { SlashCommandsSettings } from "./SlashCommandsSettings"
 import { SkillsSettings } from "./SkillsSettings"
-import { ReviewTeamThresholdSlider } from "./ReviewTeamThresholdSlider"
 import { UISettings } from "./UISettings"
 import ModesView from "../modes/ModesView"
 import McpView from "../mcp/McpView"
@@ -222,7 +221,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 		customModes,
 		autoDetectedProfile,
 		autoDetectingVerification,
-		deciderThreshold,
 	} = cachedState
 
 	const apiConfiguration = useMemo(() => cachedState.apiConfiguration ?? {}, [cachedState.apiConfiguration])
@@ -325,12 +323,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 			return { ...prevState, experiments: { ...prevState.experiments, lenientModes: modes } }
 		})
 	}, [])
-	const setDeciderThreshold = useCallback(
-		(value: number) => {
-			setCachedState((prev) => ({ ...prev, deciderThreshold: value }))
-		},
-		[setCachedState],
-	)
 
 	const setVerificationLevel = useCallback((level: "strict" | "lenient" | "bypass") => {
 		setCachedState((prevState) => {
@@ -546,7 +538,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 					kaizenAutoPush: kaizenAutoPush ?? true,
 					kaizenRemoteName: kaizenRemoteName ?? "origin",
 					kaizenCommitTemplate: kaizenCommitTemplate ?? "kaizen: {description}",
-					deciderThreshold,
 				},
 			})
 
@@ -1067,12 +1058,6 @@ const SettingsView = forwardRef<SettingsViewRef, SettingsViewProps>(({ onDone, t
 									verificationTimeoutMs={experiments.verificationTimeoutMs as number | undefined}
 									onVerificationGateChange={onVerificationGateChange}
 								/>
-								<Section>
-									<ReviewTeamThresholdSlider
-										deciderThreshold={deciderThreshold ?? 0.5}
-										setDeciderThreshold={setDeciderThreshold}
-									/>
-								</Section>
 							</>
 						)}
 
