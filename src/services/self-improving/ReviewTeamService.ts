@@ -35,6 +35,54 @@ export interface VoteResult {
 	reasoning: string
 }
 
+interface ActionFeatures {
+	patternConfidence: number // 0-1
+	patternFrequency: number // 0-1 (sigmoid-normalized)
+	patternImpact: number // 0-1
+	similarityBoost: number // 0-0.2
+	specificityScore: number // 0-0.1
+	contentRichness: number // 0-0.1
+}
+
+function extractActionFeatures(action: ImprovementAction): ActionFeatures {
+	const payload = action.payload || {}
+	const pattern = payload.pattern as
+		| { confidence?: number; frequency?: number; impact?: number; content?: string }
+		| undefined
+
+	// Core confidence from pattern analysis
+	const patternConfidence = Math.min(
+		1,
+		Math.max(0, pattern?.confidence ?? (payload.confidence as number | undefined) ?? 0.5),
+	)
+
+	// Frequency normalized via sigmoid to avoid linear bias
+	const rawFreq = pattern?.frequency ?? (payload.frequency as number | undefined) ?? 0
+	const patternFrequency = 1 / (1 + Math.exp(-10 * (rawFreq - 0.5)))
+
+	// Impact assessment
+	const patternImpact = Math.min(1, Math.max(0, pattern?.impact ?? 0.5))
+
+	// Specificity: errorKey or skillName means targeted action
+	let specificityScore = 0
+	if (payload.errorKey) specificityScore += 0.05
+	if (payload.skillName) specificityScore += 0.05
+
+	// Content richness: longer content = more detailed pattern
+	const content = (payload.content as string | undefined) ?? pattern?.content ?? ""
+	const contentLen = typeof content === "string" ? content.length : 0
+	const contentRichness = contentLen > 500 ? 0.1 : contentLen > 200 ? 0.05 : contentLen > 50 ? 0.02 : 0
+
+	return {
+		patternConfidence,
+		patternFrequency,
+		patternImpact,
+		similarityBoost: 0, // Will be updated after vector search
+		specificityScore,
+		contentRichness,
+	}
+}
+
 const DEFAULT_CONFIG: ReviewTeamConfig = {
 	enabled: true,
 	innovatorWeight: 0.3,
@@ -274,15 +322,21 @@ export class ReviewTeamService {
 			return this.passThroughVerdict("Review team disabled")
 		}
 
-		const innovatorVote = this.innovatorReviewAction(action)
-		const contrarianVote = this.contrarianReviewAction(action)
-		const devilsAdvocateVote = this.devilsAdvocateReviewAction(action)
+		// Extract features from action payload
+		const features = extractActionFeatures(action)
+
+		// Compute similarity boost from vector search
+		features.similarityBoost = await this.computeSimilarityBoost(action)
+
+		const innovatorVote = this.innovatorReviewAction(action, features)
+		const contrarianVote = this.contrarianReviewAction(action, features)
+		const devilsAdvocateVote = this.devilsAdvocateReviewAction(action, features)
 		const deciderVote = this.deciderReviewAction(action, [innovatorVote, contrarianVote, devilsAdvocateVote])
 
 		const weightedScore = this.calculateWeightedScore([innovatorVote, contrarianVote, devilsAdvocateVote])
 		// Cold-start mitigation: when no actions have ever been approved, lower threshold
 		// to seed the system and break the chicken-and-egg problem.
-		// All personas now give PROMPT_ENRICHMENT +0.1 bonus → weighted score 0.6 reaches default threshold.
+		// Dynamic feature-based scoring — high-quality patterns can reach 0.6+ threshold.
 		const isFirstAction = this.approvedActionCount === 0
 		let effectiveThreshold = isFirstAction
 			? Math.min(this.config.deciderThreshold, 0.3)
@@ -394,6 +448,30 @@ export class ReviewTeamService {
 		}
 	}
 
+	/**
+	 * Compute similarity boost by searching for similar approved patterns via vector search.
+	 * Returns 0-0.2 boost based on average similarity of top matches.
+	 */
+	private async computeSimilarityBoost(action: ImprovementAction): Promise<number> {
+		try {
+			const pattern = action.payload?.pattern as { content?: string } | undefined
+			if (!pattern?.content || !this.codeIndexManager) {
+				return 0
+			}
+
+			const results = await this.codeIndexManager.searchIndex(pattern.content, 3)
+			if (!Array.isArray(results) || results.length === 0) {
+				return 0
+			}
+
+			// Average similarity of top matches, scaled to max 0.2 boost
+			const avgSimilarity = results.reduce((sum, r) => sum + r.score, 0) / results.length
+			return Math.min(0.2, avgSimilarity * 0.5)
+		} catch {
+			return 0 // Graceful degradation
+		}
+	}
+
 	// ===== INNOVATOR =====
 
 	private innovatorReview(pattern: LearnedPattern): VoteResult {
@@ -437,23 +515,24 @@ export class ReviewTeamService {
 		}
 	}
 
-	private innovatorReviewAction(action: ImprovementAction): VoteResult {
-		let score = 0.5
-		const reasons: string[] = []
+	private innovatorReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
+		const score =
+			0.1 + // base
+			features.patternConfidence * 0.3 + // core quality
+			features.patternFrequency * 0.2 + // evidence strength
+			features.similarityBoost * 0.2 + // historical precedent
+			features.specificityScore * 0.1 + // targeting precision
+			features.contentRichness * 0.1 // documentation depth
 
-		if (action.actionType === "SKILL_CREATE" || action.actionType === "SKILL_CREATE_FROM_SCRATCH") {
-			score += 0.15
-			reasons.push("Skill creation enables reusable knowledge")
-		}
-		if (action.actionType === "PROMPT_ENRICHMENT") {
-			score += 0.1
-			reasons.push("Prompt enrichment improves future interactions")
-		}
+		const clampedScore = Math.min(1, Math.max(0, score))
+		const approved = clampedScore >= 0.5
 
 		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "Standard action",
+			approved,
+			confidence: clampedScore,
+			reasoning: approved
+				? `High-quality pattern (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)}, impact:${features.patternImpact.toFixed(2)})`
+				: `Low-quality pattern (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)}, impact:${features.patternImpact.toFixed(2)})`,
 		}
 	}
 
@@ -503,31 +582,24 @@ export class ReviewTeamService {
 		}
 	}
 
-	private contrarianReviewAction(action: ImprovementAction): VoteResult {
-		let score = 0.5
-		const reasons: string[] = []
+	private contrarianReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
+		const score =
+			0.3 + // higher base (skeptical)
+			features.patternConfidence * 0.15 + // needs strong confidence
+			features.patternFrequency * 0.15 - // but discounts frequency
+			features.similarityBoost * 0.1 + // discounts similarity (novelty bias)
+			features.specificityScore * 0.05 +
+			features.contentRichness * 0.05
 
-		if (action.actionType === "SKILL_CREATE" && !("content" in action.payload)) {
-			score -= 0.2
-			reasons.push("Skill creation without content — may be premature")
-		}
-		if (action.actionType === "SKILL_CREATE_FROM_SCRATCH" && !("instructions" in action.payload)) {
-			score -= 0.2
-			reasons.push("SKILL_CREATE_FROM_SCRATCH without instructions — may be incomplete")
-		}
-		if (action.actionType === "ERROR_AVOIDANCE" && !("errorKey" in action.payload)) {
-			score -= 0.15
-			reasons.push("Error avoidance without specific error key")
-		}
-		if (action.actionType === "PROMPT_ENRICHMENT") {
-			score += 0.1
-			reasons.push("Prompt enrichment adds value with minimal risk")
-		}
+		const clampedScore = Math.min(1, Math.max(0, score))
+		const approved = clampedScore >= 0.5
 
 		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "No strong concerns",
+			approved,
+			confidence: clampedScore,
+			reasoning: approved
+				? `Sufficient evidence despite skepticism (conf:${features.patternConfidence.toFixed(2)})`
+				: `Insufficient evidence (conf:${features.patternConfidence.toFixed(2)}, freq:${features.patternFrequency.toFixed(2)})`,
 		}
 	}
 
@@ -577,27 +649,23 @@ export class ReviewTeamService {
 		}
 	}
 
-	private devilsAdvocateReviewAction(action: ImprovementAction): VoteResult {
-		let score = 0.5
-		const reasons: string[] = []
+	private devilsAdvocateReviewAction(action: ImprovementAction, features: ActionFeatures): VoteResult {
+		const score =
+			0.2 + // base
+			features.patternImpact * 0.3 + // impact-focused
+			features.contentRichness * 0.2 + // needs detail
+			features.specificityScore * 0.1 +
+			features.patternConfidence * 0.1
 
-		if (action.actionType === "SKILL_CREATE") {
-			score -= 0.1
-			reasons.push("Skill creation modifies agent behavior — verify necessity")
-		}
-		if (action.actionType === "ERROR_AVOIDANCE") {
-			score += 0.1
-			reasons.push("Error avoidance is low-risk, high-value")
-		}
-		if (action.actionType === "PROMPT_ENRICHMENT") {
-			score += 0.1
-			reasons.push("Prompt enrichment adds context without side effects")
-		}
+		const clampedScore = Math.min(1, Math.max(0, score))
+		const approved = clampedScore >= 0.5
 
 		return {
-			approved: score >= 0.5,
-			confidence: Math.max(0, Math.min(1, score)),
-			reasoning: reasons.length > 0 ? reasons.join("; ") : "No edge case concerns",
+			approved,
+			confidence: clampedScore,
+			reasoning: approved
+				? `Pattern has sufficient impact and detail (impact:${features.patternImpact.toFixed(2)})`
+				: `Pattern lacks impact or detail (impact:${features.patternImpact.toFixed(2)}, richness:${features.contentRichness.toFixed(2)})`,
 		}
 	}
 
