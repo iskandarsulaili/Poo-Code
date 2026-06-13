@@ -1,5 +1,6 @@
 import crypto from "crypto"
 
+import { SKILL_NAME_MAX_LENGTH } from "@roo-code/types"
 import type { SkillProvenance } from "./SkillUsageStore"
 import type { Experiments, ImprovementAction, LearnedPattern, PromptContext } from "./types"
 import type { TaskPatternStore } from "./TaskPatternStore"
@@ -410,10 +411,25 @@ export class ImprovementApplier {
 	}
 
 	private buildWorkflowSkillName(toolNames: string[]): string {
-		return `workflow-${toolNames
+		const name = `workflow-${toolNames
 			.map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "-"))
 			.sort()
 			.join("-")}`
+		return this.truncateSkillName(name)
+	}
+
+	private truncateSkillName(name: string): string {
+		if (name.length <= SKILL_NAME_MAX_LENGTH) {
+			return name
+		}
+		// DJB2 hash for deterministic 8-char hex suffix
+		let hash = 5381
+		for (let i = 0; i < name.length; i++) {
+			hash = ((hash << 5) + hash + name.charCodeAt(i)) | 0
+		}
+		const hashHex = (hash >>> 0).toString(16).padStart(8, "0")
+		const truncated = name.slice(0, SKILL_NAME_MAX_LENGTH - 9)
+		return `${truncated}-${hashHex}`
 	}
 
 	private buildSkillId(skillName: string, source: "global" | "project"): string {
@@ -835,7 +851,7 @@ ${bulletList}
 			.map((t) => t.replace(/[^a-z0-9]/gi, "-").toLowerCase())
 			.slice(0, 2)
 			.join("-")
-		return `specialized-${domain}-${toolSuffix}`
+		return this.truncateSkillName(`specialized-${domain}-${toolSuffix}`)
 	}
 
 	/**
