@@ -217,6 +217,16 @@ export class ActionExecutor {
 			return false
 		}
 
+		// Validate skill name format
+		const { validateSkillName } = await import("@roo-code/types")
+		const validation = validateSkillName(skillName)
+		if (!validation.valid) {
+			this.logger.appendLine(
+				`[ActionExecutor] SKILL_CREATE invalid skill name "${skillName}": ${validation.error}`,
+			)
+			return false
+		}
+
 		await this.skillsManager.createSkillFromContent(skillName, source, description, content, modeSlugs)
 		this.skillUsageStore.getOrCreate(skillId, skillName, createdBy)
 		this.logger.appendLine(`[ActionExecutor] Skill created: ${skillName}`)
@@ -270,6 +280,16 @@ export class ActionExecutor {
 		const newContent = this.readStringPayload(action.payload.content)
 
 		if (!umbrellaName || absorbNames.length === 0) {
+			return false
+		}
+
+		// Validate umbrella skill name format
+		const { validateSkillName } = await import("@roo-code/types")
+		const validation = validateSkillName(umbrellaName)
+		if (!validation.valid) {
+			this.logger.appendLine(
+				`[ActionExecutor] SKILL_MERGE invalid umbrella name "${umbrellaName}": ${validation.error}`,
+			)
 			return false
 		}
 

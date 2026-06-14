@@ -7,6 +7,7 @@ import { BaseTool, ToolCallbacks } from "./BaseTool"
 import type { ToolUse } from "../../shared/tools"
 import type { SkillMetadata } from "../../shared/skills"
 import { getGlobalRooDirectory } from "../../services/roo-config"
+import { validateSkillName } from "@roo-code/types"
 
 // Hermes-style skill_manage: create/patch/edit/delete/merge/list
 interface SkillManageParams {
@@ -97,6 +98,20 @@ export class SkillManageTool extends BaseTool<"skill_manage"> {
 			task.recordToolError("skill_manage")
 			task.didToolFailInCurrentTurn = true
 			pushToolResult(await task.sayAndCreateMissingParamError("skill_manage", "name, description"))
+			return
+		}
+
+		// Validate skill name format
+		const validation = validateSkillName(name)
+		if (!validation.valid) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("skill_manage")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(
+				formatResponse.toolError(
+					`Skill name must be 1-64 characters, lowercase alphanumeric with hyphens (got ${name.length})`,
+				),
+			)
 			return
 		}
 
