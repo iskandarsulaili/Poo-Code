@@ -1,6 +1,6 @@
 import crypto from "crypto"
 
-import { SKILL_NAME_MAX_LENGTH } from "@roo-code/types"
+import { SKILL_NAME_MAX_LENGTH, validateSkillName } from "@roo-code/types"
 import type { SkillProvenance } from "./SkillUsageStore"
 import type { Experiments, ImprovementAction, LearnedPattern, PromptContext } from "./types"
 import type { TaskPatternStore } from "./TaskPatternStore"
@@ -428,8 +428,15 @@ export class ImprovementApplier {
 			hash = ((hash << 5) + hash + name.charCodeAt(i)) | 0
 		}
 		const hashHex = (hash >>> 0).toString(16).padStart(8, "0")
-		const truncated = name.slice(0, SKILL_NAME_MAX_LENGTH - 9)
-		return `${truncated}-${hashHex}`
+		let truncated = name.slice(0, SKILL_NAME_MAX_LENGTH - 9)
+		truncated = truncated.replace(/-+$/, "") // strip trailing hyphens
+		const result = `${truncated}-${hashHex}`
+		// Validate the result — if still invalid, fall back to hash-only name
+		const validation = validateSkillName(result)
+		if (!validation.valid) {
+			return `skill-${hashHex}` // safe fallback
+		}
+		return result
 	}
 
 	private buildSkillId(skillName: string, source: "global" | "project"): string {

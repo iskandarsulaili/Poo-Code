@@ -248,6 +248,16 @@ export class ActionExecutor {
 			return false
 		}
 
+		// Validate skill name format
+		const { validateSkillName } = await import("@roo-code/types")
+		const validation = validateSkillName(skillName)
+		if (!validation.valid) {
+			this.logger.appendLine(
+				`[ActionExecutor] SKILL_UPDATE invalid skill name "${skillName}": ${validation.error}`,
+			)
+			return false
+		}
+
 		// Deduplication check: skip update if skill content hasn't changed
 		if (this.skillsManager.getSkillContent) {
 			try {

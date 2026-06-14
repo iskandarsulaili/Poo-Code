@@ -197,6 +197,20 @@ export class SkillManageTool extends BaseTool<"skill_manage"> {
 			return
 		}
 
+		// Validate skill name format
+		const nameValidation = validateSkillName(name)
+		if (!nameValidation.valid) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("skill_manage")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(
+				formatResponse.toolError(
+					`Skill name must be 1-64 characters, lowercase alphanumeric with hyphens (got ${name.length})`,
+				),
+			)
+			return
+		}
+
 		// Find the skill file
 		const skillPath = await this.resolveSkillPath(name, task, skillsManager)
 		if (!skillPath) {
@@ -268,6 +282,20 @@ export class SkillManageTool extends BaseTool<"skill_manage"> {
 			return
 		}
 
+		// Validate skill name format
+		const nameValidation = validateSkillName(name)
+		if (!nameValidation.valid) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("skill_manage")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(
+				formatResponse.toolError(
+					`Skill name must be 1-64 characters, lowercase alphanumeric with hyphens (got ${name.length})`,
+				),
+			)
+			return
+		}
+
 		const skillPath = await this.resolveSkillPath(name, task, skillsManager)
 		if (!skillPath) {
 			pushToolResult(formatResponse.toolError(`Skill not found: "${name}"`))
@@ -303,6 +331,20 @@ export class SkillManageTool extends BaseTool<"skill_manage"> {
 			task.recordToolError("skill_manage")
 			task.didToolFailInCurrentTurn = true
 			pushToolResult(await task.sayAndCreateMissingParamError("skill_manage", "name"))
+			return
+		}
+
+		// Validate skill name format
+		const nameValidation = validateSkillName(name)
+		if (!nameValidation.valid) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("skill_manage")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(
+				formatResponse.toolError(
+					`Skill name must be 1-64 characters, lowercase alphanumeric with hyphens (got ${name.length})`,
+				),
+			)
 			return
 		}
 
@@ -351,6 +393,20 @@ export class SkillManageTool extends BaseTool<"skill_manage"> {
 			task.recordToolError("skill_manage")
 			task.didToolFailInCurrentTurn = true
 			pushToolResult(await task.sayAndCreateMissingParamError("skill_manage", "target, absorb"))
+			return
+		}
+
+		// Validate target skill name format
+		const targetValidation = validateSkillName(target)
+		if (!targetValidation.valid) {
+			task.consecutiveMistakeCount++
+			task.recordToolError("skill_manage")
+			task.didToolFailInCurrentTurn = true
+			pushToolResult(
+				formatResponse.toolError(
+					`Skill name must be 1-64 characters, lowercase alphanumeric with hyphens (got ${target.length})`,
+				),
+			)
 			return
 		}
 

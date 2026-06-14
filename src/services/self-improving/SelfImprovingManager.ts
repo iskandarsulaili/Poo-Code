@@ -657,6 +657,7 @@ export class SelfImprovingManager {
 			// Hermes F3: Consolidate MemoryManager into LearningStore cycle
 			try {
 				const memoryManager = new (MemoryManager as any)()
+				await memoryManager.initialize()
 				await memoryManager.consolidate()
 			} catch (memoryError) {
 				this.logger.appendLine(
@@ -689,11 +690,22 @@ export class SelfImprovingManager {
 				const state = this.runtime?.store
 				if (state) {
 					const patterns = state.getPatterns?.() ?? []
-					const scored = (scorer as any).scoreEntries(patterns)
-					if (scored && scored.length > 0) {
-						this.logger.appendLine(
-							`[Hermes F3] ConfidenceScorer applied to ${scored.length} learning entries`,
-						)
+					if (patterns.length > 0) {
+						const scored = patterns.map((p: LearnedPattern) => ({
+							...p,
+							confidenceScore: scorer.calculateScore({
+								baseScore: p.confidenceScore ?? 0.5,
+								tierDecayRate: 0.05, // SEMANTIC decay rate for learned patterns
+								ageMs: Date.now() - (p.lastSeenAt ?? Date.now()),
+								sourceAuthority: "execution",
+								consistency: 1.0,
+							}),
+						}))
+						if (scored && scored.length > 0) {
+							this.logger.appendLine(
+								`[Hermes F3] ConfidenceScorer applied to ${scored.length} learning entries`,
+							)
+						}
 					}
 				}
 			} catch (scorerError) {
