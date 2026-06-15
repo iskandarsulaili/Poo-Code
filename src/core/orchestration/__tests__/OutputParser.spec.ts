@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from "vitest"
 
-import type { ParserPlugin, ProjectLanguage } from "@roo-code/types"
+import type { ParserPlugin, ProjectLanguage, ParsedResult } from "@roo-code/types"
 
 import {
 	OutputParser,
@@ -10,6 +10,7 @@ import {
 	GenericParser,
 	ParserRegistry,
 } from "../OutputParser"
+import { buildLLMPrompt, parseLLMResponse, shouldInvokeLLMFallback } from "../LLMFallbackParser"
 import { experimentConfigsMap } from "../../../shared/experiments"
 
 describe("stripAnsiCodes", () => {
@@ -356,6 +357,307 @@ describe("OutputParser", () => {
 			parser.registerParser("rust", mockParser)
 			expect(parser.getSupportedLanguages()).toEqual(["typescript", "rust"])
 		})
+	})
+})
+
+describe("LLM Fallback", () => {
+	describe("shouldInvokeLLMFallback", () => {
+		it("should return false for empty output", () => {
+			const result: ParsedResult = {
+				exitCode: 0,
+				duration: 0,
+				stdout: "",
+				stderr: "",
+				errors: [],
+				warnings: [],
+				genericMessages: [],
+				summary: "No issues found",
+				rawOutput: "",
+				truncated: false,
+			}
+			expect(shouldInvokeLLMFallback(result, "")).toBe(false)
+		})
+
+		it("should return false for output shorter than threshold", () => {
+			const result: ParsedResult = {
+				exitCode: 0,
+				duration: 0,
+				stdout: "ok",
+				stderr: "",
+				errors: [],
+				warnings: [],
+				genericMessages: ["ok"],
+				summary: "1 message(s)",
+				rawOutput: "ok",
+				truncated: false,
+			}
+			expect(shouldInvokeLLMFallback(result, "ok")).toBe(false)
+		})
+
+		it("should return false when regex parser found errors", () => {
+			const result: ParsedResult = {
+				exitCode: 1,
+				duration: 10,
+				stdout: "src/file.ts:1:1: error: fail",
+				stderr: "",
+				errors: [{ file: "src/file.ts", line: 1, severity: "error", message: "fail", raw: "error" }],
+				warnings: [],
+				genericMessages: [],
+				summary: "1 error(s)",
+				rawOutput: "src/file.ts:1:1: error: fail",
+				truncated: false,
+			}
+			expect(shouldInvokeLLMFallback(result, "src/file.ts:1:1: error: fail")).toBe(false)
+		})
+
+		it("should return false when regex parser found warnings", () => {
+			const result: ParsedResult = {
+				exitCode: 0,
+				duration: 10,
+				stdout: "Warning: something",
+				stderr: "",
+				errors: [],
+				warnings: [
+					{ file: "unknown", line: 0, severity: "warning", message: "something", raw: "Warning: something" },
+				],
+				genericMessages: [],
+				summary: "1 warning(s)",
+				rawOutput: "Warning: something",
+				truncated: false,
+			}
+			expect(shouldInvokeLLMFallback(result, "Warning: something")).toBe(false)
+		})
+
+		it("should return true when no match + non-trivial output", () => {
+			const nonTrivialOutput = "A".repeat(150)
+			const result: ParsedResult = {
+				exitCode: 0,
+				duration: 10,
+				stdout: nonTrivialOutput,
+				stderr: "",
+				errors: [],
+				warnings: [],
+				genericMessages: [nonTrivialOutput],
+				summary: "1 message(s)",
+				rawOutput: nonTrivialOutput,
+				truncated: false,
+			}
+			expect(shouldInvokeLLMFallback(result, nonTrivialOutput)).toBe(true)
+		})
+	})
+
+	describe("parseWithLLMFallback", () => {
+		it("should invoke callback and return LLM result", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const mockLLMResult: ParsedResult = {
+				exitCode: undefined,
+				duration: 0,
+				stdout: "build failed",
+				stderr: "",
+				errors: [
+					{
+						file: "src/main.ts",
+						line: 42,
+						severity: "error",
+						message: "Type 'X' is not assignable",
+						code: "TS2322",
+						raw: "build failed",
+					},
+				],
+				warnings: [],
+				genericMessages: [],
+				summary: "LLM fallback: 1 error(s)",
+				rawOutput: "build failed",
+				truncated: false,
+			}
+
+			const callback = vi.fn<(...args: any[]) => any>().mockResolvedValue(mockLLMResult)
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(true)
+
+			const result = await parser.parseWithLLMFallback("build failed", "typescript")
+			expect(callback).toHaveBeenCalledWith("build failed", "typescript")
+			expect(result.errors).toHaveLength(1)
+			expect(result.errors[0].code).toBe("TS2322")
+			expect(result.summary).toBe("LLM fallback: 1 error(s)")
+		})
+
+		it("should return fallback result when no callback registered", async () => {
+			const parser = new OutputParser()
+			const result = await parser.parseWithLLMFallback("some output")
+			expect(result.summary).toBe("LLM fallback not configured")
+			expect(result.genericMessages).toContain("some output")
+		})
+
+		it("should gracefully degrade when callback throws", async () => {
+			const parser = new OutputParser()
+			parser.setLLMFallbackCallback(async () => {
+				throw new Error("LLM timeout")
+			})
+			parser.setLLMFallbackEnabled(true)
+
+			const result = await parser.parseWithLLMFallback("some output")
+			expect(result.summary).toBe("LLM fallback failed")
+		})
+	})
+
+	describe("setLLMFallbackEnabled / isLLMFallbackEnabled", () => {
+		it("should toggle LLM fallback state", () => {
+			const parser = new OutputParser()
+			expect(parser.isLLMFallbackEnabled()).toBe(false)
+
+			parser.setLLMFallbackEnabled(true)
+			expect(parser.isLLMFallbackEnabled()).toBe(true)
+
+			parser.setLLMFallbackEnabled(false)
+			expect(parser.isLLMFallbackEnabled()).toBe(false)
+		})
+	})
+
+	describe("LLM fallback in parse() integration", () => {
+		it("should NOT call LLM fallback when output is empty", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const callback = vi.fn()
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(true)
+
+			await parser.parse("")
+			expect(callback).not.toHaveBeenCalled()
+		})
+
+		it("should NOT call LLM fallback when regex matched errors", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const callback = vi.fn()
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(true)
+
+			await parser.parse("src/file.ts:1:1: er ror: fail")
+			expect(callback).not.toHaveBeenCalled()
+		})
+
+		it("should call LLM fallback when no match + non-trivial output", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const mockLLMResult: ParsedResult = {
+				exitCode: undefined,
+				duration: 0,
+				stdout: "A".repeat(150),
+				stderr: "",
+				errors: [
+					{ file: "unknown", line: 0, severity: "error", message: "Detected failure", raw: "A".repeat(150) },
+				],
+				warnings: [],
+				genericMessages: [],
+				summary: "LLM fallback: 1 error(s)",
+				rawOutput: "A".repeat(150),
+				truncated: false,
+			}
+
+			const callback = vi.fn().mockResolvedValue(mockLLMResult)
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(true)
+
+			const result = await parser.parse("A".repeat(150))
+			expect(callback).toHaveBeenCalled()
+			expect(result.errors).toHaveLength(1)
+			expect(result.errors[0].message).toBe("Detected failure")
+		})
+
+		it("should NOT call LLM fallback when feature is disabled", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const callback = vi.fn()
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(false) // explicitly disabled
+
+			await parser.parse("A".repeat(150))
+			expect(callback).not.toHaveBeenCalled()
+		})
+
+		it("should gracefully degrade when LLM callback throws during parse()", async () => {
+			const parser = new OutputParser()
+			experimentConfigsMap.STRUCTURED_OUTPUT_PARSING = { enabled: true }
+
+			const callback = vi.fn().mockRejectedValue(new Error("API error"))
+			parser.setLLMFallbackCallback(callback)
+			parser.setLLMFallbackEnabled(true)
+
+			// Should return the generic parser result, not throw
+			const result = await parser.parse("A".repeat(150))
+			expect(result).toBeDefined()
+			expect(result.rawOutput).toBe("A".repeat(150))
+		})
+	})
+})
+
+describe("buildLLMPrompt", () => {
+	it("should include language in the prompt", () => {
+		const prompt = buildLLMPrompt("some output", "typescript")
+		expect(prompt).toContain("Language: typescript")
+		expect(prompt).toContain("some output")
+	})
+
+	it("should default language to unknown when not provided", () => {
+		const prompt = buildLLMPrompt("some output")
+		expect(prompt).toContain("Language: unknown")
+	})
+})
+
+describe("parseLLMResponse", () => {
+	it("should parse a valid JSON response", () => {
+		const llmResponse = JSON.stringify({
+			errors: [
+				{
+					file: "src/main.ts",
+					line: 10,
+					column: 5,
+					message: "Type mismatch",
+					code: "TS2345",
+					rule: "no-implicit-any",
+				},
+			],
+			warnings: [{ file: "src/util.ts", line: 3, message: "Unused variable", rule: "no-unused-vars" }],
+			summary: "Found 1 error, 1 warning",
+		})
+		const result = parseLLMResponse(llmResponse, "raw build output")
+		expect(result.errors).toHaveLength(1)
+		expect(result.errors[0].code).toBe("TS2345")
+		expect(result.errors[0].rule).toBe("no-implicit-any")
+		expect(result.warnings).toHaveLength(1)
+		expect(result.warnings[0].message).toBe("Unused variable")
+	})
+
+	it("should handle markdown-wrapped JSON", () => {
+		const llmResponse =
+			'```json\n{"errors": [{"file": "test.ts", "line": 1, "message": "fail"}], "warnings": [], "summary": "1 error"}\n```'
+		const result = parseLLMResponse(llmResponse, "raw")
+		expect(result.errors).toHaveLength(1)
+		expect(result.errors[0].file).toBe("test.ts")
+	})
+
+	it("should handle markdown-wrapped JSON without json tag", () => {
+		const llmResponse = '```\n{"errors": [], "warnings": [], "summary": "all good"}\n```'
+		const result = parseLLMResponse(llmResponse, "raw")
+		expect(result.summary).toBe("all good")
+	})
+
+	it("should return unparseable response gracefully", () => {
+		const result = parseLLMResponse("not json at all", "raw output")
+		expect(result.summary).toBe("LLM fallback returned unparseable response")
+		expect(result.genericMessages).toContain("raw output")
+	})
+
+	it("should handle null/empty response gracefully", () => {
+		const result = parseLLMResponse("", "raw output")
+		expect(result.summary).toBe("LLM fallback returned unparseable response")
 	})
 })
 

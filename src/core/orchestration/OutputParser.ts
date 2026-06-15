@@ -1,5 +1,7 @@
 import type { ParsedResult, ParsedError, ParserPlugin, ProjectLanguage, AggregatedResult } from "@roo-code/types"
 import { experimentConfigsMap } from "../../shared/experiments"
+import type { LLMFallbackCallback } from "./LLMFallbackParser"
+import { shouldInvokeLLMFallback } from "./LLMFallbackParser"
 
 /**
  * ANSI escape sequence regex — matches common terminal control sequences.
@@ -251,6 +253,12 @@ export class OutputParser {
 	/** Registered parsers keyed by ProjectLanguage */
 	private parserMap = new Map<ProjectLanguage, ParserPlugin>()
 
+	/** Callback for LLM fallback parsing (dependency-injected) */
+	private llmFallbackCallback: LLMFallbackCallback | null = null
+
+	/** Whether LLM fallback is currently enabled */
+	private llmFallbackEnabled: boolean = false
+
 	/**
 	 * Register a parser plugin for a specific language.
 	 *
@@ -327,11 +335,13 @@ export class OutputParser {
 		const parser = targetLanguage ? this.parserMap.get(targetLanguage) : undefined
 		const activeParser = parser ?? GenericParser
 
+		// Step 1: Normal regex-based parsing
+		let result: ParsedResult
 		try {
 			// Parse using the selected parser
 			// Pass the combined output as stdout since we don't have separate streams
-			const result = activeParser.parse(output, "", undefined)
-			return {
+			result = activeParser.parse(output, "", undefined)
+			result = {
 				...result,
 				rawOutput: output,
 			}
@@ -339,11 +349,30 @@ export class OutputParser {
 			// Graceful degradation — if parser throws, fall back to generic
 			console.error(`[OutputParser] Parser "${activeParser.name}" threw:`, error)
 			const fallbackResult = GenericParser.parse(output, "", undefined)
-			return {
+			result = {
 				...fallbackResult,
 				rawOutput: output,
 			}
 		}
+
+		// Step 2: LLM fallback — if enabled and regex found nothing meaningful
+		if (this.llmFallbackEnabled && this.llmFallbackCallback && shouldInvokeLLMFallback(result, output)) {
+			try {
+				const llmResult = await this.llmFallbackCallback(output, targetLanguage)
+				// Merge LLM results into the result, preserving exit code from generic if present
+				return {
+					...result,
+					errors: llmResult.errors.length > 0 ? llmResult.errors : result.errors,
+					warnings: llmResult.warnings.length > 0 ? llmResult.warnings : result.warnings,
+					summary: llmResult.summary,
+				}
+			} catch (error) {
+				// Graceful degradation — if LLM call fails, return the regex-based result
+				console.error("[OutputParser] LLM fallback threw:", error)
+			}
+		}
+
+		return result
 	}
 
 	/**
@@ -415,6 +444,81 @@ export class OutputParser {
 	 */
 	getSupportedLanguages(): ProjectLanguage[] {
 		return Array.from(this.parserMap.keys())
+	}
+
+	/**
+	 * Set the LLM fallback callback for semantic parsing of unrecognized output.
+	 * The callback is dependency-injected, so OutputParser never imports the LLM provider directly.
+	 *
+	 * @param callback - Async callback that receives raw output and optional language hint,
+	 *                   returns a ParsedResult with structured diagnostics
+	 */
+	setLLMFallbackCallback(callback: LLMFallbackCallback | null): void {
+		this.llmFallbackCallback = callback
+	}
+
+	/**
+	 * Enable or disable the LLM fallback feature.
+	 *
+	 * @param enabled - Whether LLM fallback should be attempted when regex parsing produces no results
+	 */
+	setLLMFallbackEnabled(enabled: boolean): void {
+		this.llmFallbackEnabled = enabled
+	}
+
+	/**
+	 * Check whether LLM fallback is currently enabled.
+	 *
+	 * @returns True if LLM fallback is enabled
+	 */
+	isLLMFallbackEnabled(): boolean {
+		return this.llmFallbackEnabled
+	}
+
+	/**
+	 * Parse output with LLM fallback explicitly (bypasses the automatic trigger logic).
+	 * Useful for callers who want to force LLM analysis regardless of regex results.
+	 *
+	 * @param output - Raw command output to parse
+	 * @param language - Optional language hint
+	 * @returns ParsedResult from LLM analysis (or generic fallback if LLM unavailable/fails)
+	 */
+	async parseWithLLMFallback(output: string, language?: ProjectLanguage): Promise<ParsedResult> {
+		if (!this.llmFallbackCallback) {
+			console.warn(
+				"[OutputParser] parseWithLLMFallback called but no callback registered; falling back to generic",
+			)
+			return {
+				exitCode: undefined,
+				duration: 0,
+				stdout: output,
+				stderr: "",
+				errors: [],
+				warnings: [],
+				genericMessages: [output],
+				summary: "LLM fallback not configured",
+				rawOutput: output,
+				truncated: false,
+			}
+		}
+
+		try {
+			return await this.llmFallbackCallback(output, language)
+		} catch (error) {
+			console.error("[OutputParser] parseWithLLMFallback threw:", error)
+			return {
+				exitCode: undefined,
+				duration: 0,
+				stdout: output,
+				stderr: "",
+				errors: [],
+				warnings: [],
+				genericMessages: [output],
+				summary: "LLM fallback failed",
+				rawOutput: output,
+				truncated: false,
+			}
+		}
 	}
 }
 

@@ -220,6 +220,28 @@ export async function activate(context: vscode.ExtensionContext) {
 	const outputParser = new OutputParser()
 	registerAllParsers(outputParser)
 
+	// Wire LLM fallback: when regex parsing finds no errors/warnings, delegate to the
+	// active LLM provider for semantic analysis. This is best-effort and non-blocking.
+	// The callback is a placeholder — the extension's LLM provider integration sets it
+	// dynamically via ClineProvider or the active task context.
+	outputParser.setLLMFallbackCallback(async (rawOutput, language) => {
+		// The LLM provider integration happens at the task level.
+		// Placeholder returns a result indicating LLM fallback isn't wired at activation.
+		return {
+			exitCode: undefined,
+			duration: 0,
+			stdout: rawOutput,
+			stderr: "",
+			errors: [],
+			warnings: [],
+			genericMessages: [rawOutput],
+			summary: "LLM fallback: provider not available at extension level",
+			rawOutput,
+			truncated: false,
+		}
+	})
+	outputParser.setLLMFallbackEnabled(experimentConfigsMap.STRUCTURED_OUTPUT_PARSING?.enabled ?? true)
+
 	// Listen for workspace folder changes (multi-root support).
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeWorkspaceFolders((event) => {

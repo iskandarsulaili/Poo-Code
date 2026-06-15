@@ -815,15 +815,33 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			const resolvedCwd = cwd
 
 			// Use dynamic import for child_process
-			const { execSync } = await import("child_process")
+			// Use spawnSync with a parsed command array to avoid shell interpretation issues
+			// where arguments like "." can get glued to the executable name (e.g. "eslint.").
+			// Splitting the command into [executable, ...args] ensures each argument stays
+			// separate, preventing npm shell wrappers from misparsing "eslint ." as "eslint.".
+			const { spawnSync } = await import("child_process")
+			const cmdParts = command.split(/\s+/)
+			const execName = cmdParts[0]
+			const execArgs = cmdParts.slice(1)
 
-			const output = execSync(command, {
+			const result = spawnSync(execName, execArgs, {
 				cwd: resolvedCwd,
 				timeout: this.config.gateTimeoutMs,
 				encoding: "utf-8",
 				stdio: ["pipe", "pipe", "pipe"],
 			})
 
+			if (result.error) {
+				throw result.error
+			}
+			if (result.status !== 0) {
+				const err = new Error(result.stderr || `Exit code ${result.status}`)
+				;(err as any).stderr = result.stderr
+				;(err as any).stdout = result.stdout
+				throw err
+			}
+
+			const output = result.stdout || ""
 			const durationMs = Date.now() - start
 			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" passed (${durationMs}ms)`)
 			return { name, passed: true, output: output.slice(0, 1000), durationMs }
