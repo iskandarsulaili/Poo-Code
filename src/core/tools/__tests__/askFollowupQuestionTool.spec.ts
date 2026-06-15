@@ -177,13 +177,14 @@ describe("AskFollowupQuestionTool", () => {
 		expect(mockTask.consecutiveMistakeCount).toBe(0)
 	})
 
-	it("should handle user providing empty text response", async () => {
+	it("should handle user providing empty text response by falling back to first suggestion", async () => {
 		const params = { question: "What?", follow_up: [{ text: "A" }] }
 		;(mockTask.ask as any).mockResolvedValue({ text: "", images: [] })
 
 		await tool.execute(params, mockTask, mockCallbacks)
 
-		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "", [])
+		// Falls back to first non-empty suggestion instead of sending empty response
+		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "A", [])
 	})
 
 	// ===== Error handling tests =====
@@ -338,13 +339,17 @@ describe("AskFollowupQuestionTool", () => {
 		)
 	})
 
-	it("should handle null text in user response by using empty string", async () => {
+	it("should handle null text in user response by falling back to first suggestion", async () => {
 		const params = { question: "What?", follow_up: [{ text: "A" }] }
 		;(mockTask.ask as any).mockResolvedValue({ text: null, images: [] })
 
 		await tool.execute(params, mockTask, mockCallbacks)
 
-		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "", [])
+		// Falls back to first non-empty suggestion instead of sending empty response
+		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "A", [])
+		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
+			formatResponse.toolResult("<user_message>\nA\n</user_message>", []),
+		)
 	})
 
 	it("should increment consecutiveMistakeCount from existing value", async () => {
@@ -422,18 +427,19 @@ describe("AskFollowupQuestionTool", () => {
 		expect(mockTask.ask).toHaveBeenCalledWith("followup", "", true)
 	})
 
-	it("should handle execute when task.ask resolves with undefined text", async () => {
+	it("should handle execute when task.ask resolves with undefined text by falling back to suggestion", async () => {
 		const params = { question: "What?", follow_up: [{ text: "A" }] }
 		;(mockTask.ask as any).mockResolvedValue({ text: undefined, images: [] })
 
 		await tool.execute(params, mockTask, mockCallbacks)
 
-		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "", [])
-		// pushToolResult should receive normalized empty string, NOT "undefined"
+		// Falls back to first non-empty suggestion
+		expect(mockTask.say).toHaveBeenCalledWith("user_feedback", "A", [])
+		// pushToolResult should contain the suggestion, NOT undefined
 		const toolResultArg = (mockCallbacks.pushToolResult as any).mock.calls[0][0]
 		expect(toolResultArg).not.toContain("undefined")
 		expect(mockCallbacks.pushToolResult).toHaveBeenCalledWith(
-			formatResponse.toolResult("<user_message>\n\n</user_message>", []),
+			formatResponse.toolResult("<user_message>\nA\n</user_message>", []),
 		)
 	})
 

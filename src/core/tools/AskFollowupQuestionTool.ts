@@ -47,7 +47,23 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 
 			task.consecutiveMistakeCount = 0
 			const { text, images } = await task.ask("followup", JSON.stringify(follow_up_json), false)
-			const safeText = text ?? ""
+			// Ensure response text is never empty - use contextual fallback
+			const safeText = (text ?? "").trim()
+			if (!safeText && follow_up_json.suggest.length > 0) {
+				// Fallback to first non-empty suggestion if response is empty
+				const validSuggestion = follow_up_json.suggest.find(
+					(s: { answer: string; mode?: string }) => s.answer && s.answer.trim().length > 0,
+				)
+				const fallbackText = validSuggestion?.answer?.trim() ?? ""
+				if (fallbackText) {
+					console.warn(
+						`[AskFollowupQuestionTool] Empty user response, using first non-empty suggestion: "${fallbackText.substring(0, 60)}..."`,
+					)
+					await task.say("user_feedback", fallbackText, images)
+					pushToolResult(formatResponse.toolResult(`<user_message>\n${fallbackText}\n</user_message>`, images))
+					return
+				}
+			}
 			await task.say("user_feedback", safeText, images)
 			pushToolResult(formatResponse.toolResult(`<user_message>\n${safeText}\n</user_message>`, images))
 		} catch (error) {

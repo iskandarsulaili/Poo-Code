@@ -2,6 +2,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import crypto from "crypto"
 
+import { SKILL_NAME_MAX_LENGTH } from "@roo-code/types"
 import type { MemoryBackend } from "./MemoryBackend"
 import type { SkillProvenance, SkillUsageStore } from "./SkillUsageStore"
 import type { ImprovementAction, Logger } from "./types"
@@ -217,19 +218,20 @@ export class ActionExecutor {
 			return false
 		}
 
-		// Validate skill name format
+		// Validate skill name format — with defense-in-depth truncation
+		const safeName = this.enforceSafeSkillName(skillName)
 		const { validateSkillName } = await import("@roo-code/types")
-		const validation = validateSkillName(skillName)
+		const validation = validateSkillName(safeName)
 		if (!validation.valid) {
 			this.logger.appendLine(
-				`[ActionExecutor] SKILL_CREATE invalid skill name "${skillName}": ${validation.error}`,
+				`[ActionExecutor] SKILL_CREATE invalid skill name "${safeName}" (original: "${skillName}"): ${validation.error}`,
 			)
 			return false
 		}
 
-		await this.skillsManager.createSkillFromContent(skillName, source, description, content, modeSlugs)
-		this.skillUsageStore.getOrCreate(skillId, skillName, createdBy)
-		this.logger.appendLine(`[ActionExecutor] Skill created: ${skillName}`)
+		await this.skillsManager.createSkillFromContent(safeName, source, description, content, modeSlugs)
+		this.skillUsageStore.getOrCreate(skillId, safeName, createdBy)
+		this.logger.appendLine(`[ActionExecutor] Skill created: ${safeName}`)
 		return true
 	}
 
@@ -248,12 +250,13 @@ export class ActionExecutor {
 			return false
 		}
 
-		// Validate skill name format
+		// Validate skill name format — with defense-in-depth truncation
+		const safeName = this.enforceSafeSkillName(skillName)
 		const { validateSkillName } = await import("@roo-code/types")
-		const validation = validateSkillName(skillName)
+		const validation = validateSkillName(safeName)
 		if (!validation.valid) {
 			this.logger.appendLine(
-				`[ActionExecutor] SKILL_UPDATE invalid skill name "${skillName}": ${validation.error}`,
+				`[ActionExecutor] SKILL_UPDATE invalid skill name "${safeName}" (original: "${skillName}"): ${validation.error}`,
 			)
 			return false
 		}
@@ -274,10 +277,10 @@ export class ActionExecutor {
 			}
 		}
 
-		await this.skillsManager.updateSkillContent(skillName, source, content, mode)
-		this.skillUsageStore.getOrCreate(skillId, skillName, "agent")
+		await this.skillsManager.updateSkillContent(safeName, source, content, mode)
+		this.skillUsageStore.getOrCreate(skillId, safeName, "agent")
 		await this.skillUsageStore.bumpPatch(skillId)
-		this.logger.appendLine(`[ActionExecutor] Skill updated: ${skillName}`)
+		this.logger.appendLine(`[ActionExecutor] Skill updated: ${safeName}`)
 		return true
 	}
 
@@ -293,12 +296,13 @@ export class ActionExecutor {
 			return false
 		}
 
-		// Validate umbrella skill name format
+		// Validate umbrella skill name format — with defense-in-depth truncation
+		const safeName = this.enforceSafeSkillName(umbrellaName)
 		const { validateSkillName } = await import("@roo-code/types")
-		const validation = validateSkillName(umbrellaName)
+		const validation = validateSkillName(safeName)
 		if (!validation.valid) {
 			this.logger.appendLine(
-				`[ActionExecutor] SKILL_MERGE invalid umbrella name "${umbrellaName}": ${validation.error}`,
+				`[ActionExecutor] SKILL_MERGE invalid umbrella name "${safeName}" (original: "${umbrellaName}"): ${validation.error}`,
 			)
 			return false
 		}
@@ -306,7 +310,7 @@ export class ActionExecutor {
 		// 1. Create or update the umbrella skill
 		if (newContent) {
 			const source = this.readSkillSource(action.payload.source) ?? "global"
-			const skillId = `skill:${source}:${umbrellaName}`
+			const skillId = `skill:${source}:${safeName}`
 			const description =
 				this.readStringPayload(action.payload.description) ?? `Umbrella skill merging ${absorbNames.join(", ")}`
 			const modeSlugs = this.readStringArrayPayload(action.payload.modeSlugs)
@@ -314,20 +318,20 @@ export class ActionExecutor {
 			if (this.skillsManager) {
 				const existing = this.skillUsageStore.get(skillId)
 				if (existing) {
-					await this.skillsManager.updateSkillContent(umbrellaName, source, newContent, modeSlugs[0])
+					await this.skillsManager.updateSkillContent(safeName, source, newContent, modeSlugs[0])
 					await this.skillUsageStore.bumpPatch(skillId)
 				} else {
 					await this.skillsManager.createSkillFromContent(
-						umbrellaName,
+						safeName,
 						source,
 						description,
 						newContent,
 						modeSlugs,
 					)
-					this.skillUsageStore.getOrCreate(skillId, umbrellaName, "agent")
+					this.skillUsageStore.getOrCreate(skillId, safeName, "agent")
 				}
 			} else {
-				this.skillUsageStore.getOrCreate(skillId, umbrellaName, "agent")
+				this.skillUsageStore.getOrCreate(skillId, safeName, "agent")
 			}
 		}
 
@@ -335,12 +339,12 @@ export class ActionExecutor {
 		for (const absorbName of absorbNames) {
 			const source = this.readSkillSource(action.payload.source) ?? "global"
 			const absorbId = `skill:${source}:${absorbName}`
-			this.skillUsageStore.setAbsorbedInto(absorbId, umbrellaName)
+			this.skillUsageStore.setAbsorbedInto(absorbId, safeName)
 			await this.skillUsageStore.transitionState(absorbId, "archived")
-			this.logger.appendLine(`[ActionExecutor] Merged ${absorbName} into ${umbrellaName}`)
+			this.logger.appendLine(`[ActionExecutor] Merged ${absorbName} into ${safeName}`)
 		}
 
-		this.logger.appendLine(`[ActionExecutor] Merge complete: ${absorbNames.length} skills → ${umbrellaName}`)
+		this.logger.appendLine(`[ActionExecutor] Merge complete: ${absorbNames.length} skills → ${safeName}`)
 		return true
 	}
 
@@ -380,70 +384,71 @@ export class ActionExecutor {
 			return false
 		}
 
-		// Validate skill name format
+		// Validate skill name format — with defense-in-depth truncation
+		const safeName = this.enforceSafeSkillName(name)
 		const { validateSkillName } = await import("@roo-code/types")
-		const validation = validateSkillName(name)
+		const validation = validateSkillName(safeName)
 		if (!validation.valid) {
 			this.logger.appendLine(
-				`[ActionExecutor] SKILL_CREATE_FROM_SCRATCH invalid skill name "${name}": ${validation.error}`,
+				`[ActionExecutor] SKILL_CREATE_FROM_SCRATCH invalid skill name "${safeName}" (original: "${name}"): ${validation.error}`,
 			)
 			return false
 		}
 
-		// Build full SKILL.md content with frontmatter
-		const frontmatterLines = [`name: ${name}`, `description: ${description}`]
+		// Use truncated safeName for the actual skill creation
+		const resolvedName = safeName !== name ? safeName : name
+
+		// Build full SKILL.md content with frontmatter (using resolved name)
+		const domains = this.readStringArrayPayload(action.payload.domains)
+		const versatilityScore = this.readNumberPayload(action.payload.versatilityScore)
+		const crossDomainPatterns = this.readStringArrayPayload(action.payload.crossDomainPatterns)
+
+		const frontmatterParts = [`name: ${resolvedName}`, `description: ${description}`]
 		if (modeSlugs.length > 0) {
-			frontmatterLines.push("modeSlugs:")
+			frontmatterParts.push("modeSlugs:")
 			for (const slug of modeSlugs) {
-				frontmatterLines.push(`  - ${slug}`)
+				frontmatterParts.push(`  - ${slug}`)
 			}
 		}
 		if (tools.length > 0) {
-			frontmatterLines.push("tools:")
+			frontmatterParts.push("tools:")
 			for (const tool of tools) {
-				frontmatterLines.push(`  - ${tool}`)
+				frontmatterParts.push(`  - ${tool}`)
 			}
 		}
-
-		// Add cross-domain metadata if present in payload
-		const domains = this.readStringArrayPayload(action.payload.domains)
 		if (domains.length > 0) {
-			frontmatterLines.push("domains:")
+			frontmatterParts.push("domains:")
 			for (const d of domains) {
-				frontmatterLines.push(`  - ${d}`)
+				frontmatterParts.push(`  - ${d}`)
 			}
 		}
-
-		const versatilityScore = this.readNumberPayload(action.payload.versatilityScore)
 		if (versatilityScore !== undefined) {
-			frontmatterLines.push(`versatilityScore: ${versatilityScore}`)
+			frontmatterParts.push(`versatilityScore: ${versatilityScore}`)
 		}
-
-		const crossDomainPatterns = this.readStringArrayPayload(action.payload.crossDomainPatterns)
 		if (crossDomainPatterns.length > 0) {
-			frontmatterLines.push("crossDomainPatterns:")
+			frontmatterParts.push("crossDomainPatterns:")
 			for (const p of crossDomainPatterns) {
-				frontmatterLines.push(`  - ${p}`)
+				frontmatterParts.push(`  - ${p}`)
 			}
 		}
 
-		const fullContent = `---
-${frontmatterLines.join("\n")}
+		const resolvedContent = `---
+${frontmatterParts.join("\n")}
 ---
 
 ${instructions.trim()}
 `
 
 		// Create the skill via SkillsManager
-		await this.skillsManager.createSkillFromContent(name, source, description, fullContent, modeSlugs)
+		await this.skillsManager.createSkillFromContent(resolvedName, source, description, resolvedContent, modeSlugs)
 
 		// Bundle referenced assets if provided
 		if (assets.length > 0) {
-			await this.bundleAssets(name, source, assets)
+			await this.bundleAssets(resolvedName, source, assets)
 		}
 
-		this.skillUsageStore.getOrCreate(skillId, name, createdBy)
-		this.logger.appendLine(`[ActionExecutor] Specialized skill created from scratch: ${name}`)
+		this.skillUsageStore.getOrCreate(skillId, resolvedName, createdBy)
+		this.logger.appendLine(`[ActionExecutor] Specialized skill created from scratch: ${resolvedName}`)
 		return true
 	}
 
@@ -534,5 +539,30 @@ ${instructions.trim()}
 
 	private buildSkillId(skillName: string | undefined, source: "global" | "project" | undefined): string | undefined {
 		return skillName && source ? `skill:${source}:${skillName}` : undefined
+	}
+
+	/**
+	 * Defense-in-depth: ensure a skill name is safe before passing to validateSkillName.
+	 * Truncates and normalizes the name if it exceeds SKILL_NAME_MAX_LENGTH (64 chars)
+	 * or contains consecutive hyphens. Uses DJB2 hash suffix like ImprovementApplier.truncateSkillName.
+	 */
+	private enforceSafeSkillName(name: string): string {
+		// Normalize consecutive hyphens and strip leading/trailing hyphens
+		let normalized = name.replace(/--+/g, "-").replace(/^-+|-+$/g, "")
+		if (normalized.length === 0) {
+			normalized = "skill"
+		}
+		if (normalized.length <= SKILL_NAME_MAX_LENGTH) {
+			return normalized
+		}
+		// DJB2 hash for deterministic 8-char hex suffix
+		let hash = 5381
+		for (let i = 0; i < normalized.length; i++) {
+			hash = ((hash << 5) + hash + normalized.charCodeAt(i)) | 0
+		}
+		const hashHex = (hash >>> 0).toString(16).padStart(8, "0")
+		let truncated = normalized.slice(0, SKILL_NAME_MAX_LENGTH - 9)
+		truncated = truncated.replace(/-+$/, "")
+		return `${truncated}-${hashHex}`
 	}
 }

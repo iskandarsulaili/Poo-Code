@@ -1245,6 +1245,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} else if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
 			this.autoApprovalTimeoutRef = setTimeout(async () => {
+				// Helper: find the first non-empty suggestion from followUpData
+				const findNonEmptySuggestion = (
+					suggest?: Array<{ answer: string; mode?: string }>,
+				): string | undefined => {
+					if (!suggest) return undefined
+					for (const s of suggest) {
+						if (s?.answer && typeof s.answer === "string" && s.answer.trim().length > 0) {
+							return s.answer.trim()
+						}
+					}
+					return undefined
+				}
+
 				// Use QuestionEvaluatorService to pick the best choice when available
 				if (
 					this.questionEvaluator &&
@@ -1271,6 +1284,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								this.autoApprovalTimeoutRef = undefined
 								return
 							}
+							// Fallback: find first non-empty suggestion
+							const validSuggestion = findNonEmptySuggestion(followUpData.suggest)
+							if (validSuggestion) {
+								console.warn(
+									`[Task] QuestionEvaluator returned empty, using first non-empty suggestion: "${validSuggestion.substring(0, 60)}..."`,
+								)
+								this.handleWebviewAskResponse("messageResponse", validSuggestion)
+								this.autoApprovalTimeoutRef = undefined
+								return
+							}
 							// Fallback to approval function
 							if (approval.fn) {
 								const { askResponse, text: responseText, images } = approval.fn()
@@ -1281,8 +1304,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									return
 								}
 							}
-							console.warn("QuestionEvaluator returned empty response, falling back to user prompt")
-							this.handleWebviewAskResponse("ask" as any, "")
+							console.warn("Auto-approval: all suggestions empty, prompting user")
+							// We must still handle this gracefully: fall back to first suggestion even if empty
+							// rather than sending nothing
+							this.handleWebviewAskResponse("messageResponse", followUpData.suggest[0]?.answer ?? "")
 							this.autoApprovalTimeoutRef = undefined
 							return
 						}
