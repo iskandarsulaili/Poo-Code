@@ -1281,10 +1281,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									return
 								}
 							}
-							this.logger?.warn?.(
-								"QuestionEvaluator returned empty response, falling back to user prompt",
-							)
-							this.handleWebviewAskResponse("ask", "")
+							console.warn("QuestionEvaluator returned empty response, falling back to user prompt")
+							this.handleWebviewAskResponse("ask" as any, "")
 							this.autoApprovalTimeoutRef = undefined
 							return
 						}
@@ -1296,8 +1294,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				const { askResponse, text: responseText, images } = approval.fn()
 				if (!responseText || responseText.trim().length === 0) {
 					// Fallback: ask the user instead of sending empty response
-					this.logger?.warn?.("Auto-approval attempted to send empty response, falling back to user prompt")
-					this.handleWebviewAskResponse("ask", "")
+					console.warn("Auto-approval attempted to send empty response, falling back to user prompt")
+					this.handleWebviewAskResponse("ask" as any, "")
 					this.autoApprovalTimeoutRef = undefined
 					return
 				}
@@ -1428,9 +1426,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
 		// Final safety guard: never send empty messageResponse
 		if (askResponse === "messageResponse" && (!text || text.trim().length === 0)) {
-			this.logger?.warn?.("Blocked empty messageResponse in handleWebviewAskResponse")
-			askResponse = "ask"
-			text = "" // empty text routes to user prompt
+			console.warn("Blocked empty messageResponse in handleWebviewAskResponse")
+			askResponse = "ask" as any
+			text = "" // empty text
 		}
 
 		// Clear any pending auto-approval timeout when user responds
@@ -2648,7 +2646,7 @@ Choose an alternative approach now.]`
 				}
 
 				// Auto-recovery: continue despite consecutive mistakes instead of asking user
-				this.logger?.warn?.("Auto-recovery: continuing despite consecutive mistakes")
+				console.warn("Auto-recovery: continuing despite consecutive mistakes")
 				this.consecutiveMistakeCount = 0
 				// Inject context correction into conversation
 				const correctionPrompt = "Previous attempts encountered errors. Continuing with a different approach."

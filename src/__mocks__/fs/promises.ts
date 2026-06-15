@@ -139,10 +139,10 @@ const mockFs = {
 		// Add subdirectories belonging to this directory
 		for (const dir of mockDirectories) {
 			if (dir === dirPath) continue
-			const lastSep = dir.lastIndexOf("/")
-			const parentDir = lastSep >= 0 ? dir.substring(0, lastSep) : ""
+			const lastSep = (dir as string).lastIndexOf("/")
+			const parentDir = lastSep >= 0 ? (dir as string).substring(0, lastSep) : ""
 			if (parentDir === dirPath) {
-				entries.push(dir.substring(lastSep + 1))
+				entries.push((dir as string).substring(lastSep + 1))
 			}
 		}
 

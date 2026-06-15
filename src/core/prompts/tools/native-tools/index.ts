@@ -21,6 +21,7 @@ import searchFiles from "./search_files"
 import switchMode from "./switch_mode"
 import updateTodoList from "./update_todo_list"
 import writeToFile from "./write_to_file"
+import executeParallel from "./execute_parallel"
 
 export { getMcpServerTools } from "./mcp_server"
 export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
@@ -70,6 +71,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		switchMode,
 		updateTodoList,
 		writeToFile,
+		executeParallel,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
 

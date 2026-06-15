@@ -149,6 +149,7 @@ export type NativeToolArgs = {
 	update_todo_list: { todos: string }
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
+	execute_parallel: import("@roo-code/types").ExecuteParallelParams
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -349,6 +350,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	skill_manage: "manage skills (create/patch/edit/delete/merge)",
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
+	execute_parallel: "run commands in parallel",
 } as const
 
 // Define available tool groups.

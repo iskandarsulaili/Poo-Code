@@ -36,6 +36,12 @@ import { openAiCodexOAuthManager } from "./integrations/openai-codex/oauth"
 import { McpServerManager } from "./services/mcp/McpServerManager"
 import { CodeIndexManager } from "./services/code-index/manager"
 import { MdmService } from "./services/mdm/MdmService"
+import { WorkspaceManager } from "./core/orchestration/WorkspaceManager"
+import { OutputParser } from "./core/orchestration/OutputParser"
+import { registerAllParsers } from "./core/orchestration/parsers"
+import { SubProjectDetector } from "./core/orchestration/SubProjectDetector"
+import { DepGraphBuilder } from "./core/orchestration/DepGraphBuilder"
+import { experimentConfigsMap } from "./shared/experiments"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -192,6 +198,80 @@ export async function activate(context: vscode.ExtensionContext) {
 
 				context.subscriptions.push(manager)
 			}
+		}
+	}
+
+	// Initialize multi-root workspace management.
+	if (vscode.workspace.workspaceFolders) {
+		try {
+			const wm = WorkspaceManager.getInstance(context)
+			wm.initialize(vscode.workspace.workspaceFolders)
+			outputChannel.appendLine(
+				`[WorkspaceManager] Initialized with ${vscode.workspace.workspaceFolders.length} workspace folder(s)`,
+			)
+		} catch (error) {
+			outputChannel.appendLine(
+				`[WorkspaceManager] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	// Initialize output parser registry for structured command output parsing.
+	const outputParser = new OutputParser()
+	registerAllParsers(outputParser)
+
+	// Listen for workspace folder changes (multi-root support).
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeWorkspaceFolders((event) => {
+			try {
+				WorkspaceManager.getInstance().onDidChangeWorkspaceFolders(event)
+				outputChannel.appendLine(
+					`[WorkspaceManager] Workspace folders changed: ${event.added.length} added, ${event.removed.length} removed`,
+				)
+			} catch (error) {
+				outputChannel.appendLine(
+					`[WorkspaceManager] Error handling folder change: ${error instanceof Error ? error.message : String(error)}`,
+				)
+			}
+		}),
+	)
+
+	// Initialize dependency graph if the experiment is enabled.
+	// Use the experimentConfigsMap default as the source of truth for activation-time gating.
+	const depGraphEnabled = experimentConfigsMap.DEPENDENCY_GRAPH?.enabled ?? true
+	if (depGraphEnabled && vscode.workspace.workspaceFolders) {
+		try {
+			const workspaceManager = WorkspaceManager.getInstance()
+			const subProjectDetector = new SubProjectDetector(workspaceManager)
+			const depGraphBuilder = new DepGraphBuilder()
+
+			// Fire-and-forget: scan sub-projects and build dependency graph in background.
+			void (async () => {
+				try {
+					const projects = await subProjectDetector.scanAll()
+					if (projects.length > 0) {
+						const graph = depGraphBuilder.build(projects)
+						outputChannel.appendLine(
+							`[DepGraph] Built dependency graph: ${projects.length} sub-projects, build order: [${graph.buildOrder.join(", ")}]`,
+						)
+						if (graph.cycles.length > 0) {
+							outputChannel.appendLine(
+								`[DepGraph] Warning: ${graph.cycles.length} circular dependenc(ies) detected`,
+							)
+						}
+					} else {
+						outputChannel.appendLine("[DepGraph] No sub-projects discovered in workspace")
+					}
+				} catch (error) {
+					outputChannel.appendLine(
+						`[DepGraph] Scan/build error: ${error instanceof Error ? error.message : String(error)}`,
+					)
+				}
+			})()
+		} catch (error) {
+			outputChannel.appendLine(
+				`[DepGraph] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
 		}
 	}
 

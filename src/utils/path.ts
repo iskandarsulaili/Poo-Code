@@ -111,7 +111,51 @@ export const toRelativePath = (filePath: string, cwd: string) => {
 	return filePath.endsWith("/") ? relativePath + "/" : relativePath
 }
 
+/**
+ * Lazy access to WorkspaceManager singleton for multi-root support.
+ * Uses function-level require to avoid circular dependencies at module load time.
+ * Falls back gracefully when WorkspaceManager is not available or not initialized.
+ */
+function tryGetWorkspaceManager():
+	| {
+			getPrimaryRoot(): { fsPath: string } | undefined
+			getRootForFile(filePath: string): { fsPath: string } | undefined
+			getWorkspaceFolders(): { fsPath: string }[]
+	  }
+	| undefined {
+	try {
+		// Lazy require to avoid circular dependency at module load time
+		const { WorkspaceManager } = require("../core/orchestration/WorkspaceManager")
+		const wm = WorkspaceManager.getInstance()
+		if (wm.isInitialized()) {
+			return wm
+		}
+		return undefined
+	} catch {
+		// WorkspaceManager not loaded or not initialized — fall back to existing behavior
+		return undefined
+	}
+}
+
 export const getWorkspacePath = (defaultCwdPath = "") => {
+	// Try WorkspaceManager first (if initialized and multi-root feature is enabled)
+	const wm = tryGetWorkspaceManager()
+	if (wm) {
+		const roots = wm.getWorkspaceFolders()
+		if (roots.length > 0) {
+			// Current file context takes priority for more accurate root resolution
+			const currentFileUri = vscode.window.activeTextEditor?.document.uri
+			if (currentFileUri) {
+				const root = wm.getRootForFile(currentFileUri.fsPath)
+				if (root) {
+					return root.fsPath
+				}
+			}
+			return roots[0].fsPath // fallback to primary root
+		}
+	}
+
+	// Fall back to original behavior: workspaceFolders[0] or defaultCwdPath
 	const cwdPath = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) || defaultCwdPath
 	const currentFileUri = vscode.window.activeTextEditor?.document.uri
 	if (currentFileUri) {
@@ -122,8 +166,17 @@ export const getWorkspacePath = (defaultCwdPath = "") => {
 }
 
 export const getWorkspacePathForContext = (contextPath?: string): string => {
-	// If context path provided, find its workspace
+	// If context path provided, try WorkspaceManager for more accurate root resolution
 	if (contextPath) {
+		const wm = tryGetWorkspaceManager()
+		if (wm) {
+			const root = wm.getRootForFile(contextPath)
+			if (root) {
+				return root.fsPath
+			}
+		}
+
+		// Fall back to VS Code workspace folder resolution
 		const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(contextPath))
 		if (workspaceFolder) {
 			return workspaceFolder.uri.fsPath

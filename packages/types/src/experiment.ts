@@ -31,6 +31,10 @@ export const experimentIds = [
 	"recoveryContext",
 	"selfImprovingSpecializedSkills",
 	"taskPatternLearning",
+	"parallelExecution",
+	"structuredOutputParsing",
+	"dependencyGraph",
+	"multiRootWorkspace",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -99,6 +103,10 @@ export const experimentsSchema = z.object({
 	recoveryContext: z.boolean().optional(),
 	selfImprovingSpecializedSkills: z.boolean().optional(),
 	taskPatternLearning: z.boolean().optional(),
+	parallelExecution: z.boolean().optional(),
+	structuredOutputParsing: z.boolean().optional(),
+	dependencyGraph: z.boolean().optional(),
+	multiRootWorkspace: z.boolean().optional(),
 
 	/**
 	 * List of mode slugs that should skip code quality verification in AttemptCompletionTool.
