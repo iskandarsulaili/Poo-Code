@@ -160,5 +160,9 @@
 			"js-yaml": ">=4.1.1",
 			"read-yaml-file": ">=2.1.0"
 		}
+	},
+	"dependencies": {
+		"cloakbrowser": "^0.3.31",
+		"playwright-core": "^1.61.0"
 	}
 }

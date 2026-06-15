@@ -23,16 +23,29 @@ export interface ProjectProfile {
 	detectedFrom: string | null
 }
 
+/** Result of running a single verification gate (build, lint, types, tests) */
+export interface GateResult {
+	name: string
+	passed: boolean
+	output?: string
+	error?: string
+	durationMs: number
+	/** Number of warnings detected in stderr (0 if none or not parsed) */
+	warnings: number
+	/** Number of errors detected in stderr (0 if none or not parsed) */
+	errors: number
+	/** Truncated summary of stderr content for display */
+	stderrSummary?: string
+	/** Strictness level used for this gate */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
+}
+
 export interface VerificationResult {
 	passed: boolean
-	gates: Array<{
-		name: string
-		passed: boolean
-		output?: string
-		error?: string
-		durationMs: number
-	}>
+	gates: GateResult[]
 	summary: string
+	/** Strictness level used for this verification run */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
 }
 
 export interface VerificationConfig {
@@ -58,15 +71,31 @@ export interface VerificationConfig {
 	gateTimeoutMs: number
 	/** Whether verification is mandatory (blocks completion) */
 	mandatory: boolean
+	/**
+	 * Strictness level for gate validation.
+	 * - "lenient": exit code only (current behavior)
+	 * - "moderate": exit code + stderr parsed for warnings (log but don't fail)
+	 * - "strict": exit code + fail if stderr has error content + warn on warnings
+	 * - "enterprise": exit code + zero warnings + content validation + coverage check
+	 * @default "moderate"
+	 */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
+	/** Max allowed warnings before gate fails (0-100, only relevant for strict/enterprise). 0 = unlimited. */
+	maxWarnings?: number
+	/** Minimum test coverage percentage (0-100, only relevant for enterprise). 0 = no check. */
+	testCoverageThreshold?: number
 }
 
 const DEFAULT_CONFIG: VerificationConfig = {
 	checkBuild: false,
-	checkLint: false,
-	checkTypes: false,
+	checkLint: true,
+	checkTypes: true,
 	checkTests: false,
 	gateTimeoutMs: 60_000,
 	mandatory: true,
+	strictness: "moderate",
+	maxWarnings: 0,
+	testCoverageThreshold: 0,
 }
 
 /**
@@ -702,7 +731,8 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	}
 
 	async verify(): Promise<VerificationResult> {
-		const gates: VerificationResult["gates"] = []
+		const gates: GateResult[] = []
+		const strictness = this.config.strictness
 
 		if (this.config.checkBuild && this.config.buildCommand) {
 			gates.push(await this.runGate("build", this.config.buildCommand))
@@ -722,22 +752,33 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 
 		const passed = gates.every((g) => g.passed)
 		const failedGates = gates.filter((g) => !g.passed)
+		const totalWarnings = gates.reduce((sum, g) => sum + g.warnings, 0)
+		const totalErrors = gates.reduce((sum, g) => sum + g.errors, 0)
 
 		let summary: string
 		if (gates.length === 0) {
-			summary = "No verification gates configured"
+			summary = `No verification gates configured [${strictness}]`
 		} else if (passed) {
-			summary = `All ${gates.length} verification gates passed`
+			const warningSuffix =
+				totalWarnings > 0 ? ` (${totalWarnings} warning${totalWarnings !== 1 ? "s" : ""})` : ""
+			const errorSuffix =
+				totalErrors > 0 ? ` (${totalErrors} error${totalErrors !== 1 ? "s" : ""} detected)` : ""
+			summary = `All ${gates.length} verification gates passed [${strictness}]${warningSuffix}${errorSuffix}`
 		} else {
-			summary = `${failedGates.length}/${gates.length} gates failed: ${failedGates.map((g) => g.name).join(", ")}`
+			const summaryParts = failedGates.map((g) => {
+				const extra =
+					g.warnings > 0 ? ` (${g.warnings} warnings${g.errors > 0 ? `, ${g.errors} errors` : ""})` : ""
+				return `${g.name}${extra}`
+			})
+			summary = `${failedGates.length}/${gates.length} gates failed [${strictness}]: ${summaryParts.join(", ")}`
 		}
 
 		this.logger?.appendLine(`[VerificationEngine] ${summary}`)
 
 		this.lastVerifyAt = Date.now()
-		this.lastResult = { passed, gates, summary }
+		this.lastResult = { passed, gates, summary, strictness }
 
-		return { passed, gates, summary }
+		return { passed, gates, summary, strictness }
 	}
 
 	/**
@@ -806,19 +847,14 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		return undefined
 	}
 
-	private async runGate(name: string, command: string): Promise<VerificationResult["gates"][0]> {
+	private async runGate(name: string, command: string): Promise<GateResult> {
 		const start = Date.now()
+		const strictness = this.config.strictness
 
-		// Run gate with auto-discovered cwd
 		try {
 			const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
 			const resolvedCwd = cwd
 
-			// Use dynamic import for child_process
-			// Use spawnSync with a parsed command array to avoid shell interpretation issues
-			// where arguments like "." can get glued to the executable name (e.g. "eslint.").
-			// Splitting the command into [executable, ...args] ensures each argument stays
-			// separate, preventing npm shell wrappers from misparsing "eslint ." as "eslint.".
 			const { spawnSync } = await import("child_process")
 			const cmdParts = command.split(/\s+/)
 			const execName = cmdParts[0]
@@ -834,6 +870,34 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			if (result.error) {
 				throw result.error
 			}
+
+			// Content analysis: parse stderr for warnings/errors even on exit code 0
+			const cmdStderr = result.stderr || ""
+			const { warnings, errors, stderrSummary } = parseStderr(cmdStderr)
+			const output = result.stdout || ""
+			const durationMs = Date.now() - start
+
+			// --- Strictness enforcement ---
+			if (strictness === "enterprise") {
+				const maxWarnings = this.config.maxWarnings ?? 0
+				if (warnings > maxWarnings || errors > 0) {
+					const reason =
+						errors > 0
+							? `${errors} error${errors !== 1 ? "s" : ""} detected`
+							: `${warnings} warning${warnings !== 1 ? "s" : ""} exceeds max allowed (${maxWarnings})`
+					this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [enterprise] (${durationMs}ms): ${reason}`)
+					return { name, passed: false, error: `[enterprise] ${reason}:\n${stderrSummary.slice(0, 500)}`, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+				}
+			}
+
+			if (strictness === "strict") {
+				if (errors > 0 || result.status !== 0) {
+					const reason = errors > 0 ? `${errors} error${errors !== 1 ? "s" : ""} detected` : `Exit code ${result.status}`
+					this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [strict] (${durationMs}ms): ${reason}`)
+					return { name, passed: false, error: `[strict] ${reason}:\n${stderrSummary.slice(0, 500)}`, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+				}
+			}
+
 			if (result.status !== 0) {
 				const err = new Error(result.stderr || `Exit code ${result.status}`)
 				;(err as any).stderr = result.stderr
@@ -841,22 +905,63 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				throw err
 			}
 
-			const output = result.stdout || ""
-			const durationMs = Date.now() - start
-			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" passed (${durationMs}ms)`)
-			return { name, passed: true, output: output.slice(0, 1000), durationMs }
+			const warningNote = warnings > 0 ? ` (${warnings} warning${warnings !== 1 ? "s" : ""})` : ""
+			const errorNote = errors > 0 ? ` (${errors} error${errors !== 1 ? "s" : ""})` : ""
+			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" PASSED [${strictness}] (${durationMs}ms)${warningNote}${errorNote}`)
+			return { name, passed: true, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
 		} catch (error: any) {
 			const durationMs = Date.now() - start
+			const errStderr = error?.stderr || ""
+			const { warnings, errors, stderrSummary } = parseStderr(errStderr)
 			const errorMsg = error?.stderr || error?.stdout || error?.message || String(error)
-			this.logger?.appendLine(
-				`[VerificationEngine] Gate "${name}" FAILED (${durationMs}ms): ${errorMsg.slice(0, 200)}`,
-			)
-			return {
-				name,
-				passed: false,
-				error: errorMsg.slice(0, 1000),
-				durationMs,
+			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [${strictness}] (${durationMs}ms): ${errorMsg.slice(0, 200)}`)
+			return { name, passed: false, error: errorMsg.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+		}
+	}
+}
+
+/**
+	* Parse stderr for warning and error patterns (case-insensitive).
+	* Detects lines containing: error, ERROR, Error, warning, WARNING, Warning
+	* Returns counts and a truncated summary.
+	*/
+export function parseStderr(
+	stderr: string,
+): { warnings: number; errors: number; stderrSummary: string } {
+	if (!stderr || stderr.trim().length === 0) {
+		return { warnings: 0, errors: 0, stderrSummary: "" }
+	}
+
+	const lines = stderr.split("\n")
+	let warnings = 0
+	let errors = 0
+	const summaryLines: string[] = []
+
+	for (const line of lines) {
+		const trimmed = line.trim()
+		if (!trimmed) continue
+
+		if (/\berror\b/i.test(trimmed) || /^\[error\]/i.test(trimmed) || /^ERROR/i.test(trimmed) || /^Error\b/.test(trimmed)) {
+			errors++
+			if (summaryLines.length < 10) {
+				summaryLines.push(`ERR: ${trimmed.slice(0, 120)}`)
+			}
+			continue
+		}
+
+		if (/\bwarning\b/i.test(trimmed) || /^\[warning\]/i.test(trimmed) || /^WARNING/i.test(trimmed) || /^Warning\b/.test(trimmed)) {
+			warnings++
+			if (summaryLines.length < 10) {
+				summaryLines.push(`WRN: ${trimmed.slice(0, 120)}`)
 			}
 		}
 	}
+
+	const remaining = lines.length - summaryLines.length
+	let stderrSummary = summaryLines.join("\n")
+	if (remaining > 0) {
+		stderrSummary += `\n... and ${remaining - summaryLines.length} more line${remaining - summaryLines.length !== 1 ? "s" : ""}`
+	}
+
+	return { warnings, errors, stderrSummary: stderrSummary.slice(0, 2000) }
 }

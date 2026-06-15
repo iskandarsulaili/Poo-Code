@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { VerificationEngine } from "./VerificationEngine"
+import { VerificationEngine, GateResult, parseStderr } from "./VerificationEngine"
 
 // ── Auto-detection tests ──────────────────────────────────────────
 // Mock fs/promises for auto-detection scenarios.
@@ -22,6 +22,7 @@ describe("VerificationEngine", () => {
 			checkTests: false,
 			gateTimeoutMs: 5000,
 			mandatory: true,
+			strictness: "moderate",
 		})
 	})
 
@@ -30,11 +31,14 @@ describe("VerificationEngine", () => {
 			const e = new VerificationEngine()
 			const config = e.getConfig()
 			expect(config.checkBuild).toBe(false)
-			expect(config.checkLint).toBe(false)
-			expect(config.checkTypes).toBe(false)
+			expect(config.checkLint).toBe(true) // Changed from false
+			expect(config.checkTypes).toBe(true) // Changed from false
 			expect(config.checkTests).toBe(false)
 			expect(config.gateTimeoutMs).toBe(60000)
 			expect(config.mandatory).toBe(true)
+			expect(config.strictness).toBe("moderate")
+			expect(config.maxWarnings).toBe(0)
+			expect(config.testCoverageThreshold).toBe(0)
 		})
 
 		it("should merge partial config with defaults", () => {
@@ -45,7 +49,8 @@ describe("VerificationEngine", () => {
 			const config = e.getConfig()
 			expect(config.checkBuild).toBe(true)
 			expect(config.buildCommand).toBe("npm run build")
-			expect(config.checkLint).toBe(false)
+			expect(config.checkLint).toBe(true) // default
+			expect(config.strictness).toBe("moderate") // default
 			expect(config.gateTimeoutMs).toBe(60000)
 		})
 
@@ -55,6 +60,18 @@ describe("VerificationEngine", () => {
 			expect(config.checkLint).toBe(true)
 			expect(config.lintCommand).toBe("npm run lint")
 		})
+
+		it("should allow setting strictness level", () => {
+			engine.updateConfig({ strictness: "strict" })
+			expect(engine.getConfig().strictness).toBe("strict")
+		})
+
+		it("should allow setting enterprise strictness with thresholds", () => {
+			engine.updateConfig({ strictness: "enterprise", maxWarnings: 5, testCoverageThreshold: 80 })
+			expect(engine.getConfig().strictness).toBe("enterprise")
+			expect(engine.getConfig().maxWarnings).toBe(5)
+			expect(engine.getConfig().testCoverageThreshold).toBe(80)
+		})
 	})
 
 	describe("verify with no gates", () => {
@@ -62,7 +79,7 @@ describe("VerificationEngine", () => {
 			const result = await engine.verify()
 			expect(result.passed).toBe(true)
 			expect(result.gates).toHaveLength(0)
-			expect(result.summary).toBe("No verification gates configured")
+			expect(result.summary).toBe("No verification gates configured [moderate]")
 		})
 	})
 
@@ -81,9 +98,14 @@ describe("VerificationEngine", () => {
 			expect(result.gates).toHaveLength(2)
 			expect(result.gates[0].name).toBe("build")
 			expect(result.gates[0].passed).toBe(true)
+			expect(result.gates[0].warnings).toBe(0)
+			expect(result.gates[0].errors).toBe(0)
+			expect(result.gates[0].strictness).toBe("moderate")
 			expect(result.gates[1].name).toBe("lint")
 			expect(result.gates[1].passed).toBe(true)
-			expect(result.summary).toBe("All 2 verification gates passed")
+			expect(result.gates[1].strictness).toBe("moderate")
+			expect(result.summary).toContain("All 2 verification gates passed")
+			expect(result.summary).toContain("[moderate]")
 		})
 
 		it("should fail when build fails", async () => {
@@ -99,6 +121,7 @@ describe("VerificationEngine", () => {
 			expect(result.gates[0].name).toBe("build")
 			expect(result.gates[0].passed).toBe(false)
 			expect(result.gates[0].error).toBeTruthy()
+			expect(result.gates[0].strictness).toBe("moderate")
 			expect(result.summary).toContain("1/1 gates failed")
 		})
 
@@ -190,6 +213,263 @@ describe("VerificationEngine", () => {
 		})
 	})
 
+	describe("strictness levels", () => {
+		describe("lenient (exit code only)", () => {
+			it("should pass on exit code 0 even with stderr warnings", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "echo build-ok",
+					cwd: "/tmp",
+					strictness: "lenient",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(true)
+				expect(result.gates[0].strictness).toBe("lenient")
+				expect(result.summary).toContain("[lenient]")
+			})
+
+			it("should fail on non-zero exit code", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "false",
+					cwd: "/tmp",
+					strictness: "lenient",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(false)
+			})
+		})
+
+		describe("moderate (exit code + stderr parsing)", () => {
+			it("should pass on exit code 0 and report warnings count", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "echo build-ok",
+					cwd: "/tmp",
+					strictness: "moderate",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(true)
+				expect(result.gates[0].strictness).toBe("moderate")
+				// Gate result should have warnings/errors fields even if zero
+				expect(result.gates[0].warnings).toBe(0)
+				expect(result.gates[0].errors).toBe(0)
+			})
+
+			it("should fail on non-zero exit code", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "false",
+					cwd: "/tmp",
+					strictness: "moderate",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(false)
+			})
+		})
+
+		describe("strict (exit code + fail on stderr errors)", () => {
+			it("should pass on exit code 0 with no stderr errors", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "echo build-ok",
+					cwd: "/tmp",
+					strictness: "strict",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(true)
+				expect(result.gates[0].strictness).toBe("strict")
+			})
+
+			it("should fail on non-zero exit code", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "false",
+					cwd: "/tmp",
+					strictness: "strict",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(false)
+			})
+		})
+
+		describe("enterprise (exit code + zero warnings + content validation)", () => {
+			it("should pass on clean exit with no warnings", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "echo build-ok",
+					cwd: "/tmp",
+					strictness: "enterprise",
+					maxWarnings: 0,
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(true)
+				expect(result.gates[0].strictness).toBe("enterprise")
+			})
+
+			it("should fail on non-zero exit code", async () => {
+				engine.updateConfig({
+					checkBuild: true,
+					buildCommand: "false",
+					cwd: "/tmp",
+					strictness: "enterprise",
+				})
+
+				const result = await engine.verify()
+				expect(result.passed).toBe(false)
+			})
+		})
+
+		it("should include strictness in summary string", async () => {
+			engine.updateConfig({
+				checkBuild: true,
+				buildCommand: "echo build-ok",
+				cwd: "/tmp",
+				strictness: "strict",
+			})
+
+			const result = await engine.verify()
+			expect(result.summary).toContain("[strict]")
+			expect(result.strictness).toBe("strict")
+		})
+
+		it("should include strictness in result object", async () => {
+			engine.updateConfig({
+				checkBuild: true,
+				buildCommand: "echo build-ok",
+				cwd: "/tmp",
+				strictness: "enterprise",
+			})
+
+			const result = await engine.verify()
+			expect(result.strictness).toBe("enterprise")
+		})
+	})
+
+	describe("gate result fields", () => {
+		it("should include warnings and errors fields on pass", async () => {
+			engine.updateConfig({
+				checkBuild: true,
+				buildCommand: "echo build-ok",
+				cwd: "/tmp",
+			})
+
+			const result = await engine.verify()
+			const gate = result.gates[0]
+			expect(gate).toHaveProperty("warnings")
+			expect(gate).toHaveProperty("errors")
+			expect(gate).toHaveProperty("stderrSummary")
+			expect(gate).toHaveProperty("strictness")
+			expect(gate.warnings).toBe(0)
+			expect(gate.errors).toBe(0)
+		})
+
+		it("should include warnings and errors fields on fail", async () => {
+			engine.updateConfig({
+				checkBuild: true,
+				buildCommand: "false",
+				cwd: "/tmp",
+			})
+
+			const result = await engine.verify()
+			const gate = result.gates[0]
+			expect(gate).toHaveProperty("warnings")
+			expect(gate).toHaveProperty("errors")
+			expect(gate).toHaveProperty("strictness")
+		})
+	})
+
+	describe("stderr parsing", () => {
+		it("should return zeros for empty stderr", () => {
+			const result = parseStderr("")
+			expect(result.warnings).toBe(0)
+			expect(result.errors).toBe(0)
+			expect(result.stderrSummary).toBe("")
+		})
+
+		it("should count warnings", () => {
+			const stderr = "warning: unused variable\nWARNING: deprecated API\nWarning: something"
+			const result = parseStderr(stderr)
+			expect(result.warnings).toBe(3)
+			expect(result.errors).toBe(0)
+		})
+
+		it("should count errors", () => {
+			const stderr = "error: build failed\nERROR: compilation error\nError: runtime exception"
+			const result = parseStderr(stderr)
+			expect(result.warnings).toBe(0)
+			expect(result.errors).toBe(3)
+		})
+
+		it("should count mixed warnings and errors", () => {
+			const stderr = "error: build failed\nwarning: unused variable\nERROR: compilation error"
+			const result = parseStderr(stderr)
+			expect(result.warnings).toBe(1)
+			expect(result.errors).toBe(2)
+		})
+
+		it("should detect [error] prefixed lines", () => {
+			const stderr = "[error] module not found"
+			const result = parseStderr(stderr)
+			expect(result.errors).toBe(1)
+		})
+
+		it("should detect [warning] prefixed lines", () => {
+			const stderr = "[warning] deprecated feature"
+			const result = parseStderr(stderr)
+			expect(result.warnings).toBe(1)
+		})
+
+		it("should produce a summary with truncated lines", () => {
+			const stderr = Array.from({ length: 15 }, (_, i) => `warning: issue number ${i}`).join("\n")
+			const result = parseStderr(stderr)
+			expect(result.warnings).toBe(15)
+			expect(result.stderrSummary).toContain("... and")
+			expect(result.stderrSummary.length).toBeLessThanOrEqual(2000)
+		})
+
+		it("should include error markers in summary lines", () => {
+			const stderr = "ERROR: critical failure"
+			const result = parseStderr(stderr)
+			expect(result.stderrSummary).toContain("ERR:")
+		})
+
+		it("should include warning markers in summary lines", () => {
+			const stderr = "WARNING: deprecated"
+			const result = parseStderr(stderr)
+			expect(result.stderrSummary).toContain("WRN:")
+		})
+	})
+
+	describe("override behavior", () => {
+		it("should allow strictness override from experiment config", () => {
+			engine.updateConfig({
+				strictness: "enterprise",
+				maxWarnings: 3,
+			})
+			const config = engine.getConfig()
+			expect(config.strictness).toBe("enterprise")
+			expect(config.maxWarnings).toBe(3)
+		})
+
+		it("should allow toggling checkLint and checkTypes independently", () => {
+			engine.updateConfig({
+				checkLint: true,
+				checkTypes: false,
+			})
+			const config = engine.getConfig()
+			expect(config.checkLint).toBe(true)
+			expect(config.checkTypes).toBe(false)
+		})
+	})
+
 	describe("mandatory flag", () => {
 		it("should return mandatory=true by default", () => {
 			expect(engine.getConfig().mandatory).toBe(true)
@@ -213,6 +493,7 @@ describe("VerificationEngine", () => {
 				checkTests: false,
 				gateTimeoutMs: 5000,
 				mandatory: true,
+				strictness: "moderate",
 			})
 		})
 
@@ -302,6 +583,7 @@ describe("VerificationEngine", () => {
 				checkTests: false,
 				gateTimeoutMs: 5000,
 				mandatory: true,
+				strictness: "moderate",
 			})
 			// apiConfiguration is undefined, so autoDetectProject should skip LLM
 			// and use signature-based detection
@@ -341,6 +623,7 @@ describe("VerificationEngine", () => {
 					checkTests: false,
 					gateTimeoutMs: 5000,
 					mandatory: true,
+					strictness: "moderate",
 				},
 				true,
 				mockApiConfig,
@@ -386,6 +669,7 @@ describe("VerificationEngine", () => {
 					checkTests: false,
 					gateTimeoutMs: 5000,
 					mandatory: true,
+					strictness: "moderate",
 				},
 				true,
 				mockApiConfig,

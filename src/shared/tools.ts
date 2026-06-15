@@ -96,6 +96,17 @@ export const toolParamNames = [
 	// read_file legacy format parameter (backward compatibility)
 	"files",
 	"line_ranges",
+	// web_fetch params
+	"extractMode",
+	"waitForSelector",
+	// web_search params
+	"query",
+	"count",
+	"engine",
+	// web_extract params
+	"selectors",
+	"extractAll",
+	"attribute",
 ] as const
 
 export type ToolParamName = (typeof toolParamNames)[number]
@@ -150,6 +161,14 @@ export type NativeToolArgs = {
 	use_mcp_tool: { server_name: string; tool_name: string; arguments?: Record<string, unknown> }
 	write_to_file: { path: string; content: string }
 	execute_parallel: import("@roo-code/types").ExecuteParallelParams
+	web_fetch: { url: string; extractMode?: "text" | "html" | "screenshot"; waitForSelector?: string; timeout?: number }
+	web_search: { query: string; count?: number; engine?: "google" | "bing" | "duckduckgo" }
+	web_extract: {
+		url: string
+		selectors: Array<{ name: string; selector: string; attribute?: string }>
+		waitForSelector?: string
+		extractAll?: boolean
+	}
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -351,6 +370,9 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
 	execute_parallel: "run commands in parallel",
+	web_fetch: "fetch web page content",
+	web_search: "search the web",
+	web_extract: "extract structured data from web pages",
 } as const
 
 // Define available tool groups.
@@ -371,6 +393,9 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 	modes: {
 		tools: ["switch_mode", "new_task"],
 		alwaysAvailable: true,
+	},
+	web: {
+		tools: ["web_fetch", "web_search", "web_extract"],
 	},
 }
 

@@ -47,14 +47,14 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 
 			task.consecutiveMistakeCount = 0
 			const { text, images } = await task.ask("followup", JSON.stringify(follow_up_json), false)
-			// Ensure response text is never empty - use contextual fallback
+			// Ensure response text is never empty — use contextual fallback
 			const safeText = (text ?? "").trim()
-			if (!safeText && follow_up_json.suggest.length > 0) {
-				// Fallback to first non-empty suggestion if response is empty
+			if (!safeText) {
+				// Fallback: first non-empty suggestion
 				const validSuggestion = follow_up_json.suggest.find(
 					(s: { answer: string; mode?: string }) => s.answer && s.answer.trim().length > 0,
 				)
-				const fallbackText = validSuggestion?.answer?.trim() ?? ""
+				const fallbackText = validSuggestion?.answer?.trim()
 				if (fallbackText) {
 					console.warn(
 						`[AskFollowupQuestionTool] Empty user response, using first non-empty suggestion: "${fallbackText.substring(0, 60)}..."`,
@@ -63,6 +63,14 @@ export class AskFollowupQuestionTool extends BaseTool<"ask_followup_question"> {
 					pushToolResult(formatResponse.toolResult(`<user_message>\n${fallbackText}\n</user_message>`, images))
 					return
 				}
+				// No suggestion available either — use neutral fallback to avoid empty injection
+				const neutralFallback = "I'll proceed without additional input."
+				console.warn(
+					`[AskFollowupQuestionTool] Empty user response and no valid suggestions, using neutral fallback`,
+				)
+				await task.say("user_feedback", neutralFallback, images)
+				pushToolResult(formatResponse.toolResult(`<user_message>\n${neutralFallback}\n</user_message>`, images))
+				return
 			}
 			await task.say("user_feedback", safeText, images)
 			pushToolResult(formatResponse.toolResult(`<user_message>\n${safeText}\n</user_message>`, images))

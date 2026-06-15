@@ -986,6 +986,38 @@ export class NativeToolCallParser {
 					}
 					break
 
+				case "web_fetch":
+					if (args.url !== undefined) {
+						nativeArgs = {
+							url: args.url,
+							extractMode: args.extractMode,
+							waitForSelector: args.waitForSelector,
+							timeout: args.timeout,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_search":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
+							count: args.count,
+							engine: args.engine,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_extract":
+					if (args.url !== undefined && args.selectors !== undefined) {
+						nativeArgs = {
+							url: args.url,
+							selectors: args.selectors,
+							waitForSelector: args.waitForSelector,
+							extractAll: args.extractAll,
+						} as NativeArgsFor<TName>
+					}
+					break
+
 				default:
 					if (customToolRegistry.has(resolvedName)) {
 						nativeArgs = args as NativeArgsFor<TName>
