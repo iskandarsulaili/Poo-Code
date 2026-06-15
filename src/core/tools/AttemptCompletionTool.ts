@@ -194,6 +194,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				// Build detailed gate results for display
 				const gateDetails = verResult.gates
 					.map((g) => {
+						if (g.skipped) {
+							const skipReason = g.skipReason ? `: ${g.skipReason}` : ""
+							return `  ⏭️ ${g.name}: SKIP [${g.strictness}]${skipReason}`
+						}
 						const icon = g.passed ? "✅" : "❌"
 						const warningsNote = g.warnings > 0 ? ` (${g.warnings} warning${g.warnings !== 1 ? "s" : ""})` : ""
 						const errorsNote = g.errors > 0 ? ` (${g.errors} error${g.errors !== 1 ? "s" : ""})` : ""
@@ -203,7 +207,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					})
 					.join("\n")
 
-				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
+				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
 					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
 					// Don't increment consecutiveMistakeCount — verification has its own counter
 					task.recordToolError("attempt_completion")
