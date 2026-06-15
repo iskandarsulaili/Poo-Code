@@ -1,5 +1,3 @@
-import { launch } from "cloakbrowser"
-
 import { Task } from "../task/Task"
 import type { NativeToolArgs } from "../../shared/tools"
 
@@ -12,6 +10,11 @@ type WebFetchParams = NativeToolArgs["web_fetch"]
  *
  * Uses Cloak browser with stealth protection for anti-bot evasion.
  * Supports text extraction, full HTML, or screenshot capture.
+ *
+ * NOTE: cloakbrowser/playwright-core are dynamically imported at execution time
+ * because the VSIX is packaged with --no-dependencies and these modules are
+ * externalized from the esbuild bundle. A static top-level import would crash
+ * extension activation.
  */
 export class WebFetchTool extends BaseTool<"web_fetch"> {
 	readonly name = "web_fetch" as const
@@ -29,52 +32,48 @@ export class WebFetchTool extends BaseTool<"web_fetch"> {
 
 		const extractMode = params.extractMode ?? "text"
 		const timeout = params.timeout ?? 30_000
-		let browser: Awaited<ReturnType<typeof launch>> | null = null
 
 		try {
-			browser = await launch({
+			// Dynamic import: cloakbrowser lazily resolved so extension can activate
+			// without it installed. Users must separately ensure the dep exists.
+			const { launch } = await import("cloakbrowser" as string)
+			const browser = await launch({
 				headless: true,
 				humanize: true,
 			})
 
-			const page = await browser.newPage()
-			await page.goto(params.url, { waitUntil: "networkidle", timeout })
+			try {
+				const page = await browser.newPage()
+				await page.goto(params.url, { waitUntil: "networkidle", timeout })
 
-			if (params.waitForSelector) {
-				await page.waitForSelector(params.waitForSelector, { timeout })
-			}
-
-			let content: string
-
-			switch (extractMode) {
-				case "html":
-					content = await page.content()
-					break
-				case "screenshot": {
-					const screenshotBuffer = await page.screenshot({ type: "png", fullPage: true })
-					content = `data:image/png;base64,${screenshotBuffer.toString("base64")}`
-					break
+				if (params.waitForSelector) {
+					await page.waitForSelector(params.waitForSelector, { timeout })
 				}
-				case "text":
-				default:
-					content = await page.evaluate(() => document.body.innerText)
-					break
+
+				let content: string
+
+				switch (extractMode) {
+					case "html":
+						content = await page.content()
+						break
+					case "screenshot": {
+						const screenshotBuffer = await page.screenshot({ type: "png", fullPage: true })
+						content = `data:image/png;base64,${screenshotBuffer.toString("base64")}`
+						break
+					}
+					case "text":
+					default:
+						content = await page.evaluate(() => document.body.innerText)
+						break
+				}
+
+				pushToolResult(
+					`[web_fetch] Fetched ${params.url} (mode: ${extractMode})\n\n${content.slice(0, 100_000)}`,
+				)
+			} finally {
+				await browser.close().catch(() => {})
 			}
-
-			await browser.close()
-			browser = null
-
-			pushToolResult(
-				`[web_fetch] Fetched ${params.url} (mode: ${extractMode})\n\n${content.slice(0, 100_000)}`,
-			)
 		} catch (error) {
-			if (browser) {
-				try {
-					await browser.close()
-				} catch {
-					// Best-effort cleanup
-				}
-			}
 			await handleError(`fetching ${params.url}`, error instanceof Error ? error : new Error(String(error)))
 		}
 	}

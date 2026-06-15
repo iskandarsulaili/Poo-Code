@@ -1,5 +1,4 @@
 import type { Page } from "playwright-core"
-import { launch } from "cloakbrowser"
 
 import { Task } from "../task/Task"
 import type { NativeToolArgs } from "../../shared/tools"
@@ -13,6 +12,11 @@ type WebSearchParams = NativeToolArgs["web_search"]
  *
  * Uses Cloak browser to navigate to a search engine, perform the query,
  * and extract result links/titles/snippets.
+ *
+ * NOTE: cloakbrowser/playwright-core are dynamically imported at execution time
+ * because the VSIX is packaged with --no-dependencies and these modules are
+ * externalized from the esbuild bundle. A static top-level import would crash
+ * extension activation.
  */
 export class WebSearchTool extends BaseTool<"web_search"> {
 	readonly name = "web_search" as const
@@ -30,10 +34,10 @@ export class WebSearchTool extends BaseTool<"web_search"> {
 
 		const count = Math.min(params.count ?? 10, 20)
 		const engine = params.engine ?? "google"
-		let browser: Awaited<ReturnType<typeof launch>> | null = null
 
 		try {
-			browser = await launch({
+			const { launch } = await import("cloakbrowser" as string)
+			const browser = await launch({
 				headless: true,
 				humanize: true,
 			})
@@ -48,7 +52,6 @@ export class WebSearchTool extends BaseTool<"web_search"> {
 			const results = await extractResults(page, engine, count)
 
 			await browser.close()
-			browser = null
 
 			const resultText = results
 				.map(
@@ -61,13 +64,6 @@ export class WebSearchTool extends BaseTool<"web_search"> {
 				`[web_search] Results for "${params.query}" (${engine})\n\n${resultText}`,
 			)
 		} catch (error) {
-			if (browser) {
-				try {
-					await browser.close()
-				} catch {
-					// Best-effort cleanup
-				}
-			}
 			await handleError(`searching for "${params.query}"`, error instanceof Error ? error : new Error(String(error)))
 		}
 	}

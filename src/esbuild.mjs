@@ -126,9 +126,12 @@ async function main() {
 		// global-agent must be external because it dynamically patches Node.js http/https modules
 		// which breaks when bundled. It needs access to the actual Node.js module instances.
 		// undici must be bundled because our VSIX is packaged with `--no-dependencies`.
-		// playwright-core, cloakbrowser, chromium-bidi are external because they bundle
-		// native dependencies and browser binaries that can't be bundled by esbuild.
-		external: ["vscode", "esbuild", "global-agent", "playwright-core", "cloakbrowser", "chromium-bidi"],
+		// cloakbrowser is external because it is dynamically imported (lazy) at execution time.
+		// It pulls in playwright-core and chromium-bidi transitively — those aren't bundled
+		// because the VSIX is packaged with --no-dependencies (no node_modules shipped).
+		// If unavailable at runtime, the web tools fail gracefully via handleError instead of
+		// crashing extension activation.
+		external: ["vscode", "esbuild", "global-agent", "cloakbrowser"],
 	}
 
 	/**

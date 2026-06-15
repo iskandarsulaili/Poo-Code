@@ -1,5 +1,4 @@
 import type { ElementHandle, Page } from "playwright-core"
-import { launch } from "cloakbrowser"
 
 import { Task } from "../task/Task"
 import type { NativeToolArgs } from "../../shared/tools"
@@ -13,6 +12,11 @@ type WebExtractParams = NativeToolArgs["web_extract"]
  *
  * Uses Cloak browser to navigate to a URL, apply CSS selectors,
  * and return structured JSON data.
+ *
+ * NOTE: cloakbrowser/playwright-core are dynamically imported at execution time
+ * because the VSIX is packaged with --no-dependencies and these modules are
+ * externalized from the esbuild bundle. A static top-level import would crash
+ * extension activation.
  */
 export class WebExtractTool extends BaseTool<"web_extract"> {
 	readonly name = "web_extract" as const
@@ -38,10 +42,10 @@ export class WebExtractTool extends BaseTool<"web_extract"> {
 
 		const extractAll = params.extractAll ?? false
 		const timeout = 30_000
-		let browser: Awaited<ReturnType<typeof launch>> | null = null
 
 		try {
-			browser = await launch({
+			const { launch } = await import("cloakbrowser" as string)
+			const browser = await launch({
 				headless: true,
 				humanize: true,
 			})
@@ -59,18 +63,10 @@ export class WebExtractTool extends BaseTool<"web_extract"> {
 			const result = await extractData(page, params.selectors, extractAll)
 
 			await browser.close()
-			browser = null
 
 			const resultJson = JSON.stringify(result, null, 2)
 			pushToolResult(`[web_extract] Extracted data from ${params.url}\n\n${resultJson}`)
 		} catch (error) {
-			if (browser) {
-				try {
-					await browser.close()
-				} catch {
-					// Best-effort cleanup
-				}
-			}
 			await handleError(`extracting from ${params.url}`, error instanceof Error ? error : new Error(String(error)))
 		}
 	}
