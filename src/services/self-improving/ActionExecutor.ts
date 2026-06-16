@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as path from "path"
 import crypto from "crypto"
+import matter from "gray-matter"
 
 import { SKILL_NAME_MAX_LENGTH } from "@roo-code/types"
 import type { MemoryBackend } from "./MemoryBackend"
@@ -229,7 +230,10 @@ export class ActionExecutor {
 			return false
 		}
 
-		await this.skillsManager.createSkillFromContent(safeName, source, description, content, modeSlugs)
+		// If name was truncated, patch the content's frontmatter name to match safeName
+		const resolvedContent = safeName !== skillName ? this.patchFrontmatterName(content, safeName) : content
+
+		await this.skillsManager.createSkillFromContent(safeName, source, description, resolvedContent, modeSlugs)
 		this.skillUsageStore.getOrCreate(skillId, safeName, createdBy)
 		this.logger.appendLine(`[ActionExecutor] Skill created: ${safeName}`)
 		return true
@@ -261,11 +265,14 @@ export class ActionExecutor {
 			return false
 		}
 
+		// If name was truncated, patch the content's frontmatter name to match safeName
+		const resolvedContent = safeName !== skillName ? this.patchFrontmatterName(content, safeName) : content
+
 		// Deduplication check: skip update if skill content hasn't changed
 		if (this.skillsManager.getSkillContent) {
 			try {
 				const existing = await this.skillsManager.getSkillContent(skillName, mode)
-				if (existing && existing.instructions.trim() === content.trim()) {
+				if (existing && existing.instructions.trim() === resolvedContent.trim()) {
 					this.logger.appendLine(`[ActionExecutor] Skill content unchanged for ${skillName}, skipping update`)
 					return false
 				}
@@ -277,7 +284,7 @@ export class ActionExecutor {
 			}
 		}
 
-		await this.skillsManager.updateSkillContent(safeName, source, content, mode)
+		await this.skillsManager.updateSkillContent(safeName, source, resolvedContent, mode)
 		this.skillUsageStore.getOrCreate(skillId, safeName, "agent")
 		await this.skillUsageStore.bumpPatch(skillId)
 		this.logger.appendLine(`[ActionExecutor] Skill updated: ${safeName}`)
@@ -564,5 +571,15 @@ ${instructions.trim()}
 		let truncated = normalized.slice(0, SKILL_NAME_MAX_LENGTH - 9)
 		truncated = truncated.replace(/-+$/, "")
 		return `${truncated}-${hashHex}`
+	}
+
+	/**
+	 * Patch the frontmatter `name` field in SKILL.md content to a new name.
+	 * Uses gray-matter for reliable YAML frontmatter manipulation.
+	 */
+	private patchFrontmatterName(content: string, newName: string): string {
+		const parsed = matter(content)
+		parsed.data.name = newName
+		return matter.stringify(parsed.content, parsed.data, { lineWidth: -1 })
 	}
 }
