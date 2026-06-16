@@ -41,6 +41,7 @@ import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { webFetchTool } from "../tools/WebFetchTool"
 import { webSearchTool } from "../tools/WebSearchTool"
 import { webExtractTool } from "../tools/WebExtractTool"
+import { executeParallelSubtaskTool } from "../tools/ExecuteParallelSubtaskTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -919,6 +920,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "web_extract":
 					await webExtractTool.handle(cline, block as ToolUse<"web_extract">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "execute_parallel_subtask":
+					await executeParallelSubtaskTool.handle(cline, block as ToolUse<"execute_parallel_subtask">, {
 						askApproval,
 						handleError,
 						pushToolResult,

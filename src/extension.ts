@@ -42,6 +42,7 @@ import { registerAllParsers } from "./core/orchestration/parsers"
 import { SubProjectDetector } from "./core/orchestration/SubProjectDetector"
 import { DepGraphBuilder } from "./core/orchestration/DepGraphBuilder"
 import { experimentConfigsMap } from "./shared/experiments"
+import { executeParallelSubtaskTool } from "./core/tools/ExecuteParallelSubtaskTool"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -293,6 +294,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		} catch (error) {
 			outputChannel.appendLine(
 				`[DepGraph] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	}
+
+	// Initialize parallel subtask execution system if the experiment is enabled.
+	const parallelSubtaskEnabled = experimentConfigsMap.PARALLEL_SUBTASK?.enabled ?? true
+	if (parallelSubtaskEnabled) {
+		try {
+			executeParallelSubtaskTool.initialize()
+			outputChannel.appendLine("[ParallelSubtask] ExecuteParallelSubtaskTool initialized")
+		} catch (error) {
+			outputChannel.appendLine(
+				`[ParallelSubtask] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}

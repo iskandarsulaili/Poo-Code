@@ -51,6 +51,7 @@ export const toolNames = [
 	"web_fetch",
 	"web_search",
 	"web_extract",
+	"execute_parallel_subtask",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

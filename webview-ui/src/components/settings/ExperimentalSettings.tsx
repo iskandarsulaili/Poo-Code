@@ -113,6 +113,7 @@ const CATEGORIES: ExperimentCategory[] = [
 			"RESILIENCE_SERVICE",
 			"TOOL_ERROR_HEALER",
 			"RECOVERY_CONTEXT",
+			"PARALLEL_SUBTASK",
 		],
 	},
 	{
@@ -496,6 +497,97 @@ const CustomToolsSection = ({
 	)
 }
 
+/**
+ * Renders the parallel subtask section with its sub-settings.
+ */
+const ParallelSubtaskSection = ({
+	experiments,
+	setExperimentEnabled,
+}: {
+	experiments: Experiments
+	setExperimentEnabled: SetExperimentEnabled
+}) => {
+	const { t } = useAppTranslation()
+	const visible = experiments[EXPERIMENT_IDS.PARALLEL_SUBTASK] ?? false
+
+	return (
+		<div className="space-y-3">
+			<ExperimentalFeature
+				experimentKey="PARALLEL_SUBTASK"
+				enabled={visible}
+				onChange={(enabled) => setExperimentEnabled(EXPERIMENT_IDS.PARALLEL_SUBTASK, enabled)}
+				checkboxTestId="experimental-parallel-subtask-checkbox"
+			/>
+			{visible && (
+				<div className="ml-6 space-y-3 border-l border-vscode-panel-border pl-4">
+					<div className="space-y-2">
+						<label className="block font-medium">
+							{t("settings:experimental.PARALLEL_SUBTASK.maxParallelLabel", {
+								defaultValue: "Max Parallel Subtasks",
+							})}
+						</label>
+						<Input
+							type="number"
+							min={1}
+							max={16}
+							value={experiments.parallelSubtaskMaxParallel ?? 4}
+							onChange={(e) => {
+								const val = parseInt(e.target.value, 10)
+								if (!isNaN(val) && val >= 1) {
+									;(setExperimentEnabled as any)("parallelSubtaskMaxParallel", val)
+								}
+							}}
+							data-testid="parallel-subtask-max-parallel-input"
+						/>
+					</div>
+					<div className="space-y-2">
+						<label className="block font-medium">
+							{t("settings:experimental.PARALLEL_SUBTASK.heartbeatLabel", {
+								defaultValue: "Heartbeat Interval (ms)",
+							})}
+						</label>
+						<Input
+							type="number"
+							min={1000}
+							max={60000}
+							step={1000}
+							value={experiments.parallelSubtaskHeartbeatIntervalMs ?? 5000}
+							onChange={(e) => {
+								const val = parseInt(e.target.value, 10)
+								if (!isNaN(val) && val >= 1000) {
+									;(setExperimentEnabled as any)("parallelSubtaskHeartbeatIntervalMs", val)
+								}
+							}}
+							data-testid="parallel-subtask-heartbeat-input"
+						/>
+					</div>
+					<div className="space-y-2">
+						<label className="block font-medium">
+							{t("settings:experimental.PARALLEL_SUBTASK.lockTimeoutLabel", {
+								defaultValue: "Lock Timeout (ms)",
+							})}
+						</label>
+						<Input
+							type="number"
+							min={1000}
+							max={300000}
+							step={1000}
+							value={experiments.parallelSubtaskLockTimeoutMs ?? 30000}
+							onChange={(e) => {
+								const val = parseInt(e.target.value, 10)
+								if (!isNaN(val) && val >= 1000) {
+									;(setExperimentEnabled as any)("parallelSubtaskLockTimeoutMs", val)
+								}
+							}}
+							data-testid="parallel-subtask-lock-timeout-input"
+						/>
+					</div>
+				</div>
+			)}
+		</div>
+	)
+}
+
 /** Renders a category group with a sub-header and its experiments. */
 const CategoryGroup = ({
 	category,
@@ -594,6 +686,9 @@ export const ExperimentalSettings = ({
 		}
 		if (key === "CUSTOM_TOOLS") {
 			return <CustomToolsSection experiments={experiments} setExperimentEnabled={setExperimentEnabled} />
+		}
+		if (key === "PARALLEL_SUBTASK") {
+			return <ParallelSubtaskSection experiments={experiments} setExperimentEnabled={setExperimentEnabled} />
 		}
 		return (
 			<SimpleExperimentToggle

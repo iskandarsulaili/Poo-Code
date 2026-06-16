@@ -31,6 +31,7 @@ export const EXPERIMENT_IDS = {
 	STRUCTURED_OUTPUT_PARSING: "structuredOutputParsing",
 	DEPENDENCY_GRAPH: "dependencyGraph",
 	MULTI_ROOT_WORKSPACE: "multiRootWorkspace",
+	PARALLEL_SUBTASK: "parallelSubtask",
 } as const satisfies Record<string, ExperimentId>
 
 type ExperimentKey = Keys<typeof EXPERIMENT_IDS>
@@ -70,6 +71,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	STRUCTURED_OUTPUT_PARSING: { enabled: true },
 	DEPENDENCY_GRAPH: { enabled: true },
 	MULTI_ROOT_WORKSPACE: { enabled: true },
+	PARALLEL_SUBTASK: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

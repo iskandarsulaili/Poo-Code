@@ -169,6 +169,24 @@ export type NativeToolArgs = {
 		waitForSelector?: string
 		extractAll?: boolean
 	}
+	execute_parallel_subtask: {
+		tasks: Array<{
+			id: string
+			name: string
+			mode: string
+			prompt: string
+			inputFiles?: string[]
+			outputFiles?: string[]
+			deps?: string[]
+			requiredResources?: string[]
+			subscribedTopics?: string[]
+			publishedTopics?: string[]
+			estimatedTokens?: number
+			timeoutMs?: number
+			isCritical?: boolean
+		}>
+		maxParallel?: number
+	}
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -370,6 +388,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	generate_image: "generate images",
 	custom_tool: "use custom tools",
 	execute_parallel: "run commands in parallel",
+	execute_parallel_subtask: "execute parallel subtasks",
 	web_fetch: "fetch web page content",
 	web_search: "search the web",
 	web_extract: "extract structured data from web pages",
