@@ -580,6 +580,6 @@ ${instructions.trim()}
 	private patchFrontmatterName(content: string, newName: string): string {
 		const parsed = matter(content)
 		parsed.data.name = newName
-		return matter.stringify(parsed.content, parsed.data, { lineWidth: -1 })
+		return matter.stringify(parsed.content, parsed.data)
 	}
 }
