@@ -516,9 +516,17 @@ export class VerificationEngine {
 
 			// Check other manifest files known to have tooling
 			const toolingManifests = [
-				"Cargo.toml", "go.mod", "build.gradle", "build.gradle.kts",
-				"pyproject.toml", "Gemfile", "mix.exs",
-				"deno.json", "deno.jsonc", "build.zig", "Makefile",
+				"Cargo.toml",
+				"go.mod",
+				"build.gradle",
+				"build.gradle.kts",
+				"pyproject.toml",
+				"Gemfile",
+				"mix.exs",
+				"deno.json",
+				"deno.jsonc",
+				"build.zig",
+				"Makefile",
 			] as const
 
 			for (const manifest of toolingManifests) {
@@ -528,7 +536,23 @@ export class VerificationEngine {
 			}
 
 			// Check for source code files that indicate a real project
-			const codeExtensions = [".ts", ".tsx", ".js", ".jsx", ".rs", ".py", ".go", ".java", ".kt", ".kts", ".rb", ".cs", ".zig", ".ex", ".exs"]
+			const codeExtensions = [
+				".ts",
+				".tsx",
+				".js",
+				".jsx",
+				".rs",
+				".py",
+				".go",
+				".java",
+				".kt",
+				".kts",
+				".rb",
+				".cs",
+				".zig",
+				".ex",
+				".exs",
+			]
 			for (const entry of entries) {
 				if (entry.startsWith(".")) continue
 				const ext = path.extname(entry)
@@ -966,8 +990,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			const skippedNote = skippedGates.length > 0 ? ` (${skippedGates.length} skipped)` : ""
 			const warningSuffix =
 				totalWarnings > 0 ? ` (${totalWarnings} warning${totalWarnings !== 1 ? "s" : ""})` : ""
-			const errorSuffix =
-				totalErrors > 0 ? ` (${totalErrors} error${totalErrors !== 1 ? "s" : ""} detected)` : ""
+			const errorSuffix = totalErrors > 0 ? ` (${totalErrors} error${totalErrors !== 1 ? "s" : ""} detected)` : ""
 			summary = `All ${gates.length} verification gates passed [${strictness}]${skippedNote}${warningSuffix}${errorSuffix}`
 		} else {
 			const summaryParts = failedGates.map((g) => {
@@ -989,14 +1012,14 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	/**
 	 * Create a skipped gate result.
 	 */
-	private makeSkippedGate(name: string, reason: string, strictness: string): GateResult {
+	private makeSkippedGate(name: string, reason: string, strictness: GateResult["strictness"]): GateResult {
 		return {
 			name,
 			passed: true,
 			durationMs: 0,
 			warnings: 0,
 			errors: 0,
-			strictness: strictness as GateResult["strictness"],
+			strictness,
 			skipped: true,
 			skipReason: reason,
 		}
@@ -1068,7 +1091,11 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		return undefined
 	}
 
-	private async runGate(name: string, command: string, effectiveStrictness?: string): Promise<GateResult> {
+	private async runGate(
+		name: string,
+		command: string,
+		effectiveStrictness?: "lenient" | "moderate" | "strict" | "enterprise",
+	): Promise<GateResult> {
 		const start = Date.now()
 		const strictness = effectiveStrictness ?? this.config.strictness
 
@@ -1162,16 +1189,41 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 						errors > 0
 							? `${errors} error${errors !== 1 ? "s" : ""} detected`
 							: `${warnings} warning${warnings !== 1 ? "s" : ""} exceeds max allowed (${maxWarnings})`
-					this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [enterprise] (${durationMs}ms): ${reason}`)
-					return { name, passed: false, error: `[enterprise] ${reason}:\n${stderrSummary.slice(0, 500)}`, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "${name}" FAILED [enterprise] (${durationMs}ms): ${reason}`,
+					)
+					return {
+						name,
+						passed: false,
+						error: `[enterprise] ${reason}:\n${stderrSummary.slice(0, 500)}`,
+						output: output.slice(0, 1000),
+						durationMs,
+						warnings,
+						errors,
+						stderrSummary,
+						strictness,
+					}
 				}
 			}
 
 			if (strictness === "strict") {
 				if (errors > 0 || result.status !== 0) {
-					const reason = errors > 0 ? `${errors} error${errors !== 1 ? "s" : ""} detected` : `Exit code ${result.status}`
-					this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [strict] (${durationMs}ms): ${reason}`)
-					return { name, passed: false, error: `[strict] ${reason}:\n${stderrSummary.slice(0, 500)}`, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+					const reason =
+						errors > 0 ? `${errors} error${errors !== 1 ? "s" : ""} detected` : `Exit code ${result.status}`
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "${name}" FAILED [strict] (${durationMs}ms): ${reason}`,
+					)
+					return {
+						name,
+						passed: false,
+						error: `[strict] ${reason}:\n${stderrSummary.slice(0, 500)}`,
+						output: output.slice(0, 1000),
+						durationMs,
+						warnings,
+						errors,
+						stderrSummary,
+						strictness,
+					}
 				}
 			}
 
@@ -1184,8 +1236,19 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 
 			const warningNote = warnings > 0 ? ` (${warnings} warning${warnings !== 1 ? "s" : ""})` : ""
 			const errorNote = errors > 0 ? ` (${errors} error${errors !== 1 ? "s" : ""})` : ""
-			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" PASSED [${strictness}] (${durationMs}ms)${warningNote}${errorNote}`)
-			return { name, passed: true, output: output.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "${name}" PASSED [${strictness}] (${durationMs}ms)${warningNote}${errorNote}`,
+			)
+			return {
+				name,
+				passed: true,
+				output: output.slice(0, 1000),
+				durationMs,
+				warnings,
+				errors,
+				stderrSummary,
+				strictness,
+			}
 		} catch (error: any) {
 			const durationMs = Date.now() - start
 			const errStderr = error?.stderr || ""
@@ -1196,7 +1259,10 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			if (
 				error?.code === "ENOENT" ||
 				error?.status === 127 ||
-				(errorMsg && (errorMsg.includes("ENOENT") || errorMsg.includes("Exit code 127") || errorMsg.includes("command not found")))
+				(errorMsg &&
+					(errorMsg.includes("ENOENT") ||
+						errorMsg.includes("Exit code 127") ||
+						errorMsg.includes("command not found")))
 			) {
 				this.logger?.appendLine(
 					`[VerificationEngine] Gate "${name}" skipped: command not found in this project context`,
@@ -1213,20 +1279,29 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				}
 			}
 
-			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" FAILED [${strictness}] (${durationMs}ms): ${errorMsg.slice(0, 200)}`)
-			return { name, passed: false, error: errorMsg.slice(0, 1000), durationMs, warnings, errors, stderrSummary, strictness }
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "${name}" FAILED [${strictness}] (${durationMs}ms): ${errorMsg.slice(0, 200)}`,
+			)
+			return {
+				name,
+				passed: false,
+				error: errorMsg.slice(0, 1000),
+				durationMs,
+				warnings,
+				errors,
+				stderrSummary,
+				strictness,
+			}
 		}
 	}
 }
 
 /**
-	* Parse stderr for warning and error patterns (case-insensitive).
-	* Detects lines containing: error, ERROR, Error, warning, WARNING, Warning
-	* Returns counts and a truncated summary.
-	*/
-export function parseStderr(
-	stderr: string,
-): { warnings: number; errors: number; stderrSummary: string } {
+ * Parse stderr for warning and error patterns (case-insensitive).
+ * Detects lines containing: error, ERROR, Error, warning, WARNING, Warning
+ * Returns counts and a truncated summary.
+ */
+export function parseStderr(stderr: string): { warnings: number; errors: number; stderrSummary: string } {
 	if (!stderr || stderr.trim().length === 0) {
 		return { warnings: 0, errors: 0, stderrSummary: "" }
 	}
@@ -1240,7 +1315,12 @@ export function parseStderr(
 		const trimmed = line.trim()
 		if (!trimmed) continue
 
-		if (/\berror\b/i.test(trimmed) || /^\[error\]/i.test(trimmed) || /^ERROR/i.test(trimmed) || /^Error\b/.test(trimmed)) {
+		if (
+			/\berror\b/i.test(trimmed) ||
+			/^\[error\]/i.test(trimmed) ||
+			/^ERROR/i.test(trimmed) ||
+			/^Error\b/.test(trimmed)
+		) {
 			errors++
 			if (summaryLines.length < 10) {
 				summaryLines.push(`ERR: ${trimmed.slice(0, 120)}`)
@@ -1248,7 +1328,12 @@ export function parseStderr(
 			continue
 		}
 
-		if (/\bwarning\b/i.test(trimmed) || /^\[warning\]/i.test(trimmed) || /^WARNING/i.test(trimmed) || /^Warning\b/.test(trimmed)) {
+		if (
+			/\bwarning\b/i.test(trimmed) ||
+			/^\[warning\]/i.test(trimmed) ||
+			/^WARNING/i.test(trimmed) ||
+			/^Warning\b/.test(trimmed)
+		) {
 			warnings++
 			if (summaryLines.length < 10) {
 				summaryLines.push(`WRN: ${trimmed.slice(0, 120)}`)
