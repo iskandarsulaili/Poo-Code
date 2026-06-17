@@ -19,6 +19,10 @@ export interface ResilienceConfig {
 
 export interface RecoveryState {
 	consecutiveFailures: number
+	/** Separate counter for streaming failures to prevent cross-contamination
+	 *  with tool/mistake failures. Streaming failures have their own retry budget
+	 *  so that consecutive mistakes don't exhaust the streaming retry limit. */
+	streamingFailureCount: number
 	lastFailureType: string | null
 	lastFailureTime: number | null
 	lastSuccessfulTool: string | null
@@ -85,27 +89,31 @@ export class ResilienceService {
 	/**
 	 * Called when a "having trouble" or streaming failure occurs.
 	 * Returns the delay in ms before the next retry, or -1 if max retries exceeded.
+	 *
+	 * Uses a separate streamingFailureCount counter to prevent cross-contamination
+	 * with tool/mistake failures. This ensures that consecutive mistakes don't
+	 * exhaust the streaming retry budget, and vice versa.
 	 */
 	onStreamingFailure(): number {
 		if (!this.config.enabled) {
 			return -1
 		}
 
-		this.state.consecutiveFailures++
+		this.state.streamingFailureCount++
 		this.state.lastFailureType = "streaming_failed"
 		this.state.lastFailureTime = Date.now()
 		this.state.isInRecoveryMode = true
 
-		if (this.state.consecutiveFailures > this.config.maxRetries) {
+		if (this.state.streamingFailureCount > this.config.maxRetries) {
 			this.logger.appendLine(
-				`[Resilience] Max retries (${this.config.maxRetries}) exceeded. Entering recovery mode.`,
+				`[Resilience] Max streaming retries (${this.config.maxRetries}) exceeded. Entering recovery mode.`,
 			)
 			return -1 // Signal to enter recovery mode
 		}
 
-		const delay = this.calculateBackoff(this.state.consecutiveFailures)
+		const delay = this.calculateBackoff(this.state.streamingFailureCount)
 		this.logger.appendLine(
-			`[Resilience] Streaming failure #${this.state.consecutiveFailures}. Retrying in ${delay}ms.`,
+			`[Resilience] Streaming failure #${this.state.streamingFailureCount}. Retrying in ${delay}ms.`,
 		)
 		return delay
 	}
@@ -184,6 +192,7 @@ export class ResilienceService {
 	 */
 	onDeliveryAttempt(): void {
 		this.state.consecutiveFailures = 0
+		this.state.streamingFailureCount = 0
 		this.state.isInRecoveryMode = false
 		this.state.recoveryAttempts = 0
 	}
@@ -324,6 +333,7 @@ Please continue the task with a fresh approach. Simplify your strategy and verif
 	private getInitialState(): RecoveryState {
 		return {
 			consecutiveFailures: 0,
+			streamingFailureCount: 0,
 			lastFailureType: null,
 			lastFailureTime: null,
 			lastSuccessfulTool: null,

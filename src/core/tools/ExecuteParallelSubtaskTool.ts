@@ -24,6 +24,7 @@ import { LockManager } from "../orchestration/LockManager"
 import { Blackboard } from "../orchestration/Blackboard"
 import { ContextRouter } from "../orchestration/ContextRouter"
 import { LogAggregator } from "../orchestration/LogAggregator"
+import { compressPrompt } from "../../shared/prompt-compressor"
 
 // ============================================================================
 // Types
@@ -210,8 +211,15 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			// The executor calls task.startSubtask() which delegates via
 			// ClineProvider.delegateParentAndOpenChild() to spawn a real child agent.
 			// Subtasks execute sequentially to respect the single-open-task invariant.
+			//
+			// IMPORTANT: Compress the prompt to prevent overwhelming child agents
+			// with full parent context. Long prompts cause consecutive mistakes
+			// and streaming failures in child tasks. Uses lossless compression
+			// that preserves all content — no truncation.
+			const MAX_PROMPT_LENGTH = 8000
 			const executor: SubtaskExecutor = async (execParams) => {
-				const child = await task.startSubtask(execParams.message, [], execParams.mode)
+				const compressedMessage = compressPrompt(execParams.message, MAX_PROMPT_LENGTH)
+				const child = await task.startSubtask(compressedMessage, [], execParams.mode)
 				return { taskId: child.taskId, result: "" }
 			}
 			this.orchestrator.setSubtaskExecutor(executor)

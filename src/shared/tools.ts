@@ -444,6 +444,8 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"skill_manage",
 	"execute_parallel_subtask",
 	"execute_parallel_child_task",
+	"list_files",
+	"read_file",
 ] as const
 
 /**
