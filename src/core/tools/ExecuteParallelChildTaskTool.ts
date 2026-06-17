@@ -1,15 +1,17 @@
 /**
- * Tool for executing parallel subtasks via the Parallel Subtask Execution System.
+ * Tool for executing parallel child tasks via the Parallel Subtask Execution System.
  *
- * Accepts an array of subtask definitions and executes them with DAG-based
+ * Accepts an array of child task definitions (each with mode, message, todos, deps,
+ * inputFiles, outputFiles, subscribedTopics) and executes them with DAG-based
  * dependency resolution, lock-aware scheduling, and blackboard communication.
  *
  * ## Flow
  * 1. **Feature-flag check** — if `PARALLEL_SUBTASK` disabled, push fallback result.
- * 2. **Validation** — ensure subtasks are valid, deps reference existing IDs.
- * 3. **Execution** — delegate to {@link ParallelSubtaskOrchestrator.execute}.
- * 4. **Formatting** — structured markdown with per-subtask status.
- * 5. **Push result** — via `callbacks.pushToolResult()`.
+ * 2. **Validation** — ensure child tasks are valid, deps reference existing IDs.
+ * 3. **DAG construction** — build DAG from child task definitions.
+ * 4. **Execution** — delegate to {@link ParallelSubtaskOrchestrator.execute}.
+ * 5. **Formatting** — structured markdown with per-child-task status.
+ * 6. **Push result** — via `callbacks.pushToolResult()`.
  *
  * @module
  */
@@ -30,41 +32,40 @@ import { LogAggregator } from "../orchestration/LogAggregator"
 // ============================================================================
 
 /**
- * Parameters for the execute_parallel_subtask tool.
+ * Parameters for the execute_parallel_child_task tool.
  */
-interface ExecuteParallelSubtaskParams {
+interface ExecuteParallelChildTaskParams {
 	tasks: Array<{
 		id: string
-		name: string
 		mode: string
-		prompt: string
+		message: string
+		todos?: string
+		deps?: string[]
 		inputFiles?: string[]
 		outputFiles?: string[]
-		deps?: string[]
-		requiredResources?: string[]
 		subscribedTopics?: string[]
-		publishedTopics?: string[]
-		estimatedTokens?: number
-		timeoutMs?: number
-		isCritical?: boolean
 	}>
 	maxParallel?: number
 }
 
 // ============================================================================
-// ExecuteParallelSubtaskTool
+// ExecuteParallelChildTaskTool
 // ============================================================================
 
 /**
- * Tool that the LLM calls to execute multiple subtasks in parallel.
+ * Tool that the LLM calls to execute multiple child tasks in parallel.
+ *
+ * Each child task is a self-contained unit with its own mode, message, and
+ * optional dependencies. The tool builds a DAG from the task definitions
+ * and executes them in parallel waves using the ParallelSubtaskOrchestrator.
  *
  * Registered as a singleton in the tool registry. Must be initialized with
  * all dependencies before first use (called during extension activation).
  *
- * @extends BaseTool<"execute_parallel_subtask">
+ * @extends BaseTool<"execute_parallel_child_task">
  */
-export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subtask"> {
-	readonly name = "execute_parallel_subtask" as const
+export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_child_task"> {
+	readonly name = "execute_parallel_child_task" as const
 
 	private orchestrator: ParallelSubtaskOrchestrator | undefined
 	private lockManager: LockManager | undefined
@@ -91,17 +92,17 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			maxParallel,
 		)
 
-		console.log("[ExecuteParallelSubtaskTool] Initialized with ParallelSubtaskOrchestrator")
+		console.log("[ExecuteParallelChildTaskTool] Initialized with ParallelSubtaskOrchestrator")
 	}
 
 	/**
-	 * Execute parallel subtasks.
+	 * Execute parallel child tasks.
 	 *
 	 * @param params - Typed parameters
 	 * @param task - Task instance
 	 * @param callbacks - Tool execution callbacks
 	 */
-	async execute(params: ExecuteParallelSubtaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
+	async execute(params: ExecuteParallelChildTaskParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { handleError, pushToolResult } = callbacks
 
 		try {
@@ -110,7 +111,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			// ------------------------------------------------------------------
 			if (!experimentConfigsMap.PARALLEL_SUBTASK?.enabled) {
 				pushToolResult(
-					"Parallel subtask execution is disabled via experiment config. Use new_task sequentially.",
+					"Parallel child task execution is disabled via experiment config. Use new_task sequentially.",
 				)
 				return
 			}
@@ -120,7 +121,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			// ------------------------------------------------------------------
 			if (!this.orchestrator) {
 				pushToolResult(
-					"Parallel subtask orchestrator is not initialized. Ensure initialize() is called during extension activation.",
+					"Parallel child task orchestrator is not initialized. Ensure initialize() is called during extension activation.",
 				)
 				return
 			}
@@ -132,12 +133,12 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 
 			if (!tasks || tasks.length === 0) {
 				task.consecutiveMistakeCount++
-				task.recordToolError("execute_parallel_subtask")
-				pushToolResult(await task.sayAndCreateMissingParamError("execute_parallel_subtask", "tasks"))
+				task.recordToolError("execute_parallel_child_task")
+				pushToolResult(await task.sayAndCreateMissingParamError("execute_parallel_child_task", "tasks"))
 				return
 			}
 
-			// Validate each subtask
+			// Validate each child task
 			const validationErrors: string[] = []
 			const taskIds = new Set(tasks.map((t) => t.id))
 
@@ -149,16 +150,12 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 					continue
 				}
 
-				if (!t.name || t.name.trim().length === 0) {
-					validationErrors.push(`Task "${t.id}" is missing a 'name'.`)
-				}
-
 				if (!t.mode || t.mode.trim().length === 0) {
 					validationErrors.push(`Task "${t.id}" is missing a 'mode'.`)
 				}
 
-				if (!t.prompt || t.prompt.trim().length === 0) {
-					validationErrors.push(`Task "${t.id}" is missing a 'prompt'.`)
+				if (!t.message || t.message.trim().length === 0) {
+					validationErrors.push(`Task "${t.id}" is missing a 'message'.`)
 				}
 
 				// Validate deps reference existing task IDs
@@ -174,7 +171,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			if (validationErrors.length > 0) {
 				task.consecutiveMistakeCount++
 				pushToolResult(
-					`Validation failed for execute_parallel_subtask:\n${validationErrors.map((e) => `- ${e}`).join("\n")}`,
+					`Validation failed for execute_parallel_child_task:\n${validationErrors.map((e) => `- ${e}`).join("\n")}`,
 				)
 				return
 			}
@@ -186,18 +183,18 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			// ------------------------------------------------------------------
 			const subtaskNodes: SubtaskNode[] = tasks.map((t) => ({
 				id: t.id,
-				name: t.name,
+				name: t.id,
 				mode: t.mode,
-				prompt: t.prompt,
+				prompt: t.message,
 				inputFiles: t.inputFiles ?? [],
 				outputFiles: t.outputFiles ?? [],
 				deps: t.deps ?? [],
-				requiredResources: t.requiredResources ?? [],
+				requiredResources: [],
 				subscribedTopics: t.subscribedTopics ?? [],
-				publishedTopics: t.publishedTopics ?? [],
-				estimatedTokens: t.estimatedTokens ?? 0,
-				timeoutMs: t.timeoutMs ?? 300_000,
-				isCritical: t.isCritical ?? false,
+				publishedTopics: [],
+				estimatedTokens: 0,
+				timeoutMs: 300_000,
+				isCritical: false,
 				status: "pending",
 				metadata: {
 					correlationId: "",
@@ -215,7 +212,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 			const formatted = this.formatResult(dag)
 			pushToolResult(formatted)
 		} catch (error) {
-			await handleError("executing parallel subtasks", error as Error)
+			await handleError("executing parallel child tasks", error as Error)
 		}
 	}
 
@@ -236,15 +233,15 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 		const failed = [...dag.nodes.values()].filter((n) => n.status === "failed" || n.status === "timed_out").length
 		const skipped = [...dag.nodes.values()].filter((n) => n.status === "skipped" || n.status === "blocked").length
 
-		lines.push(`## Parallel Subtask Execution Results (${dag.status})`)
-		lines.push(`Total: ${totalNodes} subtask(s), ${completed} completed, ${failed} failed, ${skipped} skipped`)
+		lines.push(`## Parallel Child Task Execution Results (${dag.status})`)
+		lines.push(`Total: ${totalNodes} child task(s), ${completed} completed, ${failed} failed, ${skipped} skipped`)
 		lines.push(`Waves: ${dag.waves.length}`)
 		lines.push("")
 
 		// Per-wave sections
 		for (let wi = 0; wi < dag.waves.length; wi++) {
 			const wave = dag.waves[wi]
-			lines.push(`### Wave ${wi + 1} (${wave.length} subtask(s))`)
+			lines.push(`### Wave ${wi + 1} (${wave.length} child task(s))`)
 			lines.push("")
 
 			for (const node of wave) {
@@ -255,7 +252,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 						: "-"
 				const depsStr = node.deps.length > 0 ? ` (after: ${node.deps.join(", ")})` : ""
 
-				lines.push(`**${node.name}** \`${node.id}\` ${statusIcon}${depsStr}`)
+				lines.push(`**${node.id}** ${statusIcon}${depsStr}`)
 				lines.push(`> Mode: ${node.mode}`)
 				lines.push(`> Status: ${node.status}`)
 				lines.push(`> Duration: ${duration}`)
@@ -280,7 +277,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 	}
 
 	/**
-	 * Get a status icon for a subtask status.
+	 * Get a status icon for a child task status.
 	 */
 	private getStatusIcon(status: string): string {
 		switch (status) {
@@ -302,68 +299,10 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 				return "?"
 		}
 	}
-
-	// ========================================================================
-	// Intervention methods (called from webview message handlers)
-	// ========================================================================
-
-	/**
-	 * Pause a running subtask.
-	 */
-	pauseSubtask(subtaskId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] pauseSubtask: ${subtaskId}`)
-		// In production, this would signal the subagent to pause
-	}
-
-	/**
-	 * Resume a paused subtask.
-	 */
-	resumeSubtask(subtaskId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] resumeSubtask: ${subtaskId}`)
-		// In production, this would signal the subagent to resume
-	}
-
-	/**
-	 * Cancel a subtask.
-	 */
-	cancelSubtask(subtaskId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] cancelSubtask: ${subtaskId}`)
-		this.orchestrator?.cancel(subtaskId)
-	}
-
-	/**
-	 * Retry a failed subtask.
-	 */
-	retrySubtask(subtaskId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] retrySubtask: ${subtaskId}`)
-		// In production, this would re-execute the subtask
-	}
-
-	/**
-	 * Skip a subtask.
-	 */
-	skipSubtask(subtaskId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] skipSubtask: ${subtaskId}`)
-		const dag = this.orchestrator?.getDAG()
-		if (dag) {
-			const node = dag.nodes.get(subtaskId)
-			if (node) {
-				node.status = "skipped"
-			}
-		}
-	}
-
-	/**
-	 * Resume a persisted DAG.
-	 */
-	resumeDAG(correlationId: string): void {
-		console.log(`[ExecuteParallelSubtaskTool] resumeDAG: ${correlationId}`)
-		// In production, this would reload the DAG from .roosync/dag-state-{correlationId}.json
-	}
 }
 
 // ============================================================================
 // Singleton export
 // ============================================================================
 
-export const executeParallelSubtaskTool = new ExecuteParallelSubtaskTool()
+export const executeParallelChildTaskTool = new ExecuteParallelChildTaskTool()

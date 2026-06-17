@@ -110,5 +110,68 @@
 	"costs": {
 		"own": "Propre",
 		"subtasks": "Sous-tâches"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Parallel Task Dashboard",
+			"tab_subtasks": "Subtasks",
+			"tab_child_tasks": "Child Tasks",
+			"tab_dag": "DAG",
+			"tab_logs": "Logs",
+			"no_subtasks": "No subtasks running. Use execute_parallel_subtask or execute_parallel_child_task to start.",
+			"no_child_tasks": "No child tasks running.",
+			"no_dag_data": "No DAG data available",
+			"no_logs": "No log entries yet...",
+			"no_thoughts": "No agent thoughts yet...",
+			"agent_thoughts": "Agent Thoughts",
+			"system_logs": "System Logs",
+			"completed": "Completed",
+			"running": "Running",
+			"failed": "Failed",
+			"total": "Total"
+		},
+		"subtask_card": {
+			"status_label": "Status:",
+			"duration_label": "Duration:",
+			"deps_label": "Deps:",
+			"error_label": "Error:",
+			"running": "running...",
+			"no_duration": "-"
+		},
+		"intervention": {
+			"pause": "Pause",
+			"resume": "Resume",
+			"cancel": "Cancel",
+			"retry": "Retry",
+			"skip": "Skip",
+			"pause_title": "Pause this subtask",
+			"resume_title": "Resume this subtask",
+			"cancel_title": "Cancel this subtask",
+			"retry_title": "Retry this subtask",
+			"skip_title": "Skip this subtask"
+		},
+		"resume_panel": {
+			"title": "⚠ Interrupted Parallel Tasks Detected",
+			"description": "The following parallel task executions were interrupted. You can resume them or dismiss.",
+			"resume_button": "Resume",
+			"dismiss_button": "Dismiss",
+			"status_prefix": "Status:",
+			"tasks_count": "{{total}} tasks ({{completed}} completed, {{failed}} failed)"
+		},
+		"detail_panel": {
+			"select_hint": "Select a subtask to view details",
+			"mode_label": "Mode:",
+			"status_label": "Status:",
+			"deps_label": "Deps:",
+			"tokens_label": "Tokens:",
+			"prompt_label": "Prompt",
+			"error_label": "Error",
+			"inputs_label": "Inputs:",
+			"outputs_label": "Outputs:",
+			"no_deps": "none"
+		},
+		"dag": {
+			"wave_label": "Wave {{number}}"
+		}
 	}
 }

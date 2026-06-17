@@ -273,5 +273,24 @@
 		"fix": "Corregeix amb Zoo Code",
 		"improve": "Millora amb Zoo Code",
 		"addToContext": "Afegeix a Zoo Code"
+	},
+	"parallel": {
+		"subtask_started": "Parallel subtask {{id}} started in mode {{mode}}",
+		"subtask_completed": "Parallel subtask {{id}} completed",
+		"subtask_failed": "Parallel subtask {{id}} failed: {{error}}",
+		"subtask_skipped": "Parallel subtask {{id}} skipped",
+		"subtask_timed_out": "Parallel subtask {{id}} timed out",
+		"child_task_started": "Parallel child task {{id}} started in mode {{mode}}",
+		"child_task_completed": "Parallel child task {{id}} completed",
+		"child_task_failed": "Parallel child task {{id}} failed: {{error}}",
+		"dag_execution_started": "DAG execution started with {{count}} subtasks",
+		"dag_execution_completed": "DAG execution completed ({{completed}}/{{total}} succeeded)",
+		"dag_execution_failed": "DAG execution failed: {{error}}",
+		"wave_executing": "Executing wave {{wave}} with {{count}} subtasks",
+		"lock_acquired": "Lock acquired for {{file}}",
+		"lock_released": "Lock released for {{file}}",
+		"lock_timeout": "Lock timeout for {{file}}",
+		"blackboard_published": "Published to topic {{topic}}",
+		"blackboard_subscribed": "Subscribed to topic {{topic}}"
 	}
 }

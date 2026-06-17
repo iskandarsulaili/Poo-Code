@@ -43,6 +43,7 @@ import { SubProjectDetector } from "./core/orchestration/SubProjectDetector"
 import { DepGraphBuilder } from "./core/orchestration/DepGraphBuilder"
 import { experimentConfigsMap } from "./shared/experiments"
 import { executeParallelSubtaskTool } from "./core/tools/ExecuteParallelSubtaskTool"
+import { executeParallelChildTaskTool } from "./core/tools/ExecuteParallelChildTaskTool"
 import { migrateSettings } from "./utils/migrateSettings"
 import { autoImportSettings } from "./utils/autoImportSettings"
 import { API } from "./extension/api"
@@ -307,6 +308,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		} catch (error) {
 			outputChannel.appendLine(
 				`[ParallelSubtask] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+
+		try {
+			executeParallelChildTaskTool.initialize()
+			outputChannel.appendLine("[ParallelSubtask] ExecuteParallelChildTaskTool initialized")
+		} catch (error) {
+			outputChannel.appendLine(
+				`[ParallelSubtask] ExecuteParallelChildTaskTool initialization error: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
 	}

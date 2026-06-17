@@ -27,5 +27,38 @@
 		"roo": {
 			"authRequired": "이미지 생성에는 Zoo Code Cloud 인증이 필요합니다. Zoo Code Cloud에 로그인하세요."
 		}
+	},
+	"executeParallelSubtask": {
+		"displayName": "execute parallel subtasks",
+		"description": "Execute multiple subtasks in parallel with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication.",
+		"paramTasks": "Array of subtask definitions with dependencies",
+		"paramMaxParallel": "Maximum parallel subtasks (null for default which is typically 4)",
+		"paramId": "Unique identifier for this subtask (referenced by deps in other tasks)",
+		"paramName": "Human-readable name for the subtask",
+		"paramMode": "Mode slug to execute this subtask in (e.g., code, debug, architect)",
+		"paramPrompt": "The actual instructions/prompt for the subtask",
+		"paramInputFiles": "Files this subtask reads",
+		"paramOutputFiles": "Files this subtask writes (locked for write access)",
+		"paramDeps": "IDs of tasks that must complete before this one starts",
+		"paramRequiredResources": "Required resource identifiers",
+		"paramSubscribedTopics": "Blackboard topics to subscribe to for data",
+		"paramPublishedTopics": "Blackboard topics to publish data to",
+		"paramEstimatedTokens": "Approximate token consumption hint",
+		"paramTimeoutMs": "Timeout per subtask in milliseconds (default: 300000)",
+		"paramIsCritical": "If true, failure of this subtask fails the entire execution"
+	},
+	"executeParallelChildTask": {
+		"displayName": "execute parallel child tasks",
+		"description": "Execute multiple child tasks in parallel with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication.",
+		"paramTasks": "Array of child task definitions with dependencies",
+		"paramMaxParallel": "Maximum parallel child tasks (null for default which is typically 4)",
+		"paramId": "Unique identifier for this child task (referenced by deps in other tasks)",
+		"paramMode": "Mode slug to execute this child task in (e.g., code, debug, architect)",
+		"paramMessage": "The actual instructions/prompt for the child task",
+		"paramTodos": "Optional initial todo list for the child task (markdown checklist format)",
+		"paramInputFiles": "Files this child task reads",
+		"paramOutputFiles": "Files this child task writes (locked for write access)",
+		"paramDeps": "IDs of tasks that must complete before this one starts",
+		"paramSubscribedTopics": "Blackboard topics to subscribe to for data"
 	}
 }

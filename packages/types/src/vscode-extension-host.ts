@@ -99,6 +99,12 @@ export interface ExtensionMessage {
 		| "skills"
 		| "skillsUpdated"
 		| "fileContent"
+		// Parallel subtask dashboard messages (Extension → Webview)
+		| "parallelSubtaskStatus"
+		| "parallelSubtaskLog"
+		| "parallelSubtaskThought"
+		| "parallelSubtaskProgress"
+		| "parallelSubtaskSavedDAGs"
 	text?: string
 	/** For fileContent: { path, content, error? } */
 	fileContent?: { path: string; content: string | null; error?: string }
@@ -638,6 +644,13 @@ export interface WebviewMessage {
 		| "moveSkill"
 		| "updateSkillModes"
 		| "openSkillFile"
+		// Parallel subtask control messages (Webview → Extension)
+		| "parallelSubtaskPause"
+		| "parallelSubtaskResume"
+		| "parallelSubtaskCancel"
+		| "parallelSubtaskRetry"
+		| "parallelSubtaskSkip"
+		| "parallelSubtaskResumeDAG"
 	text?: string
 	taskId?: string
 	editedMessageContent?: string

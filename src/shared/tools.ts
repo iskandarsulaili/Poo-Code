@@ -187,6 +187,19 @@ export type NativeToolArgs = {
 		}>
 		maxParallel?: number
 	}
+	execute_parallel_child_task: {
+		tasks: Array<{
+			id: string
+			mode: string
+			message: string
+			todos?: string
+			deps?: string[]
+			inputFiles?: string[]
+			outputFiles?: string[]
+			subscribedTopics?: string[]
+		}>
+		maxParallel?: number
+	}
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -389,6 +402,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	custom_tool: "use custom tools",
 	execute_parallel: "run commands in parallel",
 	execute_parallel_subtask: "execute parallel subtasks",
+	execute_parallel_child_task: "execute parallel child tasks",
 	web_fetch: "fetch web page content",
 	web_search: "search the web",
 	web_extract: "extract structured data from web pages",
@@ -428,6 +442,8 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"run_slash_command",
 	"skill",
 	"skill_manage",
+	"execute_parallel_subtask",
+	"execute_parallel_child_task",
 ] as const
 
 /**
