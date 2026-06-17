@@ -1020,6 +1020,22 @@
 			"name": "Requirements Verification",
 			"description": "Tracks and verifies all explicit user requirements and implicit intent are fulfilled before completion"
 		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Enable parallel execution of commands with DAG-based dependency resolution and lock-aware scheduling"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Enable structured output parsing for improved reliability when processing model responses"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Enable dependency graph analysis for intelligent task ordering and parallel execution planning"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Enable multi-root workspace support for working with multiple project directories simultaneously"
+		},
 		"PARALLEL_SUBTASK": {
 			"name": "Parallel Subtask Execution",
 			"description": "Enable parallel execution of subtasks with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication",

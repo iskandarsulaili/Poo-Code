@@ -38,28 +38,28 @@
 		"slashCommands": "स्लैश कमांड",
 		"prompts": "प्रॉम्प्ट्स",
 		"ui": "UI",
-		"experimental": "प्रायोगिक",
+		"experimental": "प्रयोगात्मक",
 		"language": "भाषा",
 		"about": "परिचय",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "AI मॉडल एक्सेस के लिए API प्रदाताओं, मॉडलों और प्रमाणीकरण क्रेडेंशियल्स कॉन्फ़िगर करें।",
+		"modesDescription": "विभिन्न कार्यों के लिए विशिष्ट निर्देशों, उपकरणों और मॉडल कॉन्फ़िगरेशन के साथ कस्टम मोड परिभाषित करें।",
+		"mcpDescription": "MCP सर्वर प्रबंधित करें जो एजेंट को अतिरिक्त उपकरण और संसाधन प्रदान करते हैं।",
+		"worktreesDescription": "एक साथ कई ब्रांचों पर समानांतर विकास के लिए Git वर्कट्री प्रबंधित करें।",
+		"skillsDescription": "पुन: प्रयोज्य कौशल बनाएं और प्रबंधित करें जो प्रासंगिक निर्देशों और कार्यप्रवाहों को समाहित करते हैं।",
+		"autoApproveDescription": "कॉन्फ़िगर करें कि एजेंट मैन्युअल अनुमोदन की आवश्यकता के बिना स्वचालित रूप से कौन सी कार्रवाइयां कर सकता है।",
+		"checkpointsDescription": "आसान समीक्षा और रोलबैक के लिए कार्य निष्पादन के दौरान स्वचालित चेकपॉइंट कॉन्फ़िगर करें।",
+		"notificationsDescription": "कार्य सूचनाओं और घटनाओं के लिए ध्वनि प्रभाव और टेक्स्ट-टू-स्पीच कॉन्फ़िगर करें।",
+		"contextManagementDescription": "नियंत्रित करें कि AI के संदर्भ विंडो में कौन सी जानकारी शामिल है, जो टोकन उपयोग और प्रतिक्रिया गुणवत्ता को प्रभावित करती है।",
+		"terminalDescription": "शेल एकीकरण, आउटपुट सीमाएं और कमांड निष्पादन व्यवहार सहित टर्मिनल एकीकरण सेटिंग्स कॉन्फ़िगर करें।",
+		"slashCommandsDescription": "बार-बार उपयोग किए जाने वाले प्रॉम्प्ट और कार्यप्रवाहों के लिए पुन: प्रयोज्य स्लैश कमांड शॉर्टकट बनाएं।",
+		"promptsDescription": "त्वरित कार्रवाइयों जैसे प्रॉम्प्ट बढ़ाने, कोड समझाने और समस्याओं को ठीक करने के लिए समर्थन प्रॉम्प्ट कॉन्फ़िगर करें।",
+		"uiDescription": "संदेश प्रदर्शन और इनपुट प्राथमिकताओं सहित उपयोगकर्ता इंटरफ़ेस व्यवहार अनुकूलित करें।",
+		"experimentalDescription": "प्रयोगात्मक सुविधाओं को सक्षम और कॉन्फ़िगर करें जो सक्रिय विकास में हैं। ये बिना सूचना के बदल या हटाई जा सकती हैं।",
+		"languageDescription": "एक्सटेंशन इंटरफ़ेस के लिए प्रदर्शन भाषा बदलें।",
+		"aboutDescription": "संस्करण जानकारी, सामुदायिक संसाधन, टेलीमेट्री सेटिंग्स और डीबग विकल्प देखें।",
+		"kaizenDescription": "निरंतर सुधार चक्र कॉन्फ़िगर करें जो समय के साथ आपके कोडबेस को स्वचालित रूप से बेहतर बनाते हैं।"
 	},
 	"about": {
 		"bugReport": {
@@ -913,56 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "कार्य परिणामों से पृष्ठभूमि सीखने को सक्षम करें ताकि समय के साथ प्रॉम्प्ट मार्गदर्शन, टूल प्राथमिकताओं और त्रुटि-परिहार में सुधार हो सके।",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "सत्रों में एजेंट स्थिति के लिए मेमोरी बैकएंड और स्थिरता सेटिंग्स कॉन्फ़िगर करें।",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "प्रयोगात्मक UI और फ़ाइल संपादन सुविधाएं जो बदलती हैं कि एजेंट आपके कार्यक्षेत्र के साथ कैसे इंटरैक्ट करता है।",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "उत्पादन-ग्रेड एजेंट संचालन के लिए त्रुटि रोकथाम, लचीलापन और विश्वसनीयता सेवाएं।",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "एजेंट कार्यक्षमता बढ़ाने के लिए अतिरिक्त टूल एकीकरण और क्षमताएं।"
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "सक्षम होने पर, Self-Improving दोहराए गए सफल कार्यप्रवाहों को प्रोजेक्ट कौशल में बदल सकता है और एजेंट-निर्मित कौशल को स्वचालित रूप से अपडेट रख सकता है।"
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "स्व-उपचार और स्वचालित मोड निर्माण के साथ पूरी तरह से स्वायत्त आत्म-सुधार मोड सक्षम करें"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "मल्टी-एजेंट समीक्षा पाइपलाइन सक्षम करें (इनोवेटर, कॉन्ट्रारियन, डेविल्स एडवोकेट, द डिसाइडर)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "उपयोगकर्ता पुष्टि के बिना कमांड के लिए स्वतः-अनुमोदन सक्षम करें"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "सिस्टम को कार्य पैटर्न और उपयोग आवृत्ति के आधार पर स्वचालित रूप से विशेष कौशल बनाने और परिष्कृत करने में सक्षम बनाता है, दोहराए जाने वाले कार्यों के लिए दक्षता में सुधार करता है।"
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "सक्षम होने पर, सिस्टम पैटर्न, टूल उपयोग और परिणामों को रिकॉर्ड करके पूर्ण किए गए कार्यों से सीखता है। इन पैटर्न का उपयोग समान भविष्य के कार्यों के लिए सुधार सुझाने के लिए किया जाता है।"
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "सत्यापन सक्षम करें",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "सक्षम होने पर, सिस्टम टूल त्रुटियों के बाद स्वचालित रूप से पुनर्प्राप्ति संदर्भ उत्पन्न करता है, मॉडल को विफलताओं से उबरने में मदद करने के लिए अगले मॉडल प्रॉम्प्ट में मार्गदर्शन इंजेक्ट करता है।"
 		},
 		"PARALLEL_SUBTASK": {
 			"name": "Parallel Subtask Execution",
-			"description": "Enable parallel execution of subtasks with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication",
+			"description": "DAG-आधारित निर्भरता समाधान, लॉक-जागरूक शेड्यूलिंग और ब्लैकबोर्ड संचार के साथ उप-कार्यों के समानांतर निष्पादन को सक्षम करें",
 			"maxParallelLabel": "Max Parallel Subtasks",
 			"heartbeatLabel": "Heartbeat Interval (ms)",
 			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "DAG-आधारित निर्भरता समाधान और लॉक-जागरूक शेड्यूलिंग के साथ कमांड के समानांतर निष्पादन को सक्षम करें"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "मॉडल प्रतिक्रियाओं को संसाधित करते समय बेहतर विश्वसनीयता के लिए संरचित आउटपुट पार्सिंग सक्षम करें"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "बुद्धिमान कार्य क्रम और समानांतर निष्पादन योजना के लिए निर्भरता ग्राफ विश्लेषण सक्षम करें"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "एक साथ कई प्रोजेक्ट निर्देशिकाओं के साथ काम करने के लिए मल्टी-रूट वर्कस्पेस समर्थन सक्षम करें"
 		}
 	},
 	"promptCaching": {
@@ -1079,7 +1095,7 @@
 		"label": "सेवा स्तर",
 		"tooltip": "API अनुरोधों के तेज़ प्रसंस्करण के लिए, प्राथमिकता प्रसंस्करण सेवा स्तर का प्रयास करें। उच्च विलंबता के साथ कम कीमतों के लिए, फ्लेक्स प्रसंस्करण स्तर का प्रयास करें।",
 		"standard": "मानक",
-		"flex": "फ्लेक्स",
+		"flex": "लचीला",
 		"priority": "प्राथमिकता",
 		"pricingTableTitle": "सेवा स्तर के अनुसार मूल्य निर्धारण (प्रति 1M टोकन मूल्य)",
 		"columns": {

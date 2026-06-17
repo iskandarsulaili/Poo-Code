@@ -43,23 +43,23 @@
 		"about": "Tentang Zoo Code",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "Konfigurasikan penyedia API, model, dan kredensial autentikasi untuk akses model AI.",
+		"modesDescription": "Tentukan mode kustom dengan instruksi, alat, dan konfigurasi model khusus untuk berbagai tugas.",
+		"mcpDescription": "Kelola server MCP yang menyediakan alat dan sumber daya tambahan kepada agen.",
+		"worktreesDescription": "Kelola worktree Git untuk pengembangan paralel pada beberapa cabang secara bersamaan.",
+		"skillsDescription": "Buat dan kelola skill yang dapat digunakan kembali yang merangkum instruksi kontekstual dan alur kerja.",
+		"autoApproveDescription": "Konfigurasikan tindakan mana yang dapat dilakukan agen secara otomatis tanpa memerlukan persetujuan manual.",
+		"checkpointsDescription": "Konfigurasikan pos pemeriksaan otomatis selama eksekusi tugas untuk memudahkan peninjauan dan pengembalian.",
+		"notificationsDescription": "Konfigurasikan efek suara dan teks-ke-ucapan untuk notifikasi dan acara tugas.",
+		"contextManagementDescription": "Kontrol informasi apa yang disertakan dalam jendela konteks AI, memengaruhi penggunaan token dan kualitas respons.",
+		"terminalDescription": "Konfigurasikan pengaturan integrasi terminal termasuk integrasi shell, batas output, dan perilaku eksekusi perintah.",
+		"slashCommandsDescription": "Buat pintasan perintah garis miring yang dapat digunakan kembali untuk perintah dan alur kerja yang sering digunakan.",
+		"promptsDescription": "Konfigurasikan prompt dukungan yang digunakan untuk tindakan cepat seperti meningkatkan prompt, menjelaskan kode, dan memperbaiki masalah.",
+		"uiDescription": "Sesuaikan perilaku antarmuka pengguna termasuk tampilan pesan dan preferensi input.",
+		"experimentalDescription": "Aktifkan dan konfigurasikan fitur eksperimental yang sedang dalam pengembangan aktif. Ini dapat berubah atau dihapus tanpa pemberitahuan.",
+		"languageDescription": "Ubah bahasa tampilan untuk antarmuka ekstensi.",
+		"aboutDescription": "Lihat informasi versi, sumber daya komunitas, pengaturan telemetri, dan opsi debug.",
+		"kaizenDescription": "Konfigurasikan siklus perbaikan berkelanjutan yang secara otomatis meningkatkan basis kode Anda dari waktu ke waktu."
 	},
 	"about": {
 		"bugReport": {
@@ -913,56 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "Aktifkan pembelajaran latar belakang dari hasil tugas untuk meningkatkan panduan prompt, preferensi alat, dan penghindaran kesalahan seiring waktu.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "Konfigurasikan backend memori dan pengaturan persistensi untuk status agen di seluruh sesi.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "Fitur UI dan pengeditan file eksperimental yang mengubah cara agen berinteraksi dengan ruang kerja Anda.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "Layanan pencegahan kesalahan, ketahanan, dan keandalan untuk operasi agen tingkat produksi.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "Integrasi alat tambahan dan kemampuan untuk memperluas fungsionalitas agen."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "Saat diaktifkan, Self-Improving dapat mengubah alur kerja berulang yang berhasil menjadi skill proyek dan menjaga skill buatan agen tetap diperbarui secara otomatis."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "Aktifkan mode perbaikan diri otonom penuh dengan penyembuhan otomatis dan pembuatan mode otomatis"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "Aktifkan jalur peninjauan multi-agen (Inovator, Kontrarian, Pengacara Iblis, Sang Penentu)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "Aktifkan persetujuan otomatis untuk perintah tanpa konfirmasi pengguna"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "Memungkinkan sistem untuk secara otomatis membuat dan menyempurnakan skill khusus berdasarkan pola tugas dan frekuensi penggunaan, meningkatkan efisiensi untuk tugas berulang."
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "Saat diaktifkan, sistem belajar dari tugas yang selesai dengan merekam pola, penggunaan alat, dan hasil. Pola-pola ini digunakan untuk menyarankan perbaikan untuk tugas serupa di masa depan."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "Aktifkan Verifikasi",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "Saat diaktifkan, sistem secara otomatis menghasilkan konteks pemulihan setelah kesalahan alat, menyuntikkan panduan ke prompt model berikutnya untuk membantu model pulih dari kegagalan."
 		},
 		"PARALLEL_SUBTASK": {
 			"name": "Parallel Subtask Execution",
-			"description": "Enable parallel execution of subtasks with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication",
+			"description": "Aktifkan eksekusi paralel sub-tugas dengan resolusi ketergantungan berbasis DAG, penjadwalan sadar kunci, dan komunikasi papan tulis",
 			"maxParallelLabel": "Max Parallel Subtasks",
 			"heartbeatLabel": "Heartbeat Interval (ms)",
 			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Aktifkan eksekusi paralel perintah dengan resolusi dependensi berbasis DAG dan penjadwalan sadar kunci"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Aktifkan penguraian output terstruktur untuk keandalan yang lebih baik saat memproses respons model"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Aktifkan analisis grafik dependensi untuk pengurutan tugas cerdas dan perencanaan eksekusi paralel"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Aktifkan dukungan ruang kerja multi-root untuk bekerja dengan beberapa direktori proyek secara bersamaan"
 		}
 	},
 	"promptCaching": {

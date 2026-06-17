@@ -43,23 +43,23 @@
 		"about": "Zoo Codeについて",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "APIプロバイダー、モデル、認証情報を設定してAIモデルにアクセスします。",
+		"modesDescription": "特定の指示、ツール、モデル構成を持つカスタムモードをさまざまなタスク用に定義します。",
+		"mcpDescription": "エージェントに追加のツールとリソースを提供するMCPサーバーを管理します。",
+		"worktreesDescription": "複数のブランチで同時に並行開発を行うためのGitワークツリーを管理します。",
+		"skillsDescription": "コンテキストに応じた指示とワークフローをカプセル化した再利用可能なスキルを作成および管理します。",
+		"autoApproveDescription": "エージェントが手動承認なしで自動的に実行できるアクションを設定します。",
+		"checkpointsDescription": "タスク実行中に自動チェックポイントを設定して、簡単なレビューとロールバックを実現します。",
+		"notificationsDescription": "タスク通知とイベントのサウンドエフェクトとテキスト読み上げを設定します。",
+		"contextManagementDescription": "AIのコンテキストウィンドウに含める情報を制御し、トークン使用量と応答品質に影響を与えます。",
+		"terminalDescription": "シェル統合、出力制限、コマンド実行動作を含むターミナル統合設定を構成します。",
+		"slashCommandsDescription": "頻繁に使用するプロンプトとワークフロー用の再利用可能なスラッシュコマンドショートカットを作成します。",
+		"promptsDescription": "プロンプトの強化、コードの説明、問題の修正などのクイックアクションに使用するサポートプロンプトを設定します。",
+		"uiDescription": "メッセージ表示や入力設定を含むユーザーインターフェースの動作をカスタマイズします。",
+		"experimentalDescription": "現在開発中の実験的機能を有効にして設定します。これらは予告なく変更または削除される可能性があります。",
+		"languageDescription": "拡張機能インターフェースの表示言語を変更します。",
+		"aboutDescription": "バージョン情報、コミュニティリソース、テレメトリ設定、デバッグオプションを表示します。",
+		"kaizenDescription": "コードベースを時間の経過とともに自動的に改善する継続的改善サイクルを設定します。"
 	},
 	"about": {
 		"bugReport": {
@@ -913,56 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "タスク結果からのバックグラウンド学習を有効にして、プロンプトのガイダンス、ツールの好み、エラー回避を時間の経過とともに改善します。",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "セッション間のエージェント状態のメモリバックエンドと永続化設定を構成します。",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "エージェントがワークスペースと対話する方法を変更する実験的なUIおよびファイル編集機能。",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "プロダクショングレードのエージェント運用のためのエラー防止、復元力、信頼性サービス。",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "エージェント機能を拡張するための追加のツール統合と機能。"
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "有効にすると、Self-Improvingは繰り返し成功したワークフローをプロジェクトスキルに変換し、エージェントが作成したスキルを自動的に最新に保ちます。"
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "自動修復と自動モード作成を備えた完全自律型の自己改善モードを有効にします"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "マルチエージェントレビューパイプラインを有効にします（革新者、反対者、悪魔の代弁者、決定者）"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "ユーザー確認なしでコマンドの自動承認を有効にします"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "タスクパターンと使用頻度に基づいて、システムが専門スキルを自動的に作成および洗練できるようにし、反復タスクの効率を向上させます。"
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "有効にすると、システムは完了したタスクからパターン、ツール使用法、結果を記録して学習します。これらのパターンは、類似した将来のタスクの改善を提案するために使用されます。"
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "検証を有効にする",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "有効にすると、システムはツールエラー後に自動的にリカバリコンテキストを生成し、次のモデルプロンプトにガイダンスを注入して、モデルが障害から回復するのを支援します。"
 		},
 		"PARALLEL_SUBTASK": {
 			"name": "Parallel Subtask Execution",
-			"description": "Enable parallel execution of subtasks with DAG-based dependency resolution, lock-aware scheduling, and blackboard communication",
+			"description": "DAGベースの依存関係解決、ロック認識スケジューリング、ブラックボード通信によるサブタスクの並列実行を有効にします",
 			"maxParallelLabel": "Max Parallel Subtasks",
 			"heartbeatLabel": "Heartbeat Interval (ms)",
 			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "DAGベースの依存関係解決とロック認識スケジューリングによるコマンドの並列実行を有効にします"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "モデル応答を処理する際の信頼性向上のために、構造化された出力解析を有効にします"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "インテリジェントなタスク順序付けと並列実行計画のための依存関係グラフ分析を有効にします"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "複数のプロジェクトディレクトリを同時に操作するためのマルチルートワークスペースサポートを有効にします"
 		}
 	},
 	"promptCaching": {
