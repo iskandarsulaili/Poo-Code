@@ -88,15 +88,21 @@ export class ErrorClassifier {
 		}
 
 		// Empty response — tool returned nothing (Situation D)
-		if (errorMessage === "" || errorMessage === "Running" || !errorMessage || errorMessage.trim().length === 0) {
+		if (
+			errorMessage === "" ||
+			errorMessage === "Running" ||
+			!errorMessage ||
+			errorMessage.trim().length === 0 ||
+			errorMessage.includes("no assistant messages")
+		) {
 			return {
 				category: ErrorCategory.EMPTY_RESPONSE,
 				severity: 3,
 				toolName,
 				suggestion:
-					"The tool returned no output. Verify the command parameters and try again with explicit flags.",
+					"The API returned an empty response without assistant messages. This is typically a transient API issue — retrying with backoff usually resolves it.",
 				isRecoverable: true,
-				recoveryAction: "retry_with_explicit_params",
+				recoveryAction: "retry_with_backoff",
 			}
 		}
 
