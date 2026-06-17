@@ -58,6 +58,7 @@ import {
 import { initializeI18n } from "./i18n"
 import { initializeModelCacheRefresh } from "./api/providers/fetchers/modelCache"
 import { initZooCodeAuth } from "./services/zoo-code-auth"
+import { CodebaseMappingManager } from "./services/codebase-mapping"
 
 /**
  * Built using https://github.com/microsoft/vscode-webview-ui-toolkit
@@ -217,6 +218,11 @@ export async function activate(context: vscode.ExtensionContext) {
 			)
 		}
 	}
+
+		// Initialize codebase mapping service
+		CodebaseMappingManager.initializeAll(context, vscode.workspace.workspaceFolders!).catch((err) => {
+			outputChannel.appendLine(`[CodebaseMapping] Initialization error: ${err instanceof Error ? err.message : String(err)}`)
+		})
 
 	// Initialize output parser registry for structured command output parsing.
 	const outputParser = new OutputParser()
@@ -521,4 +527,5 @@ export async function deactivate() {
 	await McpServerManager.cleanup(extensionContext)
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
+	CodebaseMappingManager.disposeAll()
 }
