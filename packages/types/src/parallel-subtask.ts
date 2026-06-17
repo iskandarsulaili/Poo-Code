@@ -48,6 +48,8 @@ export interface SubtaskMetadata {
 	heartbeatPath?: string
 	/** Interval in ms between heartbeat file touches (default: 5000) */
 	heartbeatIntervalMs?: number
+	/** Result summary from the child agent's attempt_completion */
+	result?: string
 }
 
 /**

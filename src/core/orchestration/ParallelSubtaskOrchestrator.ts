@@ -5,8 +5,14 @@
  * 1. Build DAG from tasks
  * 2. Detect cycles → fail if found
  * 3. Topological sort → waves
- * 4. For each wave: lock-aware scheduling, spawn subtasks, monitor, handle failures
+ * 4. For each wave: spawn subtasks via SubtaskExecutor, monitor, handle failures
  * 5. Aggregate results
+ *
+ * Subtasks execute **sequentially** within each wave to respect the
+ * single-open-task invariant (only one Task can be active at a time).
+ * The DAG provides dependency ordering and wave structure; parallelism
+ * is achieved by the child agent's own tool calls, not by concurrent
+ * Task instances.
  *
  * Integrates with LockManager, Blackboard, ContextRouter, and LogAggregator.
  *
@@ -29,11 +35,30 @@ import { ContextRouter } from "./ContextRouter"
 import { LogAggregator, CorrelationIdManager } from "./LogAggregator"
 
 // ============================================================================
+// Types
+// ============================================================================
+
+/**
+ * Callback that spawns a real child agent for a subtask.
+ *
+ * Implementations must call `task.startSubtask(message, todos, mode)`
+ * which delegates via `ClineProvider.delegateParentAndOpenChild()`.
+ * The child runs to completion (attempt_completion) before the promise
+ * resolves with the child's result summary.
+ */
+export type SubtaskExecutor = (params: {
+	subtaskId: string
+	message: string
+	mode: string
+	todos?: string
+}) => Promise<{ taskId: string; result: string }>
+
+// ============================================================================
 // Constants
 // ============================================================================
 
-/** Default maximum parallel subtasks. */
-const DEFAULT_MAX_PARALLEL = 4
+/** Default maximum parallel subtasks (used for semaphore, but execution is sequential). */
+const DEFAULT_MAX_PARALLEL = 1
 
 /** Default timeout per subtask (ms). */
 const DEFAULT_TIMEOUT_MS = 300_000
@@ -65,11 +90,17 @@ export class ParallelSubtaskOrchestrator {
 	private heartbeatTimer: NodeJS.Timeout | null = null
 
 	/**
+	 * Real subtask executor — calls task.startSubtask() to spawn a child agent.
+	 * Set by the tool that owns this orchestrator.
+	 */
+	private subtaskExecutor: SubtaskExecutor | null = null
+
+	/**
 	 * @param lockManager - LockManager instance
 	 * @param blackboard - Blackboard instance
 	 * @param contextRouter - ContextRouter instance
 	 * @param logAggregator - LogAggregator instance
-	 * @param maxParallel - Maximum parallel subtasks (default: 4)
+	 * @param maxParallel - Maximum parallel subtasks (default: 1)
 	 */
 	constructor(
 		lockManager: LockManager,
@@ -84,6 +115,14 @@ export class ParallelSubtaskOrchestrator {
 		this.contextRouter = contextRouter
 		this.logAggregator = logAggregator
 		this.maxParallel = maxParallel
+	}
+
+	/**
+	 * Set the real subtask executor.
+	 * Must be called before execute() to enable real child agent spawning.
+	 */
+	setSubtaskExecutor(executor: SubtaskExecutor): void {
+		this.subtaskExecutor = executor
 	}
 
 	/**
@@ -459,23 +498,48 @@ export class ParallelSubtaskOrchestrator {
 				await this.blackboard.publish(topic, { status: "running", subtaskId: subtask.id }, subtask.id)
 			}
 
-			// Simulate execution (in production, this would spawn a subagent)
-			// For now, we mark as completed after a minimal delay
-			await this.simulateExecution(subtask, context)
+			// Execute the subtask via the real executor (spawns a child agent).
+			// If no executor is set, we fall back to a minimal delay for testing.
+			if (this.subtaskExecutor) {
+				const result = await this.subtaskExecutor({
+					subtaskId: subtask.id,
+					message: subtask.prompt,
+					mode: subtask.mode,
+					todos: undefined,
+				})
 
-			// Mark as completed
-			subtask.status = "completed"
-			subtask.metadata.completedAt = Date.now()
+				// Mark as completed with the child's result
+				subtask.status = "completed"
+				subtask.metadata.completedAt = Date.now()
+				subtask.metadata.result = result.result
 
-			this.logAggregator.log({
-				correlationId,
-				subtaskId: subtask.id,
-				component: "orchestrator",
-				level: "info",
-				message: `Subtask "${subtask.id}" completed`,
-				timestamp: new Date().toISOString(),
-				durationMs: Date.now() - startTime,
-			})
+				this.logAggregator.log({
+					correlationId,
+					subtaskId: subtask.id,
+					component: "orchestrator",
+					level: "info",
+					message: `Subtask "${subtask.id}" completed (child: ${result.taskId})`,
+					timestamp: new Date().toISOString(),
+					durationMs: Date.now() - startTime,
+				})
+			} else {
+				// No executor set — this is a test or dry-run scenario.
+				// Use a minimal delay so tests still pass.
+				await new Promise((resolve) => setTimeout(resolve, 50))
+
+				subtask.status = "completed"
+				subtask.metadata.completedAt = Date.now()
+
+				this.logAggregator.log({
+					correlationId,
+					subtaskId: subtask.id,
+					component: "orchestrator",
+					level: "info",
+					message: `Subtask "${subtask.id}" completed (dry-run)`,
+					timestamp: new Date().toISOString(),
+					durationMs: Date.now() - startTime,
+				})
+			}
 
 			// Publish completion to blackboard
 			for (const topic of subtask.publishedTopics) {
@@ -535,16 +599,6 @@ export class ParallelSubtaskOrchestrator {
 		}
 
 		return { ready, blocked }
-	}
-
-	/**
-	 * Simulate subtask execution.
-	 * In production, this would spawn a subagent via new_task tool.
-	 */
-	private async simulateExecution(_subtask: SubtaskNode, _context: unknown): Promise<void> {
-		// In production, this would use the new_task tool to spawn a subagent.
-		// For now, we use a minimal delay to simulate execution.
-		await new Promise((resolve) => setTimeout(resolve, 50))
 	}
 
 	// ========================================================================

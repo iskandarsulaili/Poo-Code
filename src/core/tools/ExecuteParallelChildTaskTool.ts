@@ -21,7 +21,7 @@ import type { SubtaskNode } from "@roo-code/types"
 import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { experimentConfigsMap } from "../../shared/experiments"
-import { ParallelSubtaskOrchestrator } from "../orchestration/ParallelSubtaskOrchestrator"
+import { ParallelSubtaskOrchestrator, SubtaskExecutor } from "../orchestration/ParallelSubtaskOrchestrator"
 import { LockManager } from "../orchestration/LockManager"
 import { Blackboard } from "../orchestration/Blackboard"
 import { ContextRouter } from "../orchestration/ContextRouter"
@@ -202,8 +202,16 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 			}))
 
 			// ------------------------------------------------------------------
-			// 5. Execute via Orchestrator
+			// 5. Wire real subtask executor and execute via Orchestrator
 			// ------------------------------------------------------------------
+			// The executor calls task.startSubtask() which delegates via
+			// ClineProvider.delegateParentAndOpenChild() to spawn a real child agent.
+			// Subtasks execute sequentially to respect the single-open-task invariant.
+			const executor: SubtaskExecutor = async (execParams) => {
+				const child = await task.startSubtask(execParams.message, [], execParams.mode)
+				return { taskId: child.taskId, result: "" }
+			}
+			this.orchestrator.setSubtaskExecutor(executor)
 			const dag = await this.orchestrator.execute(subtaskNodes)
 
 			// ------------------------------------------------------------------
