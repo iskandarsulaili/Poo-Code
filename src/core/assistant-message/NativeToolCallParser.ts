@@ -538,6 +538,15 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "execute_parallel_subtask":
+				if (partialArgs.tasks !== undefined) {
+					nativeArgs = {
+						tasks: partialArgs.tasks,
+						maxParallel: partialArgs.maxParallel,
+					}
+				}
+				break
+
 			case "switch_mode":
 				if (partialArgs.mode_slug !== undefined || partialArgs.reason !== undefined) {
 					nativeArgs = {
@@ -870,6 +879,15 @@ export class NativeToolCallParser {
 							path: args.path,
 							regex: args.regex,
 							file_pattern: args.file_pattern,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "execute_parallel_subtask":
+					if (args.tasks !== undefined) {
+						nativeArgs = {
+							tasks: args.tasks,
+							maxParallel: args.maxParallel,
 						} as NativeArgsFor<TName>
 					}
 					break

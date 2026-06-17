@@ -25,6 +25,7 @@ import executeParallel from "./execute_parallel"
 import webFetch from "./web_fetch"
 import webSearch from "./web_search"
 import webExtract from "./web_extract"
+import executeParallelSubtask from "./execute_parallel_subtask"
 
 export { getMcpServerTools } from "./mcp_server"
 export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
@@ -78,6 +79,7 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		webFetch,
 		webSearch,
 		webExtract,
+		executeParallelSubtask,
 	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
 
