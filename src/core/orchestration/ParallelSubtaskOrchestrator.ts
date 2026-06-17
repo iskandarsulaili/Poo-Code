@@ -53,6 +53,12 @@ export type SubtaskExecutor = (params: {
 	todos?: string
 }) => Promise<{ taskId: string; result: string }>
 
+/**
+ * Callback for sending live status updates to the webview.
+ * Called by the orchestrator whenever a subtask's status changes.
+ */
+export type StatusCallback = (dag: import("@roo-code/types").SubtaskDAG) => void
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -96,6 +102,12 @@ export class ParallelSubtaskOrchestrator {
 	private subtaskExecutor: SubtaskExecutor | null = null
 
 	/**
+	 * Optional callback for sending live DAG status updates to the webview.
+	 * Called after each subtask status change.
+	 */
+	private statusCallback: StatusCallback | null = null
+
+	/**
 	 * @param lockManager - LockManager instance
 	 * @param blackboard - Blackboard instance
 	 * @param contextRouter - ContextRouter instance
@@ -123,6 +135,14 @@ export class ParallelSubtaskOrchestrator {
 	 */
 	setSubtaskExecutor(executor: SubtaskExecutor): void {
 		this.subtaskExecutor = executor
+	}
+
+	/**
+	 * Set the status callback for live webview updates.
+	 * Called after each subtask status change with the current DAG.
+	 */
+	setStatusCallback(callback: StatusCallback): void {
+		this.statusCallback = callback
 	}
 
 	/**
@@ -455,6 +475,7 @@ export class ParallelSubtaskOrchestrator {
 		subtask.status = "running"
 		subtask.metadata.startedAt = startTime
 		subtask.metadata.correlationId = correlationId
+		this.emitStatusUpdate(dag)
 
 		// Create heartbeat
 		const heartbeatPath = this.lockManager.createHeartbeat(subtask.id)
@@ -512,6 +533,7 @@ export class ParallelSubtaskOrchestrator {
 				subtask.status = "completed"
 				subtask.metadata.completedAt = Date.now()
 				subtask.metadata.result = result.result
+				this.emitStatusUpdate(dag)
 
 				this.logAggregator.log({
 					correlationId,
@@ -529,6 +551,7 @@ export class ParallelSubtaskOrchestrator {
 
 				subtask.status = "completed"
 				subtask.metadata.completedAt = Date.now()
+				this.emitStatusUpdate(dag)
 
 				this.logAggregator.log({
 					correlationId,
@@ -549,6 +572,7 @@ export class ParallelSubtaskOrchestrator {
 			subtask.status = "failed"
 			subtask.metadata.completedAt = Date.now()
 			subtask.metadata.error = error instanceof Error ? error.message : String(error)
+			this.emitStatusUpdate(dag)
 
 			this.logAggregator.log({
 				correlationId,
@@ -703,6 +727,24 @@ export class ParallelSubtaskOrchestrator {
 					release()
 				}
 			},
+		}
+	}
+
+	// ========================================================================
+	// Private: Status Callback
+	// ========================================================================
+
+	/**
+		* Emit a DAG status update via the status callback (if set).
+		* Called after each subtask status change so the webview can display live progress.
+		*/
+	private emitStatusUpdate(dag: SubtaskDAG): void {
+		if (this.statusCallback) {
+			try {
+				this.statusCallback(dag)
+			} catch {
+				// Swallow callback errors to avoid breaking execution
+			}
 		}
 	}
 }

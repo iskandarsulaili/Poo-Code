@@ -21,7 +21,7 @@ import type { SubtaskNode } from "@roo-code/types"
 import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { experimentConfigsMap } from "../../shared/experiments"
-import { ParallelSubtaskOrchestrator, SubtaskExecutor } from "../orchestration/ParallelSubtaskOrchestrator"
+import { ParallelSubtaskOrchestrator, StatusCallback, SubtaskExecutor } from "../orchestration/ParallelSubtaskOrchestrator"
 import { LockManager } from "../orchestration/LockManager"
 import { Blackboard } from "../orchestration/Blackboard"
 import { ContextRouter } from "../orchestration/ContextRouter"
@@ -131,8 +131,8 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 			// 3. Validate params
 			// ------------------------------------------------------------------
 			const { tasks, maxParallel } = params
-
-			if (!tasks || tasks.length === 0) {
+	
+			if (!Array.isArray(tasks) || tasks.length === 0) {
 				task.consecutiveMistakeCount++
 				task.recordToolError("execute_parallel_child_task")
 				pushToolResult(await task.sayAndCreateMissingParamError("execute_parallel_child_task", "tasks"))
@@ -182,7 +182,16 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 			// ------------------------------------------------------------------
 			// 4. Convert to SubtaskNode[]
 			// ------------------------------------------------------------------
-			const subtaskNodes: SubtaskNode[] = tasks.map((t) => ({
+			const subtaskNodes: SubtaskNode[] = (tasks as Array<{
+				id: string
+				mode: string
+				message: string
+				todos?: string
+				deps?: string[]
+				inputFiles?: string[]
+				outputFiles?: string[]
+				subscribedTopics?: string[]
+			}>).map((t) => ({
 				id: t.id,
 				name: t.id,
 				mode: t.mode,
@@ -217,9 +226,21 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 			const executor: SubtaskExecutor = async (execParams) => {
 				const compressedMessage = compressPrompt(execParams.message, MAX_PROMPT_LENGTH)
 				const child = await task.startSubtask(compressedMessage, [], execParams.mode)
+				// Wait for the child task to actually complete before marking subtask as done.
+				// Without this, the orchestrator marks the subtask "completed" immediately
+				// while the child agent hasn't started or finished its work.
+				await child.waitForCompletion()
 				return { taskId: child.taskId, result: "" }
 			}
 			this.orchestrator.setSubtaskExecutor(executor)
+			// Wire status callback to send live DAG updates to the webview
+			const statusCallback: StatusCallback = (dag) => {
+				task.providerRef.deref()?.postMessageToWebview({
+					type: "parallelSubtaskStatus",
+					text: JSON.stringify(dag),
+				})
+			}
+			this.orchestrator.setStatusCallback(statusCallback)
 			const dag = await this.orchestrator.execute(subtaskNodes)
 
 			// ------------------------------------------------------------------

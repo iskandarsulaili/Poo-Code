@@ -166,6 +166,14 @@ export interface TaskOptions extends CreateTaskOptions {
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
+	/**
+	 * Wait for this task's execution loop to complete.
+	 * Resolves when the task finishes (attempt_completion, abort, or max requests).
+	 */
+	async waitForCompletion(): Promise<void> {
+		return this._completionPromise
+	}
+
 	readonly taskId: string
 	readonly rootTaskId?: string
 	readonly parentTaskId?: string
@@ -271,6 +279,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @private
 	 */
 	private taskApiConfigReady: Promise<void>
+
+	/** Promise + resolver for waiting on task completion (used by parallel subtask executor). */
+	private _completionPromise: Promise<void>
+	private _resolveCompletion!: () => void
 
 	providerRef: WeakRef<ClineProvider>
 	private readonly globalStoragePath: string
@@ -451,6 +463,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialStatus,
 	}: TaskOptions) {
 		super()
+
+		// Initialize completion promise (resolved when task loop ends)
+		this._completionPromise = new Promise<void>((resolve) => {
+			this._resolveCompletion = resolve
+		})
 
 		if (startTask && !task && !images && !historyItem) {
 			throw new Error("Either historyItem or task/images must be provided")
@@ -2569,28 +2586,38 @@ Choose an alternative approach now.]`
 
 		this.emit(RooCodeEventName.TaskStarted)
 
-		while (!this.abort) {
-			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
-			includeFileDetails = false // We only need file details the first time.
+		try {
+			while (!this.abort) {
+				const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
+				includeFileDetails = false // We only need file details the first time.
 
-			// The way this agentic loop works is that cline will be given a
-			// task that he then calls tools to complete. Unless there's an
-			// attempt_completion call, we keep responding back to him with his
-			// tool's responses until he either attempt_completion or does not
-			// use anymore tools. If he does not use anymore tools, we ask him
-			// to consider if he's completed the task and then call
-			// attempt_completion, otherwise proceed with completing the task.
-			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite
-			// requests, but Cline is prompted to finish the task as efficiently
-			// as he can.
+				// The way this agentic loop works is that cline will be given a
+				// task that he then calls tools to complete. Unless there's an
+				// attempt_completion call, we keep responding back to him with his
+				// tool's responses until he either attempt_completion or does not
+				// use anymore tools. If he does not use anymore tools, we ask him
+				// to consider if he's completed the task and then call
+				// attempt_completion, otherwise proceed with completing the task.
+				// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite
+				// requests, but Cline is prompted to finish the task as efficiently
+				// as he can.
 
-			if (didEndLoop) {
-				// For now a task never 'completes'. This will only happen if
-				// the user hits max requests and denies resetting the count.
-				break
-			} else {
-				nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
+				if (didEndLoop) {
+					// For now a task never 'completes'. This will only happen if
+					// the user hits max requests and denies resetting the count.
+					break
+				} else {
+					nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
+				}
 			}
+		} finally {
+			// Signal completion so parallel subtask executor can await it.
+			// CRITICAL: Must be in `finally` block to ensure it always resolves,
+			// even if the while loop exits due to error or early return.
+			// Without this, child tasks that fail their API call would never
+			// have their _completionPromise resolved, causing the parallel
+			// subtask executor to hang indefinitely.
+			this._resolveCompletion()
 		}
 	}
 
