@@ -74,8 +74,10 @@ const ParallelDashboard: React.FC = () => {
 				if (raw && typeof raw === "object") {
 					// Convert serialized plain objects back to Maps
 					// (JSON.stringify loses Map entries, so extension sends plain objects)
-					const nodes = new Map(Object.entries(raw.nodes || {}))
-					const edges = new Map(
+					const nodes = new Map<string, SubtaskNode>(
+						Object.entries(raw.nodes || {}).map(([k, v]) => [k, v as SubtaskNode]),
+					)
+					const edges = new Map<string, Set<string>>(
 						Object.entries(raw.edges || {}).map(([k, v]) => [k, new Set(v as string[])]),
 					)
 					setDag({
