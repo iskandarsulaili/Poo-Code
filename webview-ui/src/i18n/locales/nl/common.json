@@ -113,65 +113,55 @@
 	},
 	"parallel": {
 		"dashboard": {
-			"title": "Parallel Task Dashboard",
-			"tab_subtasks": "Subtasks",
-			"tab_child_tasks": "Child Tasks",
+			"title": "Parallel-dashboard",
+			"tab_subtasks": "Subtaken",
+			"tab_child_tasks": "Kindtaken",
 			"tab_dag": "DAG",
-			"tab_logs": "Logs",
-			"no_subtasks": "No subtasks running. Use execute_parallel_subtask or execute_parallel_child_task to start.",
-			"no_child_tasks": "No child tasks running.",
-			"no_dag_data": "No DAG data available",
-			"no_logs": "No log entries yet...",
-			"no_thoughts": "No agent thoughts yet...",
-			"agent_thoughts": "Agent Thoughts",
-			"system_logs": "System Logs",
-			"completed": "Completed",
-			"running": "Running",
-			"failed": "Failed",
-			"total": "Total"
+			"tab_logs": "Logboeken",
+			"no_subtasks": "Geen subtaken actief",
+			"no_child_tasks": "Geen kindtaken actief",
+			"agent_thoughts": "Agentgedachten",
+			"system_logs": "Systeemlogboeken"
 		},
 		"subtask_card": {
 			"status_label": "Status:",
-			"duration_label": "Duration:",
-			"deps_label": "Deps:",
-			"error_label": "Error:",
-			"running": "running...",
-			"no_duration": "-"
+			"duration_label": "Duur:",
+			"deps_label": "Afhankelijkheden:"
 		},
 		"intervention": {
-			"pause": "Pause",
-			"resume": "Resume",
-			"cancel": "Cancel",
-			"retry": "Retry",
-			"skip": "Skip",
-			"pause_title": "Pause this subtask",
-			"resume_title": "Resume this subtask",
-			"cancel_title": "Cancel this subtask",
-			"retry_title": "Retry this subtask",
-			"skip_title": "Skip this subtask"
+			"pause": "Pauze",
+			"resume": "Hervat",
+			"cancel": "Annuleren",
+			"retry": "Opnieuw",
+			"skip": "Overslaan",
+			"pause_title": "Deze subtaak pauzeren",
+			"resume_title": "Deze subtaak hervatten",
+			"cancel_title": "Deze subtaak annuleren",
+			"retry_title": "Deze subtaak opnieuw proberen",
+			"skip_title": "Deze subtaak overslaan"
 		},
 		"resume_panel": {
-			"title": "⚠ Interrupted Parallel Tasks Detected",
-			"description": "The following parallel task executions were interrupted. You can resume them or dismiss.",
-			"resume_button": "Resume",
-			"dismiss_button": "Dismiss",
+			"title": "⚠ Onderbroken parallelle taken gedetecteerd",
+			"description": "De volgende parallelle taakuitvoeringen zijn onderbroken. Je kunt ze hervatten of negeren.",
+			"resume_button": "Hervat",
+			"dismiss_button": "Negeren",
 			"status_prefix": "Status:",
-			"tasks_count": "{{total}} tasks ({{completed}} completed, {{failed}} failed)"
+			"tasks_count": "{{total}} taken ({{completed}} voltooid, {{failed}} mislukt)"
 		},
 		"detail_panel": {
-			"select_hint": "Select a subtask to view details",
-			"mode_label": "Mode:",
+			"select_hint": "Selecteer een subtaak om details te bekijken",
+			"mode_label": "Modus:",
 			"status_label": "Status:",
-			"deps_label": "Deps:",
+			"deps_label": "Afhankelijkheden:",
 			"tokens_label": "Tokens:",
 			"prompt_label": "Prompt",
-			"error_label": "Error",
-			"inputs_label": "Inputs:",
-			"outputs_label": "Outputs:",
-			"no_deps": "none"
+			"error_label": "Fout",
+			"inputs_label": "Invoer:",
+			"outputs_label": "Uitvoer:",
+			"no_deps": "geen"
 		},
 		"dag": {
-			"wave_label": "Wave {{number}}"
+			"wave_label": "Golf {{number}}"
 		}
 	}
 }

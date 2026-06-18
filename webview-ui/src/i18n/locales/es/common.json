@@ -113,65 +113,55 @@
 	},
 	"parallel": {
 		"dashboard": {
-			"title": "Parallel Task Dashboard",
-			"tab_subtasks": "Subtasks",
-			"tab_child_tasks": "Child Tasks",
+			"title": "Panel de tareas paralelas",
+			"tab_subtasks": "Subtareas",
+			"tab_child_tasks": "Tareas hijas",
 			"tab_dag": "DAG",
-			"tab_logs": "Logs",
-			"no_subtasks": "No subtasks running. Use execute_parallel_subtask or execute_parallel_child_task to start.",
-			"no_child_tasks": "No child tasks running.",
-			"no_dag_data": "No DAG data available",
-			"no_logs": "No log entries yet...",
-			"no_thoughts": "No agent thoughts yet...",
-			"agent_thoughts": "Agent Thoughts",
-			"system_logs": "System Logs",
-			"completed": "Completed",
-			"running": "Running",
-			"failed": "Failed",
-			"total": "Total"
+			"tab_logs": "Registros",
+			"no_subtasks": "No hay subtareas en ejecución",
+			"no_child_tasks": "No hay tareas hijas en ejecución",
+			"agent_thoughts": "Pensamientos del agente",
+			"system_logs": "Registros del sistema"
 		},
 		"subtask_card": {
-			"status_label": "Status:",
-			"duration_label": "Duration:",
-			"deps_label": "Deps:",
-			"error_label": "Error:",
-			"running": "running...",
-			"no_duration": "-"
+			"status_label": "Estado:",
+			"duration_label": "Duración:",
+			"deps_label": "Deps:"
 		},
 		"intervention": {
-			"pause": "Pause",
-			"resume": "Resume",
-			"cancel": "Cancel",
-			"retry": "Retry",
-			"skip": "Skip",
-			"pause_title": "Pause this subtask",
-			"resume_title": "Resume this subtask",
-			"cancel_title": "Cancel this subtask",
-			"retry_title": "Retry this subtask",
-			"skip_title": "Skip this subtask"
+			"pause": "Pausar",
+			"resume": "Reanudar",
+			"cancel": "Cancelar",
+			"retry": "Reintentar",
+			"skip": "Saltar",
+			"pause_title": "Pausar esta subtarea",
+			"resume_title": "Reanudar esta subtarea",
+			"cancel_title": "Cancelar esta subtarea",
+			"retry_title": "Reintentar esta subtarea",
+			"skip_title": "Saltar esta subtarea"
 		},
 		"resume_panel": {
-			"title": "⚠ Interrupted Parallel Tasks Detected",
-			"description": "The following parallel task executions were interrupted. You can resume them or dismiss.",
-			"resume_button": "Resume",
-			"dismiss_button": "Dismiss",
-			"status_prefix": "Status:",
-			"tasks_count": "{{total}} tasks ({{completed}} completed, {{failed}} failed)"
+			"title": "⚠ Tareas paralelas interrumpidas detectadas",
+			"description": "Las siguientes ejecuciones de tareas paralelas fueron interrumpidas. Puedes reanudarlas o descartarlas.",
+			"resume_button": "Reanudar",
+			"dismiss_button": "Descartar",
+			"status_prefix": "Estado:",
+			"tasks_count": "{{total}} tareas ({{completed}} completadas, {{failed}} fallidas)"
 		},
 		"detail_panel": {
-			"select_hint": "Select a subtask to view details",
-			"mode_label": "Mode:",
-			"status_label": "Status:",
+			"select_hint": "Selecciona una subtarea para ver detalles",
+			"mode_label": "Modo:",
+			"status_label": "Estado:",
 			"deps_label": "Deps:",
 			"tokens_label": "Tokens:",
 			"prompt_label": "Prompt",
 			"error_label": "Error",
-			"inputs_label": "Inputs:",
-			"outputs_label": "Outputs:",
-			"no_deps": "none"
+			"inputs_label": "Entradas:",
+			"outputs_label": "Salidas:",
+			"no_deps": "ninguno"
 		},
 		"dag": {
-			"wave_label": "Wave {{number}}"
+			"wave_label": "Ola {{number}}"
 		}
 	}
 }

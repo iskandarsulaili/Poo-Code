@@ -113,65 +113,55 @@
 	},
 	"parallel": {
 		"dashboard": {
-			"title": "Parallel Task Dashboard",
-			"tab_subtasks": "Subtasks",
-			"tab_child_tasks": "Child Tasks",
+			"title": "Parallel-Dashboard",
+			"tab_subtasks": "Teilaufgaben",
+			"tab_child_tasks": "Unteraufgaben",
 			"tab_dag": "DAG",
-			"tab_logs": "Logs",
-			"no_subtasks": "No subtasks running. Use execute_parallel_subtask or execute_parallel_child_task to start.",
-			"no_child_tasks": "No child tasks running.",
-			"no_dag_data": "No DAG data available",
-			"no_logs": "No log entries yet...",
-			"no_thoughts": "No agent thoughts yet...",
-			"agent_thoughts": "Agent Thoughts",
-			"system_logs": "System Logs",
-			"completed": "Completed",
-			"running": "Running",
-			"failed": "Failed",
-			"total": "Total"
+			"tab_logs": "Protokolle",
+			"no_subtasks": "Keine Teilaufgaben aktiv",
+			"no_child_tasks": "Keine Unteraufgaben aktiv",
+			"agent_thoughts": "Agent-Gedanken",
+			"system_logs": "Systemprotokolle"
 		},
 		"subtask_card": {
 			"status_label": "Status:",
-			"duration_label": "Duration:",
-			"deps_label": "Deps:",
-			"error_label": "Error:",
-			"running": "running...",
-			"no_duration": "-"
+			"duration_label": "Dauer:",
+			"deps_label": "Abhängigkeiten:"
 		},
 		"intervention": {
 			"pause": "Pause",
-			"resume": "Resume",
-			"cancel": "Cancel",
-			"retry": "Retry",
-			"skip": "Skip",
-			"pause_title": "Pause this subtask",
-			"resume_title": "Resume this subtask",
-			"cancel_title": "Cancel this subtask",
-			"retry_title": "Retry this subtask",
-			"skip_title": "Skip this subtask"
+			"resume": "Fortsetzen",
+			"cancel": "Abbrechen",
+			"retry": "Wiederholen",
+			"skip": "Überspringen",
+			"pause_title": "Diese Teilaufgabe pausieren",
+			"resume_title": "Diese Teilaufgabe fortsetzen",
+			"cancel_title": "Diese Teilaufgabe abbrechen",
+			"retry_title": "Diese Teilaufgabe wiederholen",
+			"skip_title": "Diese Teilaufgabe überspringen"
 		},
 		"resume_panel": {
-			"title": "⚠ Interrupted Parallel Tasks Detected",
-			"description": "The following parallel task executions were interrupted. You can resume them or dismiss.",
-			"resume_button": "Resume",
-			"dismiss_button": "Dismiss",
+			"title": "⚠ Unterbrochene parallele Aufgaben erkannt",
+			"description": "Die folgenden parallelen Aufgaben wurden unterbrochen. Du kannst sie fortsetzen oder verwerfen.",
+			"resume_button": "Fortsetzen",
+			"dismiss_button": "Verwerfen",
 			"status_prefix": "Status:",
-			"tasks_count": "{{total}} tasks ({{completed}} completed, {{failed}} failed)"
+			"tasks_count": "{{total}} Aufgaben ({{completed}} erledigt, {{failed}} fehlgeschlagen)"
 		},
 		"detail_panel": {
-			"select_hint": "Select a subtask to view details",
-			"mode_label": "Mode:",
+			"select_hint": "Wähle eine Teilaufgabe aus, um Details anzuzeigen",
+			"mode_label": "Modus:",
 			"status_label": "Status:",
-			"deps_label": "Deps:",
-			"tokens_label": "Tokens:",
+			"deps_label": "Abhängigkeiten:",
+			"tokens_label": "Token:",
 			"prompt_label": "Prompt",
-			"error_label": "Error",
-			"inputs_label": "Inputs:",
-			"outputs_label": "Outputs:",
-			"no_deps": "none"
+			"error_label": "Fehler",
+			"inputs_label": "Eingaben:",
+			"outputs_label": "Ausgaben:",
+			"no_deps": "keine"
 		},
 		"dag": {
-			"wave_label": "Wave {{number}}"
+			"wave_label": "Welle {{number}}"
 		}
 	}
 }
