@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"lint": "eslint src --ext=ts,tsx --max-warnings=0",
+		"typecheck": "tsc",
 		"check-types": "tsc",
 		"pretest": "turbo run bundle --cwd ..",
 		"test": "vitest run",

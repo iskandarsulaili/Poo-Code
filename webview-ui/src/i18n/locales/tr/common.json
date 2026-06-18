@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Kendi",
 		"subtasks": "Alt görevler"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Paralel Gösterge Paneli",
+			"tab_subtasks": "Alt Görevler",
+			"tab_child_tasks": "Çocuk Görevler",
+			"tab_dag": "DAG",
+			"tab_logs": "Günlükler",
+			"no_subtasks": "Çalışan alt görev yok",
+			"no_child_tasks": "Çalışan çocuk görev yok",
+			"agent_thoughts": "Ajan Düşünceleri",
+			"system_logs": "Sistem Günlükleri"
+		},
+		"subtask_card": {
+			"status_label": "Durum:",
+			"duration_label": "Süre:",
+			"deps_label": "Bağımlılıklar:"
+		},
+		"intervention": {
+			"pause": "Duraklat",
+			"resume": "Devam Et",
+			"cancel": "İptal",
+			"retry": "Yeniden Dene",
+			"skip": "Atla",
+			"pause_title": "Bu alt görevi duraklat",
+			"resume_title": "Bu alt görevi devam ettir",
+			"cancel_title": "Bu alt görevi iptal et",
+			"retry_title": "Bu alt görevi yeniden dene",
+			"skip_title": "Bu alt görevi atla"
+		},
+		"resume_panel": {
+			"title": "⚠ Kesintiye Uğramış Paralel Görevler Tespit Edildi",
+			"description": "Aşağıdaki paralel görev yürütmeleri kesintiye uğradı. Bunları devam ettirebilir veya kapatabilirsiniz.",
+			"resume_button": "Devam Et",
+			"dismiss_button": "Kapat",
+			"status_prefix": "Durum:",
+			"tasks_count": "{{total}} görev ({{completed}} tamamlandı, {{failed}} başarısız)"
+		},
+		"detail_panel": {
+			"select_hint": "Detayları görmek için bir alt görev seçin",
+			"mode_label": "Mod:",
+			"status_label": "Durum:",
+			"deps_label": "Bağımlılıklar:",
+			"tokens_label": "Token:",
+			"prompt_label": "Prompt",
+			"error_label": "Hata",
+			"inputs_label": "Girdiler:",
+			"outputs_label": "Çıktılar:",
+			"no_deps": "yok"
+		},
+		"dag": {
+			"wave_label": "Dalga {{number}}"
+		}
 	}
 }

@@ -43,23 +43,23 @@
 		"about": "Informazioni su Zoo Code",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "Configura provider API, modelli e credenziali di autenticazione per l'accesso ai modelli AI.",
+		"modesDescription": "Definisci modalità personalizzate con istruzioni, strumenti e configurazioni di modello specifiche per diverse attività.",
+		"mcpDescription": "Gestisci i server MCP che forniscono strumenti e risorse aggiuntive all'agente.",
+		"worktreesDescription": "Gestisci i worktree Git per lo sviluppo parallelo su più rami contemporaneamente.",
+		"skillsDescription": "Crea e gestisci competenze riutilizzabili che incapsulano istruzioni contestuali e flussi di lavoro.",
+		"autoApproveDescription": "Configura quali azioni l'agente può eseguire automaticamente senza richiedere approvazione manuale.",
+		"checkpointsDescription": "Configura punti di controllo automatici durante l'esecuzione delle attività per una facile revisione e rollback.",
+		"notificationsDescription": "Configura effetti sonori e sintesi vocale per notifiche ed eventi delle attività.",
+		"contextManagementDescription": "Controlla quali informazioni sono incluse nella finestra di contesto dell'IA, influenzando l'uso dei token e la qualità delle risposte.",
+		"terminalDescription": "Configura le impostazioni di integrazione del terminale, inclusa l'integrazione della shell, i limiti di output e il comportamento di esecuzione dei comandi.",
+		"slashCommandsDescription": "Crea scorciatoie di comandi slash riutilizzabili per prompt e flussi di lavoro usati frequentemente.",
+		"promptsDescription": "Configura i prompt di supporto utilizzati per azioni rapide come migliorare i prompt, spiegare il codice e risolvere problemi.",
+		"uiDescription": "Personalizza il comportamento dell'interfaccia utente, inclusa la visualizzazione dei messaggi e le preferenze di input.",
+		"experimentalDescription": "Attiva e configura funzionalità sperimentali in fase di sviluppo attivo. Queste possono cambiare o essere rimosse senza preavviso.",
+		"languageDescription": "Cambia la lingua di visualizzazione dell'interfaccia dell'estensione.",
+		"aboutDescription": "Visualizza informazioni sulla versione, risorse della community, impostazioni di telemetria e opzioni di debug.",
+		"kaizenDescription": "Configura cicli di miglioramento continuo che migliorano automaticamente la tua base di codice nel tempo."
 	},
 	"about": {
 		"bugReport": {
@@ -913,33 +913,33 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "Attiva l'apprendimento in background dai risultati delle attività per migliorare la guida dei prompt, le preferenze degli strumenti e l'evitamento degli errori nel tempo.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "Configura i backend di memoria e le impostazioni di persistenza per lo stato dell'agente tra le sessioni.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "Funzionalità sperimentali di UI e modifica dei file che cambiano il modo in cui l'agente interagisce con il tuo spazio di lavoro.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "Servizi di prevenzione degli errori, resilienza e affidabilità per operazioni dell'agente di livello produttivo.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "Integrazioni di strumenti aggiuntivi e capacità per estendere la funzionalità dell'agente."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "Quando attivato, Self-Improving può trasformare flussi di lavoro ripetuti con successo in competenze di progetto e mantenere le competenze create dall'agente aggiornate automaticamente."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "Attiva la modalità di auto-miglioramento completamente autonoma con auto-guarigione e creazione automatica di modalità"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "Attiva la pipeline di revisione multi-agente (Innovatore, Contrario, Avvocato del Diavolo, Il Decisore)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "Attiva l'approvazione automatica per i comandi senza conferma dell'utente"
 		},
 		"SELF_IMPROVING_QUESTION_EVALUATION": {
 			"name": "Question Evaluation",
@@ -967,7 +967,7 @@
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "Consente al sistema di creare e perfezionare automaticamente competenze specializzate basate su modelli di attività e frequenza di utilizzo, migliorando l'efficienza per attività ripetitive."
 		},
 		"ONE_SHOT_ORCHESTRATOR": {
 			"name": "ONE-SHOT Orchestrator",
@@ -979,15 +979,38 @@
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "Quando attivato, il sistema apprende dalle attività completate registrando modelli, utilizzo degli strumenti e risultati. Questi modelli vengono utilizzati per suggerire miglioramenti per attività future simili."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "Attiva verifica",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "Quando attivato, il sistema genera automaticamente contesto di recupero dopo errori degli strumenti, iniettando indicazioni nel prossimo prompt del modello per aiutare il modello a riprendersi dai fallimenti."
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "Attiva l'esecuzione parallela di sotto-attività con risoluzione delle dipendenze basata su DAG, pianificazione consapevole dei blocchi e comunicazione tramite lavagna",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Abilita l'esecuzione parallela dei comandi con risoluzione delle dipendenze basata su DAG e pianificazione consapevole dei blocchi"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Abilita l'analisi strutturata dell'output per una maggiore affidabilità nell'elaborazione delle risposte del modello"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Abilita l'analisi del grafo delle dipendenze per l'ordinamento intelligente delle attività e la pianificazione dell'esecuzione parallela"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Abilita il supporto per spazi di lavoro multi-radice per lavorare con più directory di progetto simultaneamente"
 		}
 	},
 	"promptCaching": {

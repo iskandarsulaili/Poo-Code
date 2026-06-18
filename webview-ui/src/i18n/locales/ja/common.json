@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "自身",
 		"subtasks": "サブタスク"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "並列ダッシュボード",
+			"tab_subtasks": "サブタスク",
+			"tab_child_tasks": "子タスク",
+			"tab_dag": "DAG",
+			"tab_logs": "ログ",
+			"no_subtasks": "実行中のサブタスクはありません",
+			"no_child_tasks": "実行中の子タスクはありません",
+			"agent_thoughts": "エージェントの思考",
+			"system_logs": "システムログ"
+		},
+		"subtask_card": {
+			"status_label": "ステータス:",
+			"duration_label": "所要時間:",
+			"deps_label": "依存関係:"
+		},
+		"intervention": {
+			"pause": "一時停止",
+			"resume": "再開",
+			"cancel": "キャンセル",
+			"retry": "リトライ",
+			"skip": "スキップ",
+			"pause_title": "このサブタスクを一時停止",
+			"resume_title": "このサブタスクを再開",
+			"cancel_title": "このサブタスクをキャンセル",
+			"retry_title": "このサブタスクをリトライ",
+			"skip_title": "このサブタスクをスキップ"
+		},
+		"resume_panel": {
+			"title": "⚠ 中断された並列タスクを検出",
+			"description": "以下の並列タスクの実行が中断されました。再開するか、却下することができます。",
+			"resume_button": "再開",
+			"dismiss_button": "却下",
+			"status_prefix": "ステータス:",
+			"tasks_count": "{{total}} タスク ({{completed}} 完了、{{failed}} 失敗)"
+		},
+		"detail_panel": {
+			"select_hint": "詳細を表示するサブタスクを選択",
+			"mode_label": "モード:",
+			"status_label": "ステータス:",
+			"deps_label": "依存関係:",
+			"tokens_label": "トークン:",
+			"prompt_label": "プロンプト",
+			"error_label": "エラー",
+			"inputs_label": "入力:",
+			"outputs_label": "出力:",
+			"no_deps": "なし"
+		},
+		"dag": {
+			"wave_label": "ウェーブ {{number}}"
+		}
 	}
 }

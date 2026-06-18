@@ -1554,9 +1554,9 @@ describe("Cline", () => {
 				task.handleWebviewAskResponse("messageResponse", "", [])
 
 				// Should have been converted to ask with empty text (routes to user prompt)
-				expect(task.askResponse).toBe("ask")
-				expect(task.askResponseText).toBe("")
-				expect(task.askResponseImages).toEqual([])
+				expect((task as any).askResponse).toBe("ask")
+				expect((task as any).askResponseText).toBe("")
+				expect((task as any).askResponseImages).toEqual([])
 			})
 
 			it("should block empty messageResponse when text is undefined", () => {
@@ -1569,8 +1569,8 @@ describe("Cline", () => {
 
 				task.handleWebviewAskResponse("messageResponse", undefined, undefined)
 
-				expect(task.askResponse).toBe("ask")
-				expect(task.askResponseText).toBe("")
+				expect((task as any).askResponse).toBe("ask")
+				expect((task as any).askResponseText).toBe("")
 			})
 
 			it("should block empty messageResponse when text is whitespace-only", () => {
@@ -1583,8 +1583,8 @@ describe("Cline", () => {
 
 				task.handleWebviewAskResponse("messageResponse", "   ", [])
 
-				expect(task.askResponse).toBe("ask")
-				expect(task.askResponseText).toBe("")
+				expect((task as any).askResponse).toBe("ask")
+				expect((task as any).askResponseText).toBe("")
 			})
 
 			it("should NOT block non-empty messageResponse", () => {
@@ -1597,8 +1597,8 @@ describe("Cline", () => {
 
 				task.handleWebviewAskResponse("messageResponse", "valid response content", [])
 
-				expect(task.askResponse).toBe("messageResponse")
-				expect(task.askResponseText).toBe("valid response content")
+				expect((task as any).askResponse).toBe("messageResponse")
+				expect((task as any).askResponseText).toBe("valid response content")
 			})
 
 			it("should NOT block yesButtonClicked with empty text (approval)", () => {
@@ -1612,8 +1612,8 @@ describe("Cline", () => {
 				// yesButtonClicked should not be blocked by the empty messageResponse guard
 				task.handleWebviewAskResponse("yesButtonClicked", "", [])
 
-				expect(task.askResponse).toBe("yesButtonClicked")
-				expect(task.askResponseText).toBe("")
+				expect((task as any).askResponse).toBe("yesButtonClicked")
+				expect((task as any).askResponseText).toBe("")
 			})
 		})
 	})

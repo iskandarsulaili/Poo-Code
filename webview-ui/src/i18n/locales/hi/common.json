@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "स्वयं",
 		"subtasks": "उपकार्य"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "समानांतर डैशबोर्ड",
+			"tab_subtasks": "उप-कार्य",
+			"tab_child_tasks": "चाइल्ड कार्य",
+			"tab_dag": "DAG",
+			"tab_logs": "लॉग",
+			"no_subtasks": "कोई उप-कार्य नहीं चल रहे हैं",
+			"no_child_tasks": "कोई चाइल्ड कार्य नहीं चल रहे हैं",
+			"agent_thoughts": "एजेंट के विचार",
+			"system_logs": "सिस्टम लॉग"
+		},
+		"subtask_card": {
+			"status_label": "स्थिति:",
+			"duration_label": "अवधि:",
+			"deps_label": "निर्भरताएँ:"
+		},
+		"intervention": {
+			"pause": "रोकें",
+			"resume": "जारी रखें",
+			"cancel": "रद्द करें",
+			"retry": "पुनः प्रयास",
+			"skip": "छोड़ें",
+			"pause_title": "इस उप-कार्य को रोकें",
+			"resume_title": "इस उप-कार्य को जारी रखें",
+			"cancel_title": "इस उप-कार्य को रद्द करें",
+			"retry_title": "इस उप-कार्य का पुनः प्रयास करें",
+			"skip_title": "इस उप-कार्य को छोड़ें"
+		},
+		"resume_panel": {
+			"title": "⚠ बाधित समानांतर कार्य मिले",
+			"description": "निम्नलिखित समानांतर कार्य निष्पादन बाधित हुए थे। आप उन्हें जारी रख सकते हैं या खारिज कर सकते हैं।",
+			"resume_button": "जारी रखें",
+			"dismiss_button": "खारिज करें",
+			"status_prefix": "स्थिति:",
+			"tasks_count": "{{total}} कार्य ({{completed}} पूर्ण, {{failed}} विफल)"
+		},
+		"detail_panel": {
+			"select_hint": "विवरण देखने के लिए कोई उप-कार्य चुनें",
+			"mode_label": "मोड:",
+			"status_label": "स्थिति:",
+			"deps_label": "निर्भरताएँ:",
+			"tokens_label": "टोकन:",
+			"prompt_label": "प्रॉम्प्ट",
+			"error_label": "त्रुटि",
+			"inputs_label": "इनपुट:",
+			"outputs_label": "आउटपुट:",
+			"no_deps": "कोई नहीं"
+		},
+		"dag": {
+			"wave_label": "तरंग {{number}}"
+		}
 	}
 }

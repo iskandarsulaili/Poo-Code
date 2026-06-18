@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Próprio",
 		"subtasks": "Subtarefas"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Painel de tarefas paralelas",
+			"tab_subtasks": "Subtarefas",
+			"tab_child_tasks": "Tarefas filhas",
+			"tab_dag": "DAG",
+			"tab_logs": "Registros",
+			"no_subtasks": "Nenhuma subtarefa em execução",
+			"no_child_tasks": "Nenhuma tarefa filha em execução",
+			"agent_thoughts": "Pensamentos do agente",
+			"system_logs": "Registros do sistema"
+		},
+		"subtask_card": {
+			"status_label": "Status:",
+			"duration_label": "Duração:",
+			"deps_label": "Dependências:"
+		},
+		"intervention": {
+			"pause": "Pausar",
+			"resume": "Retomar",
+			"cancel": "Cancelar",
+			"retry": "Tentar novamente",
+			"skip": "Pular",
+			"pause_title": "Pausar esta subtarefa",
+			"resume_title": "Retomar esta subtarefa",
+			"cancel_title": "Cancelar esta subtarefa",
+			"retry_title": "Tentar novamente esta subtarefa",
+			"skip_title": "Pular esta subtarefa"
+		},
+		"resume_panel": {
+			"title": "⚠ Tarefas paralelas interrompidas detectadas",
+			"description": "As seguintes execuções de tarefas paralelas foram interrompidas. Você pode retomá-las ou descartá-las.",
+			"resume_button": "Retomar",
+			"dismiss_button": "Descartar",
+			"status_prefix": "Status:",
+			"tasks_count": "{{total}} tarefas ({{completed}} concluídas, {{failed}} falhas)"
+		},
+		"detail_panel": {
+			"select_hint": "Selecione uma subtarefa para ver detalhes",
+			"mode_label": "Modo:",
+			"status_label": "Status:",
+			"deps_label": "Dependências:",
+			"tokens_label": "Tokens:",
+			"prompt_label": "Prompt",
+			"error_label": "Erro",
+			"inputs_label": "Entradas:",
+			"outputs_label": "Saídas:",
+			"no_deps": "nenhuma"
+		},
+		"dag": {
+			"wave_label": "Onda {{number}}"
+		}
 	}
 }

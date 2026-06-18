@@ -43,23 +43,23 @@
 		"about": "Zoo Code Hakkında",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "AI model erişimi için API sağlayıcılarını, modelleri ve kimlik doğrulama bilgilerini yapılandırın.",
+		"modesDescription": "Farklı görevler için belirli talimatlar, araçlar ve model yapılandırmaları ile özel modlar tanımlayın.",
+		"mcpDescription": "Ajana ek araçlar ve kaynaklar sağlayan MCP sunucularını yönetin.",
+		"worktreesDescription": "Aynı anda birden fazla dalda paralel geliştirme için Git worktree'lerini yönetin.",
+		"skillsDescription": "Bağlamsal talimatları ve iş akışlarını kapsayan yeniden kullanılabilir beceriler oluşturun ve yönetin.",
+		"autoApproveDescription": "Ajanın manuel onay gerektirmeden otomatik olarak gerçekleştirebileceği eylemleri yapılandırın.",
+		"checkpointsDescription": "Kolay inceleme ve geri alma için görev yürütme sırasında otomatik kontrol noktaları yapılandırın.",
+		"notificationsDescription": "Görev bildirimleri ve olayları için ses efektlerini ve metin-konuşmayı yapılandırın.",
+		"contextManagementDescription": "AI'nın bağlam penceresine hangi bilgilerin dahil edileceğini kontrol ederek token kullanımını ve yanıt kalitesini etkiler.",
+		"terminalDescription": "Kabuk entegrasyonu, çıktı limitleri ve komut yürütme davranışı dahil terminal entegrasyon ayarlarını yapılandırın.",
+		"slashCommandsDescription": "Sık kullanılan istemler ve iş akışları için yeniden kullanılabilir eğik çizgi komut kısayolları oluşturun.",
+		"promptsDescription": "İstemleri iyileştirme, kodu açıklama ve sorunları düzeltme gibi hızlı eylemler için kullanılan destek istemlerini yapılandırın.",
+		"uiDescription": "Mesaj görüntüleme ve giriş tercihleri dahil kullanıcı arayüzü davranışını özelleştirin.",
+		"experimentalDescription": "Aktif geliştirme aşamasındaki deneysel özellikleri etkinleştirin ve yapılandırın. Bunlar bildirim olmadan değiştirilebilir veya kaldırılabilir.",
+		"languageDescription": "Uzantı arayüzü için görüntüleme dilini değiştirin.",
+		"aboutDescription": "Sürüm bilgilerini, topluluk kaynaklarını, telemetri ayarlarını ve hata ayıklama seçeneklerini görüntüleyin.",
+		"kaizenDescription": "Zaman içinde kod tabanınızı otomatik olarak iyileştiren sürekli iyileştirme döngüleri yapılandırın."
 	},
 	"about": {
 		"bugReport": {
@@ -913,49 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "Zaman içinde istem rehberliğini, araç tercihlerini ve hata önlemeyi iyileştirmek için görev sonuçlarından arka plan öğrenimini etkinleştirir.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "Oturumlar arasında ajan durumu için bellek arka uçlarını ve kalıcılık ayarlarını yapılandırın.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "Ajanın çalışma alanınızla etkileşim şeklini değiştiren deneysel UI ve dosya düzenleme özellikleri.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "Üretim sınıfı ajan operasyonları için hata önleme, dayanıklılık ve güvenilirlik hizmetleri.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "Ajan işlevselliğini genişletmek için ek araç entegrasyonları ve yetenekler."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "Etkinleştirildiğinde, Self-Improving tekrarlanan başarılı iş akışlarını proje becerilerine dönüştürebilir ve ajan tarafından oluşturulan becerileri otomatik olarak güncel tutabilir."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "Otomatik iyileştirme ve otomatik mod oluşturma ile tam otonom kendini iyileştirme modunu etkinleştir"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "Çoklu ajan inceleme hattını etkinleştir (Yenilikçi, Muhalif, Şeytanın Avukatı, Karar Verici)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "Kullanıcı onayı olmadan komutlar için otomatik onayı etkinleştir"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "Sistemin görev kalıplarına ve kullanım sıklığına göre otomatik olarak uzmanlaşmış beceriler oluşturmasını ve iyileştirmesini sağlayarak tekrarlayan görevlerde verimliliği artırır."
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "Etkinleştirildiğinde, sistem kalıpları, araç kullanımını ve sonuçları kaydederek tamamlanan görevlerden öğrenir. Bu kalıplar, benzer gelecekteki görevler için iyileştirmeler önermek üzere kullanılır."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "Doğrulamayı etkinleştir",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "Etkinleştirildiğinde, sistem araç hatalarından sonra otomatik olarak kurtarma bağlamı oluşturur ve modelin başarısızlıklardan kurtulmasına yardımcı olmak için bir sonraki model istemine rehberlik enjekte eder."
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "DAG tabanlı bağımlılık çözümleme, kilit bilinçli zamanlama ve pano iletişimi ile alt görevlerin paralel yürütülmesini etkinleştir",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Komutların DAG tabanlı bağımlılık çözümleme ve kilit bilinçli zamanlama ile paralel yürütülmesini etkinleştirir"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Model yanıtlarını işlerken gelişmiş güvenilirlik için yapılandırılmış çıktı ayrıştırmayı etkinleştirir"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Akıllı görev sıralama ve paralel yürütme planlaması için bağımlılık grafiği analizini etkinleştirir"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Birden fazla proje dizini ile aynı anda çalışmak için çok köklü çalışma alanı desteğini etkinleştirir"
 		}
 	},
 	"promptCaching": {

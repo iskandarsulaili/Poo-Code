@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Proprio",
 		"subtasks": "Sottoattività"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Dashboard parallelo",
+			"tab_subtasks": "Sotto-attività",
+			"tab_child_tasks": "Attività figlie",
+			"tab_dag": "DAG",
+			"tab_logs": "Registri",
+			"no_subtasks": "Nessuna sotto-attività in esecuzione",
+			"no_child_tasks": "Nessuna attività figlia in esecuzione",
+			"agent_thoughts": "Pensieri dell'agente",
+			"system_logs": "Registri di sistema"
+		},
+		"subtask_card": {
+			"status_label": "Stato:",
+			"duration_label": "Durata:",
+			"deps_label": "Dipendenze:"
+		},
+		"intervention": {
+			"pause": "Pausa",
+			"resume": "Riprendi",
+			"cancel": "Annulla",
+			"retry": "Riprova",
+			"skip": "Salta",
+			"pause_title": "Metti in pausa questa sotto-attività",
+			"resume_title": "Riprendi questa sotto-attività",
+			"cancel_title": "Annulla questa sotto-attività",
+			"retry_title": "Riprova questa sotto-attività",
+			"skip_title": "Salta questa sotto-attività"
+		},
+		"resume_panel": {
+			"title": "⚠ Rilevate attività parallele interrotte",
+			"description": "Le seguenti esecuzioni di attività parallele sono state interrotte. Puoi riprenderle o ignorarle.",
+			"resume_button": "Riprendi",
+			"dismiss_button": "Ignora",
+			"status_prefix": "Stato:",
+			"tasks_count": "{{total}} attività ({{completed}} completate, {{failed}} fallite)"
+		},
+		"detail_panel": {
+			"select_hint": "Seleziona una sotto-attività per vedere i dettagli",
+			"mode_label": "Modalità:",
+			"status_label": "Stato:",
+			"deps_label": "Dipendenze:",
+			"tokens_label": "Token:",
+			"prompt_label": "Prompt",
+			"error_label": "Errore",
+			"inputs_label": "Input:",
+			"outputs_label": "Output:",
+			"no_deps": "nessuna"
+		},
+		"dag": {
+			"wave_label": "Onda {{number}}"
+		}
 	}
 }

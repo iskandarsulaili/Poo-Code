@@ -38,6 +38,11 @@ import { generateImageTool } from "../tools/GenerateImageTool"
 import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
+import { webFetchTool } from "../tools/WebFetchTool"
+import { webSearchTool } from "../tools/WebSearchTool"
+import { webExtractTool } from "../tools/WebExtractTool"
+import { executeParallelSubtaskTool } from "../tools/ExecuteParallelSubtaskTool"
+import { executeParallelChildTaskTool } from "../tools/ExecuteParallelChildTaskTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -895,6 +900,41 @@ export async function presentAssistantMessage(cline: Task) {
 				case "generate_image":
 					await checkpointSaveAndMark(cline)
 					await generateImageTool.handle(cline, block as ToolUse<"generate_image">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "web_fetch":
+					await webFetchTool.handle(cline, block as ToolUse<"web_fetch">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "web_search":
+					await webSearchTool.handle(cline, block as ToolUse<"web_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "web_extract":
+					await webExtractTool.handle(cline, block as ToolUse<"web_extract">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "execute_parallel_subtask":
+					await executeParallelSubtaskTool.handle(cline, block as ToolUse<"execute_parallel_subtask">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "execute_parallel_child_task":
+					await executeParallelChildTaskTool.handle(cline, block as ToolUse<"execute_parallel_child_task">, {
 						askApproval,
 						handleError,
 						pushToolResult,

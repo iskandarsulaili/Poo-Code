@@ -538,6 +538,24 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "execute_parallel_subtask":
+				if (partialArgs.tasks !== undefined) {
+					nativeArgs = {
+						tasks: partialArgs.tasks,
+						maxParallel: partialArgs.maxParallel,
+					}
+				}
+				break
+
+			case "execute_parallel_child_task":
+				if (partialArgs.tasks !== undefined) {
+					nativeArgs = {
+						tasks: partialArgs.tasks,
+						maxParallel: partialArgs.maxParallel,
+					}
+				}
+				break
+
 			case "switch_mode":
 				if (partialArgs.mode_slug !== undefined || partialArgs.reason !== undefined) {
 					nativeArgs = {
@@ -874,6 +892,24 @@ export class NativeToolCallParser {
 					}
 					break
 
+				case "execute_parallel_subtask":
+					if (args.tasks !== undefined) {
+						nativeArgs = {
+							tasks: args.tasks,
+							maxParallel: args.maxParallel,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "execute_parallel_child_task":
+					if (args.tasks !== undefined) {
+						nativeArgs = {
+							tasks: args.tasks,
+							maxParallel: args.maxParallel,
+						} as NativeArgsFor<TName>
+					}
+					break
+
 				case "switch_mode":
 					if (args.mode_slug !== undefined && args.reason !== undefined) {
 						nativeArgs = {
@@ -982,6 +1018,38 @@ export class NativeToolCallParser {
 							mode: args.mode,
 							message: args.message,
 							todos: args.todos,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_fetch":
+					if (args.url !== undefined) {
+						nativeArgs = {
+							url: args.url,
+							extractMode: args.extractMode,
+							waitForSelector: args.waitForSelector,
+							timeout: args.timeout,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_search":
+					if (args.query !== undefined) {
+						nativeArgs = {
+							query: args.query,
+							count: args.count,
+							engine: args.engine,
+						} as NativeArgsFor<TName>
+					}
+					break
+
+				case "web_extract":
+					if (args.url !== undefined && args.selectors !== undefined) {
+						nativeArgs = {
+							url: args.url,
+							selectors: args.selectors,
+							waitForSelector: args.waitForSelector,
+							extractAll: args.extractAll,
 						} as NativeArgsFor<TName>
 					}
 					break

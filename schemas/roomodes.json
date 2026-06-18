@@ -54,6 +54,7 @@
 										"command",
 										"mcp",
 										"modes",
+										"web",
 										"browser"
 									]
 								},
@@ -70,6 +71,7 @@
 												"command",
 												"mcp",
 												"modes",
+												"web",
 												"browser"
 											]
 										},

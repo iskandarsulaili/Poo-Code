@@ -27,6 +27,11 @@ export const EXPERIMENT_IDS = {
 	RECOVERY_CONTEXT: "recoveryContext",
 	SELF_IMPROVING_SPECIALIZED_SKILLS: "selfImprovingSpecializedSkills",
 	TASK_PATTERN_LEARNING: "taskPatternLearning",
+	PARALLEL_EXECUTION: "parallelExecution",
+	STRUCTURED_OUTPUT_PARSING: "structuredOutputParsing",
+	DEPENDENCY_GRAPH: "dependencyGraph",
+	MULTI_ROOT_WORKSPACE: "multiRootWorkspace",
+	PARALLEL_SUBTASK: "parallelSubtask",
 } as const satisfies Record<string, ExperimentId>
 
 type ExperimentKey = Keys<typeof EXPERIMENT_IDS>
@@ -62,6 +67,11 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	RECOVERY_CONTEXT: { enabled: true },
 	SELF_IMPROVING_SPECIALIZED_SKILLS: { enabled: true },
 	TASK_PATTERN_LEARNING: { enabled: true },
+	PARALLEL_EXECUTION: { enabled: true },
+	STRUCTURED_OUTPUT_PARSING: { enabled: true },
+	DEPENDENCY_GRAPH: { enabled: true },
+	MULTI_ROOT_WORKSPACE: { enabled: true },
+	PARALLEL_SUBTASK: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

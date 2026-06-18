@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Собственные",
 		"subtasks": "Подзадачи"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Панель параллельных задач",
+			"tab_subtasks": "Подзадачи",
+			"tab_child_tasks": "Дочерние задачи",
+			"tab_dag": "DAG",
+			"tab_logs": "Журналы",
+			"no_subtasks": "Нет выполняющихся подзадач",
+			"no_child_tasks": "Нет выполняющихся дочерних задач",
+			"agent_thoughts": "Мысли агента",
+			"system_logs": "Системные журналы"
+		},
+		"subtask_card": {
+			"status_label": "Статус:",
+			"duration_label": "Длительность:",
+			"deps_label": "Зависимости:"
+		},
+		"intervention": {
+			"pause": "Пауза",
+			"resume": "Возобновить",
+			"cancel": "Отмена",
+			"retry": "Повторить",
+			"skip": "Пропустить",
+			"pause_title": "Приостановить эту подзадачу",
+			"resume_title": "Возобновить эту подзадачу",
+			"cancel_title": "Отменить эту подзадачу",
+			"retry_title": "Повторить эту подзадачу",
+			"skip_title": "Пропустить эту подзадачу"
+		},
+		"resume_panel": {
+			"title": "⚠ Обнаружены прерванные параллельные задачи",
+			"description": "Следующие выполнения параллельных задач были прерваны. Вы можете возобновить их или отклонить.",
+			"resume_button": "Возобновить",
+			"dismiss_button": "Отклонить",
+			"status_prefix": "Статус:",
+			"tasks_count": "{{total}} задач ({{completed}} завершено, {{failed}} с ошибками)"
+		},
+		"detail_panel": {
+			"select_hint": "Выберите подзадачу для просмотра деталей",
+			"mode_label": "Режим:",
+			"status_label": "Статус:",
+			"deps_label": "Зависимости:",
+			"tokens_label": "Токены:",
+			"prompt_label": "Промпт",
+			"error_label": "Ошибка",
+			"inputs_label": "Входные данные:",
+			"outputs_label": "Выходные данные:",
+			"no_deps": "нет"
+		},
+		"dag": {
+			"wave_label": "Волна {{number}}"
+		}
 	}
 }

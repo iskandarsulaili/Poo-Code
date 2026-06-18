@@ -43,23 +43,23 @@
 		"about": "Zoo Code 정보",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "AI 모델 액세스를 위한 API 제공자, 모델 및 인증 자격 증명을 구성합니다.",
+		"modesDescription": "다양한 작업에 대한 특정 지침, 도구 및 모델 구성을 사용하여 사용자 정의 모드를 정의합니다.",
+		"mcpDescription": "에이전트에 추가 도구와 리소스를 제공하는 MCP 서버를 관리합니다.",
+		"worktreesDescription": "여러 브랜치에서 동시에 병렬 개발을 위한 Git 워크트리를 관리합니다.",
+		"skillsDescription": "컨텍스트 지침과 워크플로를 캡슐화하는 재사용 가능한 스킬을 만들고 관리합니다.",
+		"autoApproveDescription": "에이전트가 수동 승인 없이 자동으로 수행할 수 있는 작업을 구성합니다.",
+		"checkpointsDescription": "쉬운 검토 및 롤백을 위해 작업 실행 중 자동 체크포인트를 구성합니다.",
+		"notificationsDescription": "작업 알림 및 이벤트에 대한 사운드 효과 및 텍스트 음성 변환을 구성합니다.",
+		"contextManagementDescription": "AI의 컨텍스트 창에 포함될 정보를 제어하여 토큰 사용량과 응답 품질에 영향을 줍니다.",
+		"terminalDescription": "셸 통합, 출력 제한 및 명령 실행 동작을 포함한 터미널 통합 설정을 구성합니다.",
+		"slashCommandsDescription": "자주 사용하는 프롬프트와 워크플로에 대한 재사용 가능한 슬래시 명령 바로가기를 만듭니다.",
+		"promptsDescription": "프롬프트 개선, 코드 설명, 문제 해결과 같은 빠른 작업에 사용되는 지원 프롬프트를 구성합니다.",
+		"uiDescription": "메시지 표시 및 입력 기본 설정을 포함한 사용자 인터페이스 동작을 사용자 정의합니다.",
+		"experimentalDescription": "활발히 개발 중인 실험적 기능을 활성화하고 구성합니다. 이들은 예고 없이 변경되거나 제거될 수 있습니다.",
+		"languageDescription": "확장 인터페이스의 표시 언어를 변경합니다.",
+		"aboutDescription": "버전 정보, 커뮤니티 리소스, 텔레메트리 설정 및 디버그 옵션을 봅니다.",
+		"kaizenDescription": "시간이 지남에 따라 코드베이스를 자동으로 개선하는 지속적인 개선 주기를 구성합니다."
 	},
 	"about": {
 		"bugReport": {
@@ -913,49 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "작업 결과로부터 백그라운드 학습을 활성화하여 시간이 지남에 따라 프롬프트 안내, 도구 선호도 및 오류 회피를 개선합니다.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "세션 간 에이전트 상태에 대한 메모리 백엔드 및 지속성 설정을 구성합니다.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "에이전트가 작업 공간과 상호 작용하는 방식을 변경하는 실험적 UI 및 파일 편집 기능입니다.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "프로덕션 등급 에이전트 운영을 위한 오류 방지, 복원력 및 안정성 서비스입니다.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "에이전트 기능을 확장하기 위한 추가 도구 통합 및 기능입니다."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "활성화되면 Self-Improving이 반복적으로 성공한 워크플로를 프로젝트 스킬로 전환하고 에이전트가 만든 스킬을 자동으로 최신 상태로 유지할 수 있습니다."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "자동 복구 및 자동 모드 생성을 통해 완전 자율적인 자기 개선 모드를 활성화합니다"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "다중 에이전트 검토 파이프라인을 활성화합니다 (혁신가, 반대자, 악마의 대변인, 결정자)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "사용자 확인 없이 명령에 대한 자동 승인을 활성화합니다"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "시스템이 작업 패턴과 사용 빈도에 따라 전문 스킬을 자동으로 생성 및 개선하여 반복 작업의 효율성을 향상시킵니다."
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "활성화되면 시스템은 패턴, 도구 사용 및 결과를 기록하여 완료된 작업에서 학습합니다. 이러한 패턴은 유사한 향후 작업에 대한 개선 사항을 제안하는 데 사용됩니다."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "검증 활성화",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "활성화되면 시스템은 도구 오류 후 자동으로 복구 컨텍스트를 생성하여 다음 모델 프롬프트에 안내를 주입하여 모델이 실패에서 복구할 수 있도록 돕습니다."
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "DAG 기반 종속성 해결, 잠금 인식 스케줄링 및 블랙보드 통신을 통한 하위 작업의 병렬 실행을 활성화합니다",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "DAG 기반 종속성 해결 및 잠금 인식 스케줄링을 통한 명령의 병렬 실행을 활성화합니다"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "모델 응답 처리 시 향상된 신뢰성을 위해 구조화된 출력 파싱을 활성화합니다"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "지능형 작업 순서 지정 및 병렬 실행 계획을 위한 종속성 그래프 분석을 활성화합니다"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "여러 프로젝트 디렉토리를 동시에 작업하기 위한 다중 루트 작업공간 지원을 활성화합니다"
 		}
 	},
 	"promptCaching": {

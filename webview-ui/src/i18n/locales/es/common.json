@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Propio",
 		"subtasks": "Subtareas"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Panel de tareas paralelas",
+			"tab_subtasks": "Subtareas",
+			"tab_child_tasks": "Tareas hijas",
+			"tab_dag": "DAG",
+			"tab_logs": "Registros",
+			"no_subtasks": "No hay subtareas en ejecución",
+			"no_child_tasks": "No hay tareas hijas en ejecución",
+			"agent_thoughts": "Pensamientos del agente",
+			"system_logs": "Registros del sistema"
+		},
+		"subtask_card": {
+			"status_label": "Estado:",
+			"duration_label": "Duración:",
+			"deps_label": "Deps:"
+		},
+		"intervention": {
+			"pause": "Pausar",
+			"resume": "Reanudar",
+			"cancel": "Cancelar",
+			"retry": "Reintentar",
+			"skip": "Saltar",
+			"pause_title": "Pausar esta subtarea",
+			"resume_title": "Reanudar esta subtarea",
+			"cancel_title": "Cancelar esta subtarea",
+			"retry_title": "Reintentar esta subtarea",
+			"skip_title": "Saltar esta subtarea"
+		},
+		"resume_panel": {
+			"title": "⚠ Tareas paralelas interrumpidas detectadas",
+			"description": "Las siguientes ejecuciones de tareas paralelas fueron interrumpidas. Puedes reanudarlas o descartarlas.",
+			"resume_button": "Reanudar",
+			"dismiss_button": "Descartar",
+			"status_prefix": "Estado:",
+			"tasks_count": "{{total}} tareas ({{completed}} completadas, {{failed}} fallidas)"
+		},
+		"detail_panel": {
+			"select_hint": "Selecciona una subtarea para ver detalles",
+			"mode_label": "Modo:",
+			"status_label": "Estado:",
+			"deps_label": "Deps:",
+			"tokens_label": "Tokens:",
+			"prompt_label": "Prompt",
+			"error_label": "Error",
+			"inputs_label": "Entradas:",
+			"outputs_label": "Salidas:",
+			"no_deps": "ninguno"
+		},
+		"dag": {
+			"wave_label": "Ola {{number}}"
+		}
 	}
 }

@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "자체",
 		"subtasks": "하위작업"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "병렬 대시보드",
+			"tab_subtasks": "하위 작업",
+			"tab_child_tasks": "자식 작업",
+			"tab_dag": "DAG",
+			"tab_logs": "로그",
+			"no_subtasks": "실행 중인 하위 작업 없음",
+			"no_child_tasks": "실행 중인 자식 작업 없음",
+			"agent_thoughts": "에이전트 사고",
+			"system_logs": "시스템 로그"
+		},
+		"subtask_card": {
+			"status_label": "상태:",
+			"duration_label": "기간:",
+			"deps_label": "의존성:"
+		},
+		"intervention": {
+			"pause": "일시정지",
+			"resume": "재개",
+			"cancel": "취소",
+			"retry": "재시도",
+			"skip": "건너뛰기",
+			"pause_title": "이 하위 작업 일시정지",
+			"resume_title": "이 하위 작업 재개",
+			"cancel_title": "이 하위 작업 취소",
+			"retry_title": "이 하위 작업 재시도",
+			"skip_title": "이 하위 작업 건너뛰기"
+		},
+		"resume_panel": {
+			"title": "⚠ 중단된 병렬 작업 감지",
+			"description": "다음 병렬 작업 실행이 중단되었습니다. 재개하거나 해제할 수 있습니다.",
+			"resume_button": "재개",
+			"dismiss_button": "해제",
+			"status_prefix": "상태:",
+			"tasks_count": "{{total}}개 작업 ({{completed}} 완료, {{failed}} 실패)"
+		},
+		"detail_panel": {
+			"select_hint": "세부 정보를 볼 하위 작업 선택",
+			"mode_label": "모드:",
+			"status_label": "상태:",
+			"deps_label": "의존성:",
+			"tokens_label": "토큰:",
+			"prompt_label": "프롬프트",
+			"error_label": "오류",
+			"inputs_label": "입력:",
+			"outputs_label": "출력:",
+			"no_deps": "없음"
+		},
+		"dag": {
+			"wave_label": "웨이브 {{number}}"
+		}
 	}
 }

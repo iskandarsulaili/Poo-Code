@@ -96,12 +96,16 @@ export class QuestionEvaluatorService {
 	/**
 	 * Evaluate all choices and select the best one.
 	 * Returns the index of the best choice.
+	 * Guarantees that selectedText is non-empty if any choice has non-empty text.
 	 */
 	async evaluateBestChoice(
 		question: string,
 		choices: { text: string; mode: string | null }[],
 		context?: { taskHistory?: string[]; workspaceFiles?: string[] },
 	): Promise<QuestionEvaluation> {
+		// Early guard: if any choice has non-empty text, we must always have valid output
+		const anyValidChoice = choices.some((c) => c.text?.trim().length > 0)
+
 		if (!this.config.enabled || choices.length < this.config.minChoicesForEvaluation) {
 			// Fallback: select first choice
 			return {
@@ -117,19 +121,28 @@ export class QuestionEvaluatorService {
 		// Strategy 0: Hybrid scoring (fast path + LLM slow path)
 		if (this.config.useHybridScoring && this.accumulatedScoreStore) {
 			const evaluation = await this.evaluateWithHybridScoring(question, choices, context)
-			if (evaluation) return evaluation
+			// Ensure we return valid text if any choice is valid
+			if (evaluation && (evaluation.selectedText?.trim() || !anyValidChoice)) {
+				return evaluation
+			}
 		}
 
 		// Strategy 1: Full Team evaluation (if enabled and ReviewTeamService is available)
 		if (this.config.useFullTeam && this.reviewTeam) {
 			const evaluation = await this.evaluateWithFullTeam(question, choices, context)
-			if (evaluation) return evaluation
+			// Ensure we return valid text if any choice is valid
+			if (evaluation && (evaluation.selectedText?.trim() || !anyValidChoice)) {
+				return evaluation
+			}
 		}
 
 		// Strategy 2: Contextual analysis (if enabled)
 		if (this.config.useContextualAnalysis) {
 			const evaluation = this.evaluateContextually(question, choices, context)
-			if (evaluation) return evaluation
+			// Ensure we return valid text if any choice is valid
+			if (evaluation && (evaluation.selectedText?.trim() || !anyValidChoice)) {
+				return evaluation
+			}
 		}
 
 		// Strategy 3: Research (if enabled) — would spawn a subtask
@@ -137,7 +150,7 @@ export class QuestionEvaluatorService {
 			this.logger.appendLine("[QuestionEvaluator] Research mode enabled but subtask spawning not yet implemented")
 		}
 
-		// Final fallback: first choice
+		// Final fallback: first choice — resolveSelectedText already scans for non-empty
 		return {
 			question,
 			choices,

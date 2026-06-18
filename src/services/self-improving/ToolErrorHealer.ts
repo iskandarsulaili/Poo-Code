@@ -85,6 +85,12 @@ const TOOL_RESTRICTION_FIXES: Array<{
 			"File path restriction detected. Try using `read_file` and `search_files` for reading, or switch to a mode that has access to the target file paths.",
 		autoCorrectable: false,
 	},
+	{
+		pattern: /Unknown tool "sequentialthinking"/i,
+		suggestion:
+			"The 'sequentialthinking' tool is not available as a native tool. If you need to think step-by-step, you can: (1) Use `ask_followup_question` to work through reasoning with the user, (2) Use multiple `execute_command` calls with comments to reason step by step, (3) Just reason naturally in your response without a tool — you have built-in step-by-step reasoning capability.",
+		autoCorrectable: false,
+	},
 ]
 
 export class ToolErrorHealer {
@@ -334,6 +340,13 @@ export class ToolErrorHealer {
 			fix: best.fixStrategy,
 			autoCorrectable: this.config.autoCorrect && best.occurrences >= 2,
 		}
+	}
+
+	getAllowedToolSuggestion(toolName: string): string | null {
+		if (toolName === "sequentialthinking") {
+			return "The 'sequentialthinking' tool is not available as a native tool in this environment. Consider using MCP-based sequential thinking if available, or reason step-by-step naturally in your response."
+		}
+		return null
 	}
 
 	getStatus(): Record<string, any> {

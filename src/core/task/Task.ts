@@ -166,6 +166,14 @@ export interface TaskOptions extends CreateTaskOptions {
 }
 
 export class Task extends EventEmitter<TaskEvents> implements TaskLike {
+	/**
+	 * Wait for this task's execution loop to complete.
+	 * Resolves when the task finishes (attempt_completion, abort, or max requests).
+	 */
+	async waitForCompletion(): Promise<void> {
+		return this._completionPromise
+	}
+
 	readonly taskId: string
 	readonly rootTaskId?: string
 	readonly parentTaskId?: string
@@ -271,6 +279,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	 * @private
 	 */
 	private taskApiConfigReady: Promise<void>
+
+	/** Promise + resolver for waiting on task completion (used by parallel subtask executor). */
+	private _completionPromise: Promise<void>
+	private _resolveCompletion!: () => void
 
 	providerRef: WeakRef<ClineProvider>
 	private readonly globalStoragePath: string
@@ -451,6 +463,11 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		initialStatus,
 	}: TaskOptions) {
 		super()
+
+		// Initialize completion promise (resolved when task loop ends)
+		this._completionPromise = new Promise<void>((resolve) => {
+			this._resolveCompletion = resolve
+		})
 
 		if (startTask && !task && !images && !historyItem) {
 			throw new Error("Either historyItem or task/images must be provided")
@@ -1245,6 +1262,19 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 		} else if (approval.decision === "timeout") {
 			// Store the auto-approval timeout so it can be cancelled if user interacts
 			this.autoApprovalTimeoutRef = setTimeout(async () => {
+				// Helper: find the first non-empty suggestion from followUpData
+				const findNonEmptySuggestion = (
+					suggest?: Array<{ answer: string; mode?: string }>,
+				): string | undefined => {
+					if (!suggest) return undefined
+					for (const s of suggest) {
+						if (s?.answer && typeof s.answer === "string" && s.answer.trim().length > 0) {
+							return s.answer.trim()
+						}
+					}
+					return undefined
+				}
+
 				// Use QuestionEvaluatorService to pick the best choice when available
 				if (
 					this.questionEvaluator &&
@@ -1271,6 +1301,16 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 								this.autoApprovalTimeoutRef = undefined
 								return
 							}
+							// Fallback: find first non-empty suggestion
+							const validSuggestion = findNonEmptySuggestion(followUpData.suggest)
+							if (validSuggestion) {
+								console.warn(
+									`[Task] QuestionEvaluator returned empty, using first non-empty suggestion: "${validSuggestion.substring(0, 60)}..."`,
+								)
+								this.handleWebviewAskResponse("messageResponse", validSuggestion)
+								this.autoApprovalTimeoutRef = undefined
+								return
+							}
 							// Fallback to approval function
 							if (approval.fn) {
 								const { askResponse, text: responseText, images } = approval.fn()
@@ -1281,10 +1321,10 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 									return
 								}
 							}
-							this.logger?.warn?.(
-								"QuestionEvaluator returned empty response, falling back to user prompt",
-							)
-							this.handleWebviewAskResponse("ask", "")
+							console.warn("Auto-approval: all suggestions empty, prompting user")
+							// We must still handle this gracefully: fall back to first suggestion even if empty
+							// rather than sending nothing
+							this.handleWebviewAskResponse("messageResponse", followUpData.suggest[0]?.answer ?? "")
 							this.autoApprovalTimeoutRef = undefined
 							return
 						}
@@ -1296,8 +1336,8 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 				const { askResponse, text: responseText, images } = approval.fn()
 				if (!responseText || responseText.trim().length === 0) {
 					// Fallback: ask the user instead of sending empty response
-					this.logger?.warn?.("Auto-approval attempted to send empty response, falling back to user prompt")
-					this.handleWebviewAskResponse("ask", "")
+					console.warn("Auto-approval attempted to send empty response, falling back to user prompt")
+					this.handleWebviewAskResponse("ask" as any, "")
 					this.autoApprovalTimeoutRef = undefined
 					return
 				}
@@ -1428,9 +1468,9 @@ export class Task extends EventEmitter<TaskEvents> implements TaskLike {
 	handleWebviewAskResponse(askResponse: ClineAskResponse, text?: string, images?: string[]) {
 		// Final safety guard: never send empty messageResponse
 		if (askResponse === "messageResponse" && (!text || text.trim().length === 0)) {
-			this.logger?.warn?.("Blocked empty messageResponse in handleWebviewAskResponse")
-			askResponse = "ask"
-			text = "" // empty text routes to user prompt
+			console.warn("Blocked empty messageResponse in handleWebviewAskResponse")
+			askResponse = "ask" as any
+			text = "" // empty text
 		}
 
 		// Clear any pending auto-approval timeout when user responds
@@ -2546,28 +2586,38 @@ Choose an alternative approach now.]`
 
 		this.emit(RooCodeEventName.TaskStarted)
 
-		while (!this.abort) {
-			const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
-			includeFileDetails = false // We only need file details the first time.
+		try {
+			while (!this.abort) {
+				const didEndLoop = await this.recursivelyMakeClineRequests(nextUserContent, includeFileDetails)
+				includeFileDetails = false // We only need file details the first time.
 
-			// The way this agentic loop works is that cline will be given a
-			// task that he then calls tools to complete. Unless there's an
-			// attempt_completion call, we keep responding back to him with his
-			// tool's responses until he either attempt_completion or does not
-			// use anymore tools. If he does not use anymore tools, we ask him
-			// to consider if he's completed the task and then call
-			// attempt_completion, otherwise proceed with completing the task.
-			// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite
-			// requests, but Cline is prompted to finish the task as efficiently
-			// as he can.
+				// The way this agentic loop works is that cline will be given a
+				// task that he then calls tools to complete. Unless there's an
+				// attempt_completion call, we keep responding back to him with his
+				// tool's responses until he either attempt_completion or does not
+				// use anymore tools. If he does not use anymore tools, we ask him
+				// to consider if he's completed the task and then call
+				// attempt_completion, otherwise proceed with completing the task.
+				// There is a MAX_REQUESTS_PER_TASK limit to prevent infinite
+				// requests, but Cline is prompted to finish the task as efficiently
+				// as he can.
 
-			if (didEndLoop) {
-				// For now a task never 'completes'. This will only happen if
-				// the user hits max requests and denies resetting the count.
-				break
-			} else {
-				nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
+				if (didEndLoop) {
+					// For now a task never 'completes'. This will only happen if
+					// the user hits max requests and denies resetting the count.
+					break
+				} else {
+					nextUserContent = [{ type: "text", text: formatResponse.noToolsUsed() }]
+				}
 			}
+		} finally {
+			// Signal completion so parallel subtask executor can await it.
+			// CRITICAL: Must be in `finally` block to ensure it always resolves,
+			// even if the while loop exits due to error or early return.
+			// Without this, child tasks that fail their API call would never
+			// have their _completionPromise resolved, causing the parallel
+			// subtask executor to hang indefinitely.
+			this._resolveCompletion()
 		}
 	}
 
@@ -2648,7 +2698,7 @@ Choose an alternative approach now.]`
 				}
 
 				// Auto-recovery: continue despite consecutive mistakes instead of asking user
-				this.logger?.warn?.("Auto-recovery: continuing despite consecutive mistakes")
+				console.warn("Auto-recovery: continuing despite consecutive mistakes")
 				this.consecutiveMistakeCount = 0
 				// Inject context correction into conversation
 				const correctionPrompt = "Previous attempts encountered errors. Continuing with a different approach."

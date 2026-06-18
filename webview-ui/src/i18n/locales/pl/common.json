@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Własne",
 		"subtasks": "Podzadania"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Panel zadań równoległych",
+			"tab_subtasks": "Podzadania",
+			"tab_child_tasks": "Zadania potomne",
+			"tab_dag": "DAG",
+			"tab_logs": "Logi",
+			"no_subtasks": "Brak uruchomionych podzadań",
+			"no_child_tasks": "Brak uruchomionych zadań potomnych",
+			"agent_thoughts": "Myśli agenta",
+			"system_logs": "Logi systemowe"
+		},
+		"subtask_card": {
+			"status_label": "Status:",
+			"duration_label": "Czas:",
+			"deps_label": "Zależności:"
+		},
+		"intervention": {
+			"pause": "Wstrzymaj",
+			"resume": "Wznów",
+			"cancel": "Anuluj",
+			"retry": "Spróbuj ponownie",
+			"skip": "Pomiń",
+			"pause_title": "Wstrzymaj to podzadanie",
+			"resume_title": "Wznów to podzadanie",
+			"cancel_title": "Anuluj to podzadanie",
+			"retry_title": "Spróbuj ponownie tego podzadania",
+			"skip_title": "Pomiń to podzadanie"
+		},
+		"resume_panel": {
+			"title": "⚠ Wykryto przerwane zadania równoległe",
+			"description": "Następujące wykonania zadań równoległych zostały przerwane. Możesz je wznowić lub odrzucić.",
+			"resume_button": "Wznów",
+			"dismiss_button": "Odrzuć",
+			"status_prefix": "Status:",
+			"tasks_count": "{{total}} zadań ({{completed}} ukończonych, {{failed}} nieudanych)"
+		},
+		"detail_panel": {
+			"select_hint": "Wybierz podzadanie, aby wyświetlić szczegóły",
+			"mode_label": "Tryb:",
+			"status_label": "Status:",
+			"deps_label": "Zależności:",
+			"tokens_label": "Tokeny:",
+			"prompt_label": "Prompt",
+			"error_label": "Błąd",
+			"inputs_label": "Wejścia:",
+			"outputs_label": "Wyjścia:",
+			"no_deps": "brak"
+		},
+		"dag": {
+			"wave_label": "Fala {{number}}"
+		}
 	}
 }

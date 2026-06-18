@@ -33,6 +33,10 @@ describe("@roo-code/types/experiment", () => {
 			"recoveryContext",
 			"selfImprovingSpecializedSkills",
 			"taskPatternLearning",
+			"parallelExecution",
+			"structuredOutputParsing",
+			"dependencyGraph",
+			"multiRootWorkspace",
 		] as const
 
 		it("contains all expected experiment IDs", () => {

@@ -31,6 +31,11 @@ export const experimentIds = [
 	"recoveryContext",
 	"selfImprovingSpecializedSkills",
 	"taskPatternLearning",
+	"parallelExecution",
+	"structuredOutputParsing",
+	"dependencyGraph",
+	"multiRootWorkspace",
+	"parallelSubtask",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -99,6 +104,18 @@ export const experimentsSchema = z.object({
 	recoveryContext: z.boolean().optional(),
 	selfImprovingSpecializedSkills: z.boolean().optional(),
 	taskPatternLearning: z.boolean().optional(),
+	parallelExecution: z.boolean().optional(),
+	structuredOutputParsing: z.boolean().optional(),
+	dependencyGraph: z.boolean().optional(),
+	multiRootWorkspace: z.boolean().optional(),
+	parallelSubtask: z.boolean().optional(),
+
+	/**
+	 * Parallel subtask execution configuration.
+	 */
+	parallelSubtaskMaxParallel: z.number().int().min(1).optional(),
+	parallelSubtaskHeartbeatIntervalMs: z.number().int().min(1000).optional(),
+	parallelSubtaskLockTimeoutMs: z.number().int().min(1000).optional(),
 
 	/**
 	 * List of mode slugs that should skip code quality verification in AttemptCompletionTool.

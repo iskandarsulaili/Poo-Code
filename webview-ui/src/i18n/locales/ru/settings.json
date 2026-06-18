@@ -38,28 +38,28 @@
 		"slashCommands": "Слэш-команды",
 		"prompts": "Промпты",
 		"ui": "UI",
-		"experimental": "Экспериментальное",
+		"experimental": "Экспериментальные",
 		"language": "Язык",
 		"about": "О Zoo Code",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "Настройте поставщиков API, модели и учетные данные для доступа к моделям ИИ.",
+		"modesDescription": "Определите пользовательские режимы с конкретными инструкциями, инструментами и конфигурациями моделей для разных задач.",
+		"mcpDescription": "Управляйте серверами MCP, которые предоставляют агенту дополнительные инструменты и ресурсы.",
+		"worktreesDescription": "Управляйте Git worktree для параллельной разработки в нескольких ветках одновременно.",
+		"skillsDescription": "Создавайте и управляйте переиспользуемыми навыками, которые инкапсулируют контекстные инструкции и рабочие процессы.",
+		"autoApproveDescription": "Настройте, какие действия агент может выполнять автоматически без запроса ручного одобрения.",
+		"checkpointsDescription": "Настройте автоматические контрольные точки во время выполнения задач для легкого просмотра и отката.",
+		"notificationsDescription": "Настройте звуковые эффекты и преобразование текста в речь для уведомлений и событий задач.",
+		"contextManagementDescription": "Контролируйте, какая информация включается в контекстное окно ИИ, влияя на использование токенов и качество ответов.",
+		"terminalDescription": "Настройте параметры интеграции терминала, включая интеграцию оболочки, лимиты вывода и поведение выполнения команд.",
+		"slashCommandsDescription": "Создавайте переиспользуемые ярлыки слеш-команд для часто используемых подсказок и рабочих процессов.",
+		"promptsDescription": "Настройте вспомогательные подсказки, используемые для быстрых действий, таких как улучшение подсказок, объяснение кода и исправление проблем.",
+		"uiDescription": "Настройте поведение пользовательского интерфейса, включая отображение сообщений и предпочтения ввода.",
+		"experimentalDescription": "Включите и настройте экспериментальные функции, находящиеся в активной разработке. Они могут быть изменены или удалены без уведомления.",
+		"languageDescription": "Измените язык отображения интерфейса расширения.",
+		"aboutDescription": "Просмотрите информацию о версии, ресурсы сообщества, настройки телеметрии и параметры отладки.",
+		"kaizenDescription": "Настройте циклы непрерывного улучшения, которые автоматически улучшают вашу кодовую базу со временем."
 	},
 	"about": {
 		"bugReport": {
@@ -913,49 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "Включает фоновое обучение на основе результатов задач для улучшения руководства по подсказкам, предпочтений инструментов и предотвращения ошибок с течением времени.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "Настройте бэкенды памяти и параметры сохранения состояния агента между сессиями.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "Экспериментальные функции UI и редактирования файлов, которые меняют способ взаимодействия агента с вашим рабочим пространством.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "Сервисы предотвращения ошибок, отказоустойчивости и надежности для операций агента производственного уровня.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "Дополнительные интеграции инструментов и возможности для расширения функциональности агента."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "При включении Self-Improving может превращать повторяющиеся успешные рабочие процессы в навыки проекта и автоматически обновлять навыки, созданные агентом."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "Включите полностью автономный режим самосовершенствования с автоматическим восстановлением и автоматическим созданием режимов"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "Включите многогаентный конвейер проверки (Новатор, Оппозиционер, Адвокат Дьявола, Решающий)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "Включите автоматическое одобрение команд без подтверждения пользователя"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "Позволяет системе автоматически создавать и уточнять специализированные навыки на основе шаблонов задач и частоты использования, повышая эффективность повторяющихся задач."
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "При включении система учится на выполненных задачах, записывая шаблоны, использование инструментов и результаты. Эти шаблоны используются для предложения улучшений для аналогичных будущих задач."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "Включить проверку",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "При включении система автоматически генерирует контекст восстановления после ошибок инструментов, внедряя рекомендации в следующую подсказку модели, чтобы помочь модели восстановиться после сбоев."
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "Включите параллельное выполнение подзадач с разрешением зависимостей на основе DAG, планированием с учетом блокировок и коммуникацией через общую доску",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Включает параллельное выполнение команд с разрешением зависимостей на основе DAG и планированием с учетом блокировок"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Включает структурированный разбор вывода для повышения надежности при обработке ответов модели"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Включает анализ графа зависимостей для интеллектуального упорядочивания задач и планирования параллельного выполнения"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Включает поддержку многокорневых рабочих областей для одновременной работы с несколькими каталогами проектов"
 		}
 	},
 	"promptCaching": {

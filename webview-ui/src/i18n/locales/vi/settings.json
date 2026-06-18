@@ -43,23 +43,23 @@
 		"about": "Giới thiệu",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "Cấu hình nhà cung cấp API, mô hình và thông tin xác thực để truy cập mô hình AI.",
+		"modesDescription": "Xác định chế độ tùy chỉnh với hướng dẫn, công cụ và cấu hình mô hình cụ thể cho các tác vụ khác nhau.",
+		"mcpDescription": "Quản lý máy chủ MCP cung cấp các công cụ và tài nguyên bổ sung cho tác nhân.",
+		"worktreesDescription": "Quản lý worktree Git để phát triển song song trên nhiều nhánh cùng lúc.",
+		"skillsDescription": "Tạo và quản lý các kỹ năng có thể tái sử dụng, đóng gói các hướng dẫn theo ngữ cảnh và quy trình làm việc.",
+		"autoApproveDescription": "Cấu hình những hành động mà tác nhân có thể tự động thực hiện mà không cần phê duyệt thủ công.",
+		"checkpointsDescription": "Cấu hình các điểm kiểm tra tự động trong quá trình thực thi tác vụ để dễ dàng xem xét và khôi phục.",
+		"notificationsDescription": "Cấu hình hiệu ứng âm thanh và chuyển văn bản thành giọng nói cho thông báo và sự kiện tác vụ.",
+		"contextManagementDescription": "Kiểm soát thông tin nào được đưa vào cửa sổ ngữ cảnh của AI, ảnh hưởng đến việc sử dụng token và chất lượng phản hồi.",
+		"terminalDescription": "Cấu hình cài đặt tích hợp thiết bị đầu cuối bao gồm tích hợp shell, giới hạn đầu ra và hành vi thực thi lệnh.",
+		"slashCommandsDescription": "Tạo lối tắt lệnh gạch chéo có thể tái sử dụng cho các lời nhắc và quy trình làm việc thường dùng.",
+		"promptsDescription": "Cấu hình các lời nhắc hỗ trợ được sử dụng cho các hành động nhanh như cải thiện lời nhắc, giải thích mã và sửa lỗi.",
+		"uiDescription": "Tùy chỉnh hành vi giao diện người dùng bao gồm hiển thị tin nhắn và tùy chọn đầu vào.",
+		"experimentalDescription": "Bật và cấu hình các tính năng thử nghiệm đang trong quá trình phát triển tích cực. Các tính năng này có thể thay đổi hoặc bị xóa mà không cần thông báo.",
+		"languageDescription": "Thay đổi ngôn ngữ hiển thị cho giao diện mở rộng.",
+		"aboutDescription": "Xem thông tin phiên bản, tài nguyên cộng đồng, cài đặt telemetry và tùy chọn gỡ lỗi.",
+		"kaizenDescription": "Cấu hình chu kỳ cải tiến liên tục tự động nâng cao cơ sở mã của bạn theo thời gian."
 	},
 	"about": {
 		"bugReport": {
@@ -913,49 +913,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "Bật học nền từ kết quả tác vụ để cải thiện hướng dẫn lời nhắc, sở thích công cụ và tránh lỗi theo thời gian.",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "Cấu hình back-end bộ nhớ và cài đặt duy trì trạng thái tác nhân giữa các phiên.",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "Các tính năng UI và chỉnh sửa tệp thử nghiệm thay đổi cách tác nhân tương tác với không gian làm việc của bạn.",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "Dịch vụ ngăn ngừa lỗi, khả năng phục hồi và độ tin cậy cho các hoạt động tác nhân cấp sản xuất.",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "Tích hợp công cụ bổ sung và khả năng mở rộng chức năng tác nhân."
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "Khi được bật, Self-Improving có thể biến các quy trình làm việc thành công lặp đi lặp lại thành kỹ năng dự án và giữ cho các kỹ năng do tác nhân tạo ra được cập nhật tự động."
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "Bật chế độ tự cải thiện hoàn toàn tự động với khả năng tự phục hồi và tự động tạo chế độ"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "Bật quy trình đánh giá đa tác nhân (Người đổi mới, Người phản đối, Người biện hộ cho quỷ dữ, Người quyết định)"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "Bật tự động phê duyệt cho các lệnh mà không cần xác nhận của người dùng"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "Cho phép hệ thống tự động tạo và tinh chỉnh các kỹ năng chuyên biệt dựa trên mẫu tác vụ và tần suất sử dụng, cải thiện hiệu quả cho các tác vụ lặp đi lặp lại."
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "Khi được bật, hệ thống học hỏi từ các tác vụ đã hoàn thành bằng cách ghi lại các mẫu, cách sử dụng công cụ và kết quả. Các mẫu này được sử dụng để đề xuất cải tiến cho các tác vụ tương tự trong tương lai."
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "Bật xác minh",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "Khi được bật, hệ thống tự động tạo ngữ cảnh phục hồi sau lỗi công cụ, đưa hướng dẫn vào lời nhắc mô hình tiếp theo để giúp mô hình phục hồi sau lỗi."
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "Bật thực thi song song các tác vụ con với giải quyết phụ thuộc dựa trên DAG, lập lịch nhận biết khóa và giao tiếp bảng đen",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "Bật thực thi song song các lệnh với giải quyết phụ thuộc dựa trên DAG và lập lịch nhận biết khóa"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "Bật phân tích cú pháp đầu ra có cấu trúc để cải thiện độ tin cậy khi xử lý phản hồi của mô hình"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "Bật phân tích đồ thị phụ thuộc để sắp xếp tác vụ thông minh và lập kế hoạch thực thi song song"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "Bật hỗ trợ không gian làm việc đa gốc để làm việc với nhiều thư mục dự án cùng lúc"
 		}
 	},
 	"promptCaching": {

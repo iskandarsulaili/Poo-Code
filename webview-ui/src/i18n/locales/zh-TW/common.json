@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "自身",
 		"subtasks": "子工作"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "並行任務面板",
+			"tab_subtasks": "子任務",
+			"tab_child_tasks": "下級任務",
+			"tab_dag": "DAG",
+			"tab_logs": "日誌",
+			"no_subtasks": "沒有正在執行的子任務",
+			"no_child_tasks": "沒有正在執行的下級任務",
+			"agent_thoughts": "Agent 思考",
+			"system_logs": "系統日誌"
+		},
+		"subtask_card": {
+			"status_label": "狀態:",
+			"duration_label": "時長:",
+			"deps_label": "依賴:"
+		},
+		"intervention": {
+			"pause": "暫停",
+			"resume": "繼續",
+			"cancel": "取消",
+			"retry": "重試",
+			"skip": "跳過",
+			"pause_title": "暫停此子任務",
+			"resume_title": "繼續此子任務",
+			"cancel_title": "取消此子任務",
+			"retry_title": "重試此子任務",
+			"skip_title": "跳過此子任務"
+		},
+		"resume_panel": {
+			"title": "⚠ 檢測到中斷的並行任務",
+			"description": "以下並行任務執行已被中斷。您可以繼續執行或忽略它們。",
+			"resume_button": "繼續",
+			"dismiss_button": "忽略",
+			"status_prefix": "狀態:",
+			"tasks_count": "{{total}} 個任務 ({{completed}} 已完成, {{failed}} 失敗)"
+		},
+		"detail_panel": {
+			"select_hint": "選擇一個子任務查看詳情",
+			"mode_label": "模式:",
+			"status_label": "狀態:",
+			"deps_label": "依賴:",
+			"tokens_label": "Token:",
+			"prompt_label": "提示詞",
+			"error_label": "錯誤",
+			"inputs_label": "輸入:",
+			"outputs_label": "輸出:",
+			"no_deps": "無"
+		},
+		"dag": {
+			"wave_label": "第 {{number}} 波"
+		}
 	}
 }

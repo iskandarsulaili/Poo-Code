@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Eigen",
 		"subtasks": "Unteraufgaben"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Parallel-Dashboard",
+			"tab_subtasks": "Teilaufgaben",
+			"tab_child_tasks": "Unteraufgaben",
+			"tab_dag": "DAG",
+			"tab_logs": "Protokolle",
+			"no_subtasks": "Keine Teilaufgaben aktiv",
+			"no_child_tasks": "Keine Unteraufgaben aktiv",
+			"agent_thoughts": "Agent-Gedanken",
+			"system_logs": "Systemprotokolle"
+		},
+		"subtask_card": {
+			"status_label": "Status:",
+			"duration_label": "Dauer:",
+			"deps_label": "Abhängigkeiten:"
+		},
+		"intervention": {
+			"pause": "Pause",
+			"resume": "Fortsetzen",
+			"cancel": "Abbrechen",
+			"retry": "Wiederholen",
+			"skip": "Überspringen",
+			"pause_title": "Diese Teilaufgabe pausieren",
+			"resume_title": "Diese Teilaufgabe fortsetzen",
+			"cancel_title": "Diese Teilaufgabe abbrechen",
+			"retry_title": "Diese Teilaufgabe wiederholen",
+			"skip_title": "Diese Teilaufgabe überspringen"
+		},
+		"resume_panel": {
+			"title": "⚠ Unterbrochene parallele Aufgaben erkannt",
+			"description": "Die folgenden parallelen Aufgaben wurden unterbrochen. Du kannst sie fortsetzen oder verwerfen.",
+			"resume_button": "Fortsetzen",
+			"dismiss_button": "Verwerfen",
+			"status_prefix": "Status:",
+			"tasks_count": "{{total}} Aufgaben ({{completed}} erledigt, {{failed}} fehlgeschlagen)"
+		},
+		"detail_panel": {
+			"select_hint": "Wähle eine Teilaufgabe aus, um Details anzuzeigen",
+			"mode_label": "Modus:",
+			"status_label": "Status:",
+			"deps_label": "Abhängigkeiten:",
+			"tokens_label": "Token:",
+			"prompt_label": "Prompt",
+			"error_label": "Fehler",
+			"inputs_label": "Eingaben:",
+			"outputs_label": "Ausgaben:",
+			"no_deps": "keine"
+		},
+		"dag": {
+			"wave_label": "Welle {{number}}"
+		}
 	}
 }

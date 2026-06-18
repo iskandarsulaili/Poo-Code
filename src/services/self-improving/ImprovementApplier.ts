@@ -411,7 +411,10 @@ export class ImprovementApplier {
 	}
 
 	private buildWorkflowSkillName(toolNames: string[]): string {
-		const name = `workflow-${toolNames
+		// Limit to at most 3 tool names to prevent excessively long names
+		// (buildSpecializedSkillName uses slice(0, 2) — workflows can use slightly more)
+		const upTo3Tools = toolNames.slice(0, 3)
+		const name = `workflow-${upTo3Tools
 			.map((t) => t.toLowerCase().replace(/[^a-z0-9]/g, "-"))
 			.sort()
 			.join("-")}`
@@ -419,16 +422,27 @@ export class ImprovementApplier {
 	}
 
 	private truncateSkillName(name: string): string {
-		if (name.length <= SKILL_NAME_MAX_LENGTH) {
-			return name
+		// Normalize any consecutive hyphens first (from multi-replace in tool name sanitization)
+		let normalized = name.replace(/--+/g, "-")
+		normalized = normalized.replace(/^-+|-+$/g, "") // strip leading/trailing hyphens
+		if (normalized.length <= SKILL_NAME_MAX_LENGTH) {
+			// Re-validate after normalization
+			const validation = validateSkillName(normalized)
+			if (validation.valid) {
+				return normalized
+			}
+			// If normalization broke the format (e.g., empty after stripping), fall through to truncation
+			if (normalized.length === 0) {
+				normalized = name // restore original for hashing
+			}
 		}
 		// DJB2 hash for deterministic 8-char hex suffix
 		let hash = 5381
-		for (let i = 0; i < name.length; i++) {
-			hash = ((hash << 5) + hash + name.charCodeAt(i)) | 0
+		for (let i = 0; i < normalized.length; i++) {
+			hash = ((hash << 5) + hash + normalized.charCodeAt(i)) | 0
 		}
 		const hashHex = (hash >>> 0).toString(16).padStart(8, "0")
-		let truncated = name.slice(0, SKILL_NAME_MAX_LENGTH - 9)
+		let truncated = normalized.slice(0, SKILL_NAME_MAX_LENGTH - 9)
 		truncated = truncated.replace(/-+$/, "") // strip trailing hyphens
 		const result = `${truncated}-${hashHex}`
 		// Validate the result — if still invalid, fall back to hash-only name

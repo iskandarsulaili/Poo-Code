@@ -23,16 +23,35 @@ export interface ProjectProfile {
 	detectedFrom: string | null
 }
 
+/** Result of running a single verification gate (build, lint, types, tests) */
+export interface GateResult {
+	name: string
+	passed: boolean
+	output?: string
+	error?: string
+	durationMs: number
+	/** Number of warnings detected in stderr (0 if none or not parsed) */
+	warnings: number
+	/** Number of errors detected in stderr (0 if none or not parsed) */
+	errors: number
+	/** Truncated summary of stderr content for display */
+	stderrSummary?: string
+	/** Strictness level used for this gate */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
+	/** Whether the gate was skipped (e.g., no tooling detected, ENOENT) */
+	skipped?: boolean
+	/** Reason the gate was skipped */
+	skipReason?: string
+}
+
 export interface VerificationResult {
 	passed: boolean
-	gates: Array<{
-		name: string
-		passed: boolean
-		output?: string
-		error?: string
-		durationMs: number
-	}>
+	gates: GateResult[]
 	summary: string
+	/** Strictness level used for this verification run */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
+	/** Whether all gates were skipped (no tooling detected) */
+	allSkipped?: boolean
 }
 
 export interface VerificationConfig {
@@ -58,15 +77,31 @@ export interface VerificationConfig {
 	gateTimeoutMs: number
 	/** Whether verification is mandatory (blocks completion) */
 	mandatory: boolean
+	/**
+	 * Strictness level for gate validation.
+	 * - "lenient": exit code only (current behavior)
+	 * - "moderate": exit code + stderr parsed for warnings (log but don't fail)
+	 * - "strict": exit code + fail if stderr has error content + warn on warnings
+	 * - "enterprise": exit code + zero warnings + content validation + coverage check
+	 * @default "moderate"
+	 */
+	strictness: "lenient" | "moderate" | "strict" | "enterprise"
+	/** Max allowed warnings before gate fails (0-100, only relevant for strict/enterprise). 0 = unlimited. */
+	maxWarnings?: number
+	/** Minimum test coverage percentage (0-100, only relevant for enterprise). 0 = no check. */
+	testCoverageThreshold?: number
 }
 
 const DEFAULT_CONFIG: VerificationConfig = {
 	checkBuild: false,
-	checkLint: false,
-	checkTypes: false,
+	checkLint: true,
+	checkTypes: true,
 	checkTests: false,
 	gateTimeoutMs: 60_000,
 	mandatory: true,
+	strictness: "moderate",
+	maxWarnings: 0,
+	testCoverageThreshold: 0,
 }
 
 /**
@@ -374,12 +409,164 @@ async function hasScriptPython(cwd: string, _scriptName: string): Promise<boolea
 	}
 }
 
+/**
+ * Check if a directory is markdown-only (contains only .md files and/or
+ * standard docs subdirectories like locales/, docs/).
+ */
+async function isMarkdownOnly(dir: string): Promise<boolean> {
+	try {
+		const entries = await fs.readdir(dir)
+		if (entries.length === 0) return true
+		let hasNonMdFile = false
+		for (const entry of entries) {
+			if (entry.startsWith(".")) continue // skip hidden files
+			if (entry.endsWith(".md")) continue
+			try {
+				const stat = await fs.stat(path.join(dir, entry))
+				if (stat.isDirectory()) {
+					// Docs subdirectories don't count as code
+					const dirName = entry.toLowerCase()
+					if (dirName === "locales" || dirName === "docs" || dirName === "documentation") continue
+				}
+			} catch {
+				// If we can't stat, treat it as non-md (likely a code artifact)
+			}
+			hasNonMdFile = true
+			break
+		}
+		return !hasNonMdFile
+	} catch {
+		return false // can't read dir → assume not markdown-only
+	}
+}
+
 export class VerificationEngine {
 	private config: VerificationConfig
 	private lastVerifyAt?: number
 	private lastResult?: VerificationResult
 	private enabled: boolean
 	private autoProfiled: ProjectProfile | null = null
+
+	/**
+	 * In-memory cache for isProjectWithTooling results per directory.
+	 * Prevents repeated fs reads for the same cwd within a session.
+	 * Cleared on process restart (not persisted).
+	 */
+	private static toolingCache = new Map<string, boolean | null>()
+
+	/**
+	 * Lightweight check: does the directory have project tooling?
+	 * Looks for a manifest with actual build/lint/test scripts/commands.
+	 * Results are cached per cwd to avoid repeated fs checks.
+	 * Returns: true = has tooling, false = definitively no tooling, null = cannot determine
+	 */
+	static async isProjectWithTooling(dir: string): Promise<boolean | null> {
+		// Check cache first
+		const cached = VerificationEngine.toolingCache.get(dir)
+		if (cached !== undefined) return cached
+
+		const result = await VerificationEngine.uncachedIsProjectWithTooling(dir)
+		VerificationEngine.toolingCache.set(dir, result)
+		return result
+	}
+
+	/**
+	 * Clear the tooling cache entirely (useful in tests).
+	 */
+	static clearToolingCache(): void {
+		VerificationEngine.toolingCache.clear()
+	}
+
+	/**
+	 * Uncached implementation of isProjectWithTooling.
+	 */
+	private static async uncachedIsProjectWithTooling(dir: string): Promise<boolean | null> {
+		try {
+			// First verify the directory actually exists and is accessible
+			try {
+				await fs.access(dir)
+			} catch {
+				return null // dir doesn't exist or can't be accessed → unknown
+			}
+
+			let entries: string[]
+			try {
+				entries = await fs.readdir(dir)
+			} catch {
+				return null // can't read dir → unknown
+			}
+
+			// Empty directory → no tooling
+			if (entries.length === 0) return false
+
+			// Check package.json for scripts
+			if (entries.includes("package.json")) {
+				try {
+					const content = await fs.readFile(path.join(dir, "package.json"), "utf-8")
+					const pkg = JSON.parse(content)
+					const scripts = pkg.scripts || {}
+					if (scripts.build || scripts.lint || scripts.test || scripts.typecheck) {
+						return true
+					}
+					// package.json exists but has no relevant scripts → no tooling
+				} catch {
+					// invalid JSON → treat as no tooling
+				}
+			}
+
+			// Check other manifest files known to have tooling
+			const toolingManifests = [
+				"Cargo.toml",
+				"go.mod",
+				"build.gradle",
+				"build.gradle.kts",
+				"pyproject.toml",
+				"Gemfile",
+				"mix.exs",
+				"deno.json",
+				"deno.jsonc",
+				"build.zig",
+				"Makefile",
+			] as const
+
+			for (const manifest of toolingManifests) {
+				if (entries.includes(manifest)) {
+					return true // manifest exists → project has tooling
+				}
+			}
+
+			// Check for source code files that indicate a real project
+			const codeExtensions = [
+				".ts",
+				".tsx",
+				".js",
+				".jsx",
+				".rs",
+				".py",
+				".go",
+				".java",
+				".kt",
+				".kts",
+				".rb",
+				".cs",
+				".zig",
+				".ex",
+				".exs",
+			]
+			for (const entry of entries) {
+				if (entry.startsWith(".")) continue
+				const ext = path.extname(entry)
+				if (codeExtensions.includes(ext)) {
+					return true
+				}
+			}
+
+			// Directory contents found but none indicate tooling
+			return false
+		} catch {
+			return null // unexpected error → unknown
+		}
+	}
 
 	constructor(
 		private readonly logger?: Logger,
@@ -702,42 +889,140 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	}
 
 	async verify(): Promise<VerificationResult> {
-		const gates: VerificationResult["gates"] = []
+		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
+		const gates: GateResult[] = []
+		let strictness = this.config.strictness
+
+		// Check if the working directory has actual project tooling.
+		// Only consider the result authoritative when we can read the directory.
+		// null = unknown (dir unreadable) — proceed with gates
+		// false = definitively no tooling — skip gates
+		// true = has tooling — run gates normally
+		let hasTooling: boolean | null = null
+		if (this.config.cwd) {
+			hasTooling = await VerificationEngine.isProjectWithTooling(cwd)
+		}
+
+		// Check for markdown-only directories when tooling is absent
+		const isMarkdown = hasTooling === false ? await isMarkdownOnly(cwd) : false
+
+		// For markdown-only directories, auto-downgrade to lenient
+		if (isMarkdown) {
+			strictness = "lenient"
+			this.logger?.appendLine(
+				`[VerificationEngine] Markdown-only directory detected. Auto-downgrading to lenient strictness.`,
+			)
+		}
+
+		// Only skip gates when we're CERTAIN there's no tooling (hasTooling === false).
+		// When hasTooling is null (unknown/unreadable dir) or true, run gates normally.
+		// This prevents false-positive skips when the check can't determine tooling.
+		if (hasTooling === false) {
+			const reason = isMarkdown
+				? "markdown-only directory — no project tooling detected"
+				: "no project tooling detected"
+			this.logger?.appendLine(`[VerificationEngine] ${reason}. All gates skipped.`)
+
+			const skippedGates: GateResult[] = []
+
+			if (this.config.checkBuild) {
+				skippedGates.push(this.makeSkippedGate("build", reason, strictness))
+			}
+			if (this.config.checkLint) {
+				skippedGates.push(this.makeSkippedGate("lint", reason, strictness))
+			}
+			if (this.config.checkTypes) {
+				skippedGates.push(this.makeSkippedGate("type-check", reason, strictness))
+			}
+			if (this.config.checkTests) {
+				skippedGates.push(this.makeSkippedGate("tests", reason, strictness))
+			}
+
+			const allSkipped = true
+			const summary = `All verification gates skipped [${strictness}]: ${reason}`
+			this.logger?.appendLine(`[VerificationEngine] ${summary}`)
+			this.lastVerifyAt = Date.now()
+			this.lastResult = { passed: true, gates: skippedGates, summary, strictness, allSkipped }
+			return { passed: true, gates: skippedGates, summary, strictness, allSkipped }
+		}
+
+		// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
+		const stripCd = (cmd: string | undefined): string | undefined => {
+			if (!cmd) return cmd
+			const trimmed = cmd.trim()
+			if (trimmed === "cd") return undefined
+			return cmd
+		}
 
 		if (this.config.checkBuild && this.config.buildCommand) {
-			gates.push(await this.runGate("build", this.config.buildCommand))
+			const cmd = stripCd(this.config.buildCommand)
+			if (cmd) gates.push(await this.runGate("build", cmd, strictness))
 		}
 
 		if (this.config.checkLint && this.config.lintCommand) {
-			gates.push(await this.runGate("lint", this.config.lintCommand))
+			const cmd = stripCd(this.config.lintCommand)
+			if (cmd) gates.push(await this.runGate("lint", cmd, strictness))
 		}
 
 		if (this.config.checkTypes && this.config.typeCheckCommand) {
-			gates.push(await this.runGate("type-check", this.config.typeCheckCommand))
+			const cmd = stripCd(this.config.typeCheckCommand)
+			if (cmd) gates.push(await this.runGate("type-check", cmd, strictness))
 		}
 
 		if (this.config.checkTests && this.config.testCommand) {
-			gates.push(await this.runGate("tests", this.config.testCommand))
+			const cmd = stripCd(this.config.testCommand)
+			if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
 		}
 
-		const passed = gates.every((g) => g.passed)
-		const failedGates = gates.filter((g) => !g.passed)
+		const passed = gates.every((g) => g.passed || g.skipped)
+		const failedGates = gates.filter((g) => !g.passed && !g.skipped)
+		const skippedGates = gates.filter((g) => g.skipped)
+		const allSkipped = gates.length > 0 && gates.every((g) => g.skipped)
+		const totalWarnings = gates.reduce((sum, g) => sum + g.warnings, 0)
+		const totalErrors = gates.reduce((sum, g) => sum + g.errors, 0)
 
 		let summary: string
 		if (gates.length === 0) {
-			summary = "No verification gates configured"
+			summary = `No verification gates configured [${strictness}]`
+		} else if (allSkipped) {
+			summary = `All ${gates.length} verification gates skipped [${strictness}]: no tooling detected`
 		} else if (passed) {
-			summary = `All ${gates.length} verification gates passed`
+			const skippedNote = skippedGates.length > 0 ? ` (${skippedGates.length} skipped)` : ""
+			const warningSuffix =
+				totalWarnings > 0 ? ` (${totalWarnings} warning${totalWarnings !== 1 ? "s" : ""})` : ""
+			const errorSuffix = totalErrors > 0 ? ` (${totalErrors} error${totalErrors !== 1 ? "s" : ""} detected)` : ""
+			summary = `All ${gates.length} verification gates passed [${strictness}]${skippedNote}${warningSuffix}${errorSuffix}`
 		} else {
-			summary = `${failedGates.length}/${gates.length} gates failed: ${failedGates.map((g) => g.name).join(", ")}`
+			const summaryParts = failedGates.map((g) => {
+				const extra =
+					g.warnings > 0 ? ` (${g.warnings} warnings${g.errors > 0 ? `, ${g.errors} errors` : ""})` : ""
+				return `${g.name}${extra}`
+			})
+			summary = `${failedGates.length}/${gates.length} gates failed [${strictness}]: ${summaryParts.join(", ")}`
 		}
 
 		this.logger?.appendLine(`[VerificationEngine] ${summary}`)
 
 		this.lastVerifyAt = Date.now()
-		this.lastResult = { passed, gates, summary }
+		this.lastResult = { passed, gates, summary, strictness, allSkipped }
 
-		return { passed, gates, summary }
+		return { passed, gates, summary, strictness, allSkipped }
+	}
+
+	/**
+	 * Create a skipped gate result.
+	 */
+	private makeSkippedGate(name: string, reason: string, strictness: GateResult["strictness"]): GateResult {
+		return {
+			name,
+			passed: true,
+			durationMs: 0,
+			warnings: 0,
+			errors: 0,
+			strictness,
+			skipped: true,
+			skipReason: reason,
+		}
 	}
 
 	/**
@@ -806,39 +1091,261 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		return undefined
 	}
 
-	private async runGate(name: string, command: string): Promise<VerificationResult["gates"][0]> {
+	private async runGate(
+		name: string,
+		command: string,
+		effectiveStrictness?: "lenient" | "moderate" | "strict" | "enterprise",
+	): Promise<GateResult> {
 		const start = Date.now()
+		const strictness = effectiveStrictness ?? this.config.strictness
 
-		// Run gate with auto-discovered cwd
+		// Handle empty command gracefully
+		if (!command || command.trim().length === 0) {
+			const durationMs = Date.now() - start
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "${name}" skipped: empty command in this project context`,
+			)
+			return {
+				name,
+				passed: true,
+				durationMs,
+				warnings: 0,
+				errors: 0,
+				strictness,
+				skipped: true,
+				skipReason: "empty command in this project context",
+			}
+		}
+
 		try {
 			const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
 			const resolvedCwd = cwd
 
-			// Use dynamic import for child_process
-			const { execSync } = await import("child_process")
+			const { spawnSync } = await import("child_process")
+			const cmdParts = command.split(/\s+/)
+			const execName = cmdParts[0]
+			const execArgs = cmdParts.slice(1)
 
-			const output = execSync(command, {
+			// `cd` is a shell built-in — not a binary. spawnSync already uses
+			// the resolved cwd, so a bare `cd` command is redundant and would
+			// fail with spawnSync ENOENT. Skip the gate gracefully.
+			if (execName === "cd") {
+				const durationMs = Date.now() - start
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "${name}" skipped: "cd" is a shell built-in; spawnSync already uses resolved cwd`,
+				)
+				return {
+					name,
+					passed: true,
+					durationMs,
+					warnings: 0,
+					errors: 0,
+					strictness,
+					skipped: true,
+					skipReason: `"cd" is a shell built-in; spawnSync already handles cwd`,
+				}
+			}
+
+			const result = spawnSync(execName, execArgs, {
 				cwd: resolvedCwd,
 				timeout: this.config.gateTimeoutMs,
 				encoding: "utf-8",
 				stdio: ["pipe", "pipe", "pipe"],
 			})
 
+			if (result.error) {
+				// ENOENT or similar — command not found, treat as SKIP not FAIL
+				const nodeErr = result.error as NodeJS.ErrnoException
+				if (nodeErr.code === "ENOENT" || result.status === 127) {
+					const durationMs = Date.now() - start
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "${name}" skipped: command not found in this project context`,
+					)
+					return {
+						name,
+						passed: true,
+						durationMs,
+						warnings: 0,
+						errors: 0,
+						strictness,
+						skipped: true,
+						skipReason: `command not found: ${execName}`,
+					}
+				}
+				throw result.error
+			}
+
+			// Content analysis: parse stderr for warnings/errors even on exit code 0
+			const cmdStderr = result.stderr || ""
+			const { warnings, errors, stderrSummary } = parseStderr(cmdStderr)
+			const output = result.stdout || ""
 			const durationMs = Date.now() - start
-			this.logger?.appendLine(`[VerificationEngine] Gate "${name}" passed (${durationMs}ms)`)
-			return { name, passed: true, output: output.slice(0, 1000), durationMs }
+
+			// --- Strictness enforcement ---
+			if (strictness === "enterprise") {
+				const maxWarnings = this.config.maxWarnings ?? 0
+				if (warnings > maxWarnings || errors > 0) {
+					const reason =
+						errors > 0
+							? `${errors} error${errors !== 1 ? "s" : ""} detected`
+							: `${warnings} warning${warnings !== 1 ? "s" : ""} exceeds max allowed (${maxWarnings})`
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "${name}" FAILED [enterprise] (${durationMs}ms): ${reason}`,
+					)
+					return {
+						name,
+						passed: false,
+						error: `[enterprise] ${reason}:\n${stderrSummary.slice(0, 500)}`,
+						output: output.slice(0, 1000),
+						durationMs,
+						warnings,
+						errors,
+						stderrSummary,
+						strictness,
+					}
+				}
+			}
+
+			if (strictness === "strict") {
+				if (errors > 0 || result.status !== 0) {
+					const reason =
+						errors > 0 ? `${errors} error${errors !== 1 ? "s" : ""} detected` : `Exit code ${result.status}`
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "${name}" FAILED [strict] (${durationMs}ms): ${reason}`,
+					)
+					return {
+						name,
+						passed: false,
+						error: `[strict] ${reason}:\n${stderrSummary.slice(0, 500)}`,
+						output: output.slice(0, 1000),
+						durationMs,
+						warnings,
+						errors,
+						stderrSummary,
+						strictness,
+					}
+				}
+			}
+
+			if (result.status !== 0) {
+				const err = new Error(result.stderr || `Exit code ${result.status}`)
+				;(err as any).stderr = result.stderr
+				;(err as any).stdout = result.stdout
+				throw err
+			}
+
+			const warningNote = warnings > 0 ? ` (${warnings} warning${warnings !== 1 ? "s" : ""})` : ""
+			const errorNote = errors > 0 ? ` (${errors} error${errors !== 1 ? "s" : ""})` : ""
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "${name}" PASSED [${strictness}] (${durationMs}ms)${warningNote}${errorNote}`,
+			)
+			return {
+				name,
+				passed: true,
+				output: output.slice(0, 1000),
+				durationMs,
+				warnings,
+				errors,
+				stderrSummary,
+				strictness,
+			}
 		} catch (error: any) {
 			const durationMs = Date.now() - start
+			const errStderr = error?.stderr || ""
+			const { warnings, errors, stderrSummary } = parseStderr(errStderr)
 			const errorMsg = error?.stderr || error?.stdout || error?.message || String(error)
+
+			// Check for ENOENT or status 127 in catch block too (for non-spawnSync errors)
+			if (
+				error?.code === "ENOENT" ||
+				error?.status === 127 ||
+				(errorMsg &&
+					(errorMsg.includes("ENOENT") ||
+						errorMsg.includes("Exit code 127") ||
+						errorMsg.includes("command not found")))
+			) {
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "${name}" skipped: command not found in this project context`,
+				)
+				return {
+					name,
+					passed: true,
+					durationMs,
+					warnings: 0,
+					errors: 0,
+					strictness,
+					skipped: true,
+					skipReason: "command not found in this project context",
+				}
+			}
+
 			this.logger?.appendLine(
-				`[VerificationEngine] Gate "${name}" FAILED (${durationMs}ms): ${errorMsg.slice(0, 200)}`,
+				`[VerificationEngine] Gate "${name}" FAILED [${strictness}] (${durationMs}ms): ${errorMsg.slice(0, 200)}`,
 			)
 			return {
 				name,
 				passed: false,
 				error: errorMsg.slice(0, 1000),
 				durationMs,
+				warnings,
+				errors,
+				stderrSummary,
+				strictness,
 			}
 		}
 	}
+}
+
+/**
+ * Parse stderr for warning and error patterns (case-insensitive).
+ * Detects lines containing: error, ERROR, Error, warning, WARNING, Warning
+ * Returns counts and a truncated summary.
+ */
+export function parseStderr(stderr: string): { warnings: number; errors: number; stderrSummary: string } {
+	if (!stderr || stderr.trim().length === 0) {
+		return { warnings: 0, errors: 0, stderrSummary: "" }
+	}
+
+	const lines = stderr.split("\n")
+	let warnings = 0
+	let errors = 0
+	const summaryLines: string[] = []
+
+	for (const line of lines) {
+		const trimmed = line.trim()
+		if (!trimmed) continue
+
+		if (
+			/\berror\b/i.test(trimmed) ||
+			/^\[error\]/i.test(trimmed) ||
+			/^ERROR/i.test(trimmed) ||
+			/^Error\b/.test(trimmed)
+		) {
+			errors++
+			if (summaryLines.length < 10) {
+				summaryLines.push(`ERR: ${trimmed.slice(0, 120)}`)
+			}
+			continue
+		}
+
+		if (
+			/\bwarning\b/i.test(trimmed) ||
+			/^\[warning\]/i.test(trimmed) ||
+			/^WARNING/i.test(trimmed) ||
+			/^Warning\b/.test(trimmed)
+		) {
+			warnings++
+			if (summaryLines.length < 10) {
+				summaryLines.push(`WRN: ${trimmed.slice(0, 120)}`)
+			}
+		}
+	}
+
+	const remaining = lines.length - summaryLines.length
+	let stderrSummary = summaryLines.join("\n")
+	if (remaining > 0) {
+		stderrSummary += `\n... and ${remaining - summaryLines.length} more line${remaining - summaryLines.length !== 1 ? "s" : ""}`
+	}
+
+	return { warnings, errors, stderrSummary: stderrSummary.slice(0, 2000) }
 }

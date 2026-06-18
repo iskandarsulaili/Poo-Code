@@ -107,3 +107,9 @@ export interface GenerateImageParams {
 	path: string
 	image?: string
 }
+
+/**
+ * Parallel execution parameter types are defined in orchestration.ts
+ * to maintain a single source of truth.
+ */
+export type { ExecuteParallelParams, ParallelCommand, ParallelCommandGroup } from "./orchestration.js"

@@ -14,6 +14,7 @@ import { CodeIndexManager } from "../services/code-index/manager"
 import { importSettingsWithFeedback } from "../core/config/importExport"
 import { MdmService } from "../services/mdm/MdmService"
 import { t } from "../i18n"
+import { CodebaseMappingManager } from "../services/codebase-mapping"
 
 /**
  * Helper to get the visible ClineProvider instance or log if not found.
@@ -68,6 +69,60 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		const command = getCommand(id as CommandId)
 		context.subscriptions.push(vscode.commands.registerCommand(command, callback))
 	}
+
+	// Codebase Mapping Commands
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.refreshCodebaseMap", async () => {
+			const instances = CodebaseMappingManager.getAllInstances();
+			if (instances.length === 0) {
+				vscode.window.showInformationMessage("No codebase mapping instances active.");
+				return;
+			}
+			await Promise.all(instances.map((svc) => svc.scanWorkspace()));
+			vscode.window.showInformationMessage(
+				`Codebase map refreshed for ${instances.length} workspace(s).`,
+			);
+		}),
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.showCodebaseMap", async () => {
+			const instances = CodebaseMappingManager.getAllInstances();
+			if (instances.length === 0) {
+				vscode.window.showInformationMessage("No codebase mapping instances active.");
+				return;
+			}
+			const svc = instances[0];
+			const graph = await svc.getDependencyGraph();
+			const deadCode = await svc.getDeadCode();
+			const stats = await svc.getCacheStats();
+			const message = [
+				`**Codebase Map**`,
+				`- Files: ${graph.files.size}`,
+				`- Edges: ${graph.edges.length}`,
+				`- Dead symbols: ${deadCode.length}`,
+				`- Cache hit rate: ${(stats.astHitRate * 100).toFixed(1)}%`,
+			].join("\n");
+			vscode.window.showInformationMessage(message);
+		}),
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.exportCodebaseMap", async () => {
+			const instances = CodebaseMappingManager.getAllInstances();
+			if (instances.length === 0) {
+				vscode.window.showInformationMessage("No codebase mapping instances active.");
+				return;
+			}
+			const svc = instances[0];
+			const mermaid = await svc.serialize(4 as any); // SerializationFormat.Mermaid
+			const doc = await vscode.workspace.openTextDocument({
+				content: mermaid,
+				language: "markdown",
+			});
+			vscode.window.showTextDocument(doc);
+		}),
+	)
 }
 
 const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOptions): Record<CommandId, any> => ({

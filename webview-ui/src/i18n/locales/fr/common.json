@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Propre",
 		"subtasks": "Sous-tâches"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Tableau de bord parallèle",
+			"tab_subtasks": "Sous-tâches",
+			"tab_child_tasks": "Tâches enfants",
+			"tab_dag": "DAG",
+			"tab_logs": "Journaux",
+			"no_subtasks": "Aucune sous-tâche en cours",
+			"no_child_tasks": "Aucune tâche enfant en cours",
+			"agent_thoughts": "Pensées de l'agent",
+			"system_logs": "Journaux système"
+		},
+		"subtask_card": {
+			"status_label": "Statut :",
+			"duration_label": "Durée :",
+			"deps_label": "Dépendances :"
+		},
+		"intervention": {
+			"pause": "Pause",
+			"resume": "Reprendre",
+			"cancel": "Annuler",
+			"retry": "Réessayer",
+			"skip": "Passer",
+			"pause_title": "Mettre en pause cette sous-tâche",
+			"resume_title": "Reprendre cette sous-tâche",
+			"cancel_title": "Annuler cette sous-tâche",
+			"retry_title": "Réessayer cette sous-tâche",
+			"skip_title": "Passer cette sous-tâche"
+		},
+		"resume_panel": {
+			"title": "⚠ Tâches parallèles interrompues détectées",
+			"description": "Les exécutions de tâches parallèles suivantes ont été interrompues. Vous pouvez les reprendre ou les ignorer.",
+			"resume_button": "Reprendre",
+			"dismiss_button": "Ignorer",
+			"status_prefix": "Statut :",
+			"tasks_count": "{{total}} tâches ({{completed}} terminées, {{failed}} échouées)"
+		},
+		"detail_panel": {
+			"select_hint": "Sélectionnez une sous-tâche pour voir les détails",
+			"mode_label": "Mode :",
+			"status_label": "Statut :",
+			"deps_label": "Dépendances :",
+			"tokens_label": "Jetons :",
+			"prompt_label": "Prompt",
+			"error_label": "Erreur",
+			"inputs_label": "Entrées :",
+			"outputs_label": "Sorties :",
+			"no_deps": "aucune"
+		},
+		"dag": {
+			"wave_label": "Vague {{number}}"
+		}
 	}
 }

@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Propi",
 		"subtasks": "Subtasques"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Panell de tasques paral·leles",
+			"tab_subtasks": "Subtasques",
+			"tab_child_tasks": "Tasques filles",
+			"tab_dag": "DAG",
+			"tab_logs": "Registres",
+			"no_subtasks": "No hi ha subtasques en execució",
+			"no_child_tasks": "No hi ha tasques filles en execució",
+			"agent_thoughts": "Pensaments de l'agent",
+			"system_logs": "Registres del sistema"
+		},
+		"subtask_card": {
+			"status_label": "Estat:",
+			"duration_label": "Durada:",
+			"deps_label": "Deps:"
+		},
+		"intervention": {
+			"pause": "Pausa",
+			"resume": "Reprèn",
+			"cancel": "Cancel·la",
+			"retry": "Reintenta",
+			"skip": "Omet",
+			"pause_title": "Pausa aquesta subtasca",
+			"resume_title": "Reprèn aquesta subtasca",
+			"cancel_title": "Cancel·la aquesta subtasca",
+			"retry_title": "Reintenta aquesta subtasca",
+			"skip_title": "Omet aquesta subtasca"
+		},
+		"resume_panel": {
+			"title": "⚠ S'han detectat tasques paral·leles interrompudes",
+			"description": "Les següents execucions de tasques paral·leles es van interrompre. Pots reprendre-les o descartar-les.",
+			"resume_button": "Reprèn",
+			"dismiss_button": "Descarta",
+			"status_prefix": "Estat:",
+			"tasks_count": "{{total}} tasques ({{completed}} completades, {{failed}} fallides)"
+		},
+		"detail_panel": {
+			"select_hint": "Selecciona una subtasca per veure'n els detalls",
+			"mode_label": "Mode:",
+			"status_label": "Estat:",
+			"deps_label": "Deps:",
+			"tokens_label": "Tokens:",
+			"prompt_label": "Prompt",
+			"error_label": "Error",
+			"inputs_label": "Entrades:",
+			"outputs_label": "Sortides:",
+			"no_deps": "cap"
+		},
+		"dag": {
+			"wave_label": "Onada {{number}}"
+		}
 	}
 }

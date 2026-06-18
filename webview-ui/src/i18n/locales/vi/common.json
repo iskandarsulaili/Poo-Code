@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Riêng",
 		"subtasks": "Nhiệm vụ con"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Bảng điều khiển song song",
+			"tab_subtasks": "Tác vụ con",
+			"tab_child_tasks": "Tác vụ con cấp dưới",
+			"tab_dag": "DAG",
+			"tab_logs": "Nhật ký",
+			"no_subtasks": "Không có tác vụ con nào đang chạy",
+			"no_child_tasks": "Không có tác vụ con cấp dưới nào đang chạy",
+			"agent_thoughts": "Suy nghĩ của tác nhân",
+			"system_logs": "Nhật ký hệ thống"
+		},
+		"subtask_card": {
+			"status_label": "Trạng thái:",
+			"duration_label": "Thời lượng:",
+			"deps_label": "Phụ thuộc:"
+		},
+		"intervention": {
+			"pause": "Tạm dừng",
+			"resume": "Tiếp tục",
+			"cancel": "Hủy",
+			"retry": "Thử lại",
+			"skip": "Bỏ qua",
+			"pause_title": "Tạm dừng tác vụ con này",
+			"resume_title": "Tiếp tục tác vụ con này",
+			"cancel_title": "Hủy tác vụ con này",
+			"retry_title": "Thử lại tác vụ con này",
+			"skip_title": "Bỏ qua tác vụ con này"
+		},
+		"resume_panel": {
+			"title": "⚠ Phát hiện tác vụ song song bị gián đoạn",
+			"description": "Các tác vụ song song sau đã bị gián đoạn. Bạn có thể tiếp tục hoặc bỏ qua.",
+			"resume_button": "Tiếp tục",
+			"dismiss_button": "Bỏ qua",
+			"status_prefix": "Trạng thái:",
+			"tasks_count": "{{total}} tác vụ ({{completed}} hoàn thành, {{failed}} thất bại)"
+		},
+		"detail_panel": {
+			"select_hint": "Chọn một tác vụ con để xem chi tiết",
+			"mode_label": "Chế độ:",
+			"status_label": "Trạng thái:",
+			"deps_label": "Phụ thuộc:",
+			"tokens_label": "Token:",
+			"prompt_label": "Prompt",
+			"error_label": "Lỗi",
+			"inputs_label": "Đầu vào:",
+			"outputs_label": "Đầu ra:",
+			"no_deps": "không có"
+		},
+		"dag": {
+			"wave_label": "Đợt {{number}}"
+		}
 	}
 }

@@ -110,5 +110,58 @@
 	"costs": {
 		"own": "Sendiri",
 		"subtasks": "Subtugas"
+	},
+	"parallel": {
+		"dashboard": {
+			"title": "Dasbor Paralel",
+			"tab_subtasks": "Sub-tugas",
+			"tab_child_tasks": "Tugas Anak",
+			"tab_dag": "DAG",
+			"tab_logs": "Log",
+			"no_subtasks": "Tidak ada sub-tugas yang berjalan",
+			"no_child_tasks": "Tidak ada tugas anak yang berjalan",
+			"agent_thoughts": "Pemikiran Agen",
+			"system_logs": "Log Sistem"
+		},
+		"subtask_card": {
+			"status_label": "Status:",
+			"duration_label": "Durasi:",
+			"deps_label": "Dependensi:"
+		},
+		"intervention": {
+			"pause": "Jeda",
+			"resume": "Lanjutkan",
+			"cancel": "Batalkan",
+			"retry": "Coba Ulang",
+			"skip": "Lewati",
+			"pause_title": "Jeda sub-tugas ini",
+			"resume_title": "Lanjutkan sub-tugas ini",
+			"cancel_title": "Batalkan sub-tugas ini",
+			"retry_title": "Coba ulang sub-tugas ini",
+			"skip_title": "Lewati sub-tugas ini"
+		},
+		"resume_panel": {
+			"title": "⚠ Tugas Paralel Terinterupsi Terdeteksi",
+			"description": "Eksekusi tugas paralel berikut terinterupsi. Anda dapat melanjutkan atau mengabaikannya.",
+			"resume_button": "Lanjutkan",
+			"dismiss_button": "Abaikan",
+			"status_prefix": "Status:",
+			"tasks_count": "{{total}} tugas ({{completed}} selesai, {{failed}} gagal)"
+		},
+		"detail_panel": {
+			"select_hint": "Pilih sub-tugas untuk melihat detail",
+			"mode_label": "Mode:",
+			"status_label": "Status:",
+			"deps_label": "Dependensi:",
+			"tokens_label": "Token:",
+			"prompt_label": "Prompt",
+			"error_label": "Error",
+			"inputs_label": "Masukan:",
+			"outputs_label": "Keluaran:",
+			"no_deps": "tidak ada"
+		},
+		"dag": {
+			"wave_label": "Gelombang {{number}}"
+		}
 	}
 }

@@ -3656,6 +3656,71 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		// ====================================================================
+		// Parallel Subtask Control Messages
+		// ====================================================================
+
+		case "parallelSubtaskPause": {
+			const subtaskId = message.text
+			if (subtaskId) {
+				provider.log(`[ParallelSubtask] Pause requested for subtask: ${subtaskId}`)
+				// Forward to the orchestrator via the executeParallelSubtaskTool
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.pauseSubtask?.(subtaskId)
+			}
+			break
+		}
+
+		case "parallelSubtaskResume": {
+			const subtaskId = message.text
+			if (subtaskId) {
+				provider.log(`[ParallelSubtask] Resume requested for subtask: ${subtaskId}`)
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.resumeSubtask?.(subtaskId)
+			}
+			break
+		}
+
+		case "parallelSubtaskCancel": {
+			const subtaskId = message.text
+			if (subtaskId) {
+				provider.log(`[ParallelSubtask] Cancel requested for subtask: ${subtaskId}`)
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.cancelSubtask?.(subtaskId)
+			}
+			break
+		}
+
+		case "parallelSubtaskRetry": {
+			const subtaskId = message.text
+			if (subtaskId) {
+				provider.log(`[ParallelSubtask] Retry requested for subtask: ${subtaskId}`)
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.retrySubtask?.(subtaskId)
+			}
+			break
+		}
+
+		case "parallelSubtaskSkip": {
+			const subtaskId = message.text
+			if (subtaskId) {
+				provider.log(`[ParallelSubtask] Skip requested for subtask: ${subtaskId}`)
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.skipSubtask?.(subtaskId)
+			}
+			break
+		}
+
+		case "parallelSubtaskResumeDAG": {
+			const correlationId = message.text
+			if (correlationId) {
+				provider.log(`[ParallelSubtask] Resume DAG requested: ${correlationId}`)
+				const { executeParallelSubtaskTool } = await import("../tools/ExecuteParallelSubtaskTool")
+				executeParallelSubtaskTool.resumeDAG?.(correlationId)
+			}
+			break
+		}
+
 		default: {
 			// console.log(`Unhandled message type: ${message.type}`)
 			//

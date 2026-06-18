@@ -189,16 +189,34 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
 				const verResult = await this.verificationEngine.verify()
-				if (!verResult.passed && this.verificationEngine.getConfig().mandatory) {
-					const errorMsg = `Code quality verification failed:\n${verResult.summary}\n\nFailed gates:\n${verResult.gates
-						.filter((g) => !g.passed)
-						.map((g) => `  ❌ ${g.name}: ${g.error || "failed"}`)
-						.join("\n")}\n\nPlease fix these issues before completing the task.`
+				const strictness = this.verificationEngine.getConfig().strictness || "moderate"
+
+				// Build detailed gate results for display
+				const gateDetails = verResult.gates
+					.map((g) => {
+						if (g.skipped) {
+							const skipReason = g.skipReason ? `: ${g.skipReason}` : ""
+							return `  ⏭️ ${g.name}: SKIP [${g.strictness}]${skipReason}`
+						}
+						const icon = g.passed ? "✅" : "❌"
+						const warningsNote = g.warnings > 0 ? ` (${g.warnings} warning${g.warnings !== 1 ? "s" : ""})` : ""
+						const errorsNote = g.errors > 0 ? ` (${g.errors} error${g.errors !== 1 ? "s" : ""})` : ""
+						const passLabel = g.passed ? `PASS [${g.strictness}]` : `FAIL [${g.strictness}]`
+						const errorInfo = !g.passed && g.error ? `: ${g.error.slice(0, 200)}` : ""
+						return `  ${icon} ${g.name}: ${passLabel} (${g.durationMs}ms)${warningsNote}${errorsNote}${errorInfo}`
+					})
+					.join("\n")
+
+				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
+					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
 					// Don't increment consecutiveMistakeCount — verification has its own counter
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
 					return
 				}
+
+				// Even on pass, show warning counts if any
+				// (VerificationEngine already logs details via its own logger)
 			}
 
 			task.consecutiveMistakeCount = 0

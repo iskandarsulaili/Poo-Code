@@ -43,23 +43,23 @@
 		"about": "關於 Zoo Code",
 		"skills": "Skills",
 		"kaizen": "KAIZEN",
-		"providersDescription": "Configure API providers, models, and authentication credentials for AI model access.",
-		"modesDescription": "Define custom modes with specific instructions, tools, and model configurations for different tasks.",
-		"mcpDescription": "Manage Model Context Protocol servers that provide additional tools and resources to the agent.",
-		"worktreesDescription": "Manage Git worktrees for parallel development on multiple branches simultaneously.",
-		"skillsDescription": "Create and manage reusable skills that encapsulate contextual instructions and workflows.",
-		"autoApproveDescription": "Configure which actions the agent can perform automatically without requiring manual approval.",
-		"checkpointsDescription": "Configure automatic checkpoints during task execution for easy review and rollback.",
-		"notificationsDescription": "Configure sound effects and text-to-speech for task notifications and events.",
-		"contextManagementDescription": "Control what information is included in the AI's context window, affecting token usage and response quality.",
-		"terminalDescription": "Configure terminal integration settings including shell integration, output limits, and command execution behavior.",
-		"slashCommandsDescription": "Create reusable slash command shortcuts for frequently used prompts and workflows.",
-		"promptsDescription": "Configure support prompts used for quick actions like enhancing prompts, explaining code, and fixing issues.",
-		"uiDescription": "Customize the user interface behavior including message display and input preferences.",
-		"experimentalDescription": "Enable and configure experimental features that are in active development. These may change or be removed without notice.",
-		"languageDescription": "Change the display language for the extension interface.",
-		"aboutDescription": "View version information, community resources, telemetry settings, and debug options.",
-		"kaizenDescription": "Configure continuous improvement cycles that automatically enhance your codebase over time."
+		"providersDescription": "設定 API 提供者、模型和驗證憑證以存取 AI 模型。",
+		"modesDescription": "為不同任務定義具有特定指令、工具和模型設定的自訂模式。",
+		"mcpDescription": "管理為代理提供額外工具和資源的 MCP 伺服器。",
+		"worktreesDescription": "管理 Git 工作樹，以便同時在多個分支上進行並行開發。",
+		"skillsDescription": "建立和管理可重複使用的技能，封裝上下文指令和工作流程。",
+		"autoApproveDescription": "設定代理可以自動執行而無需手動核准的動作。",
+		"checkpointsDescription": "設定任務執行期間的自動檢查點，以便輕鬆檢視和復原。",
+		"notificationsDescription": "設定任務通知和事件的音效及文字轉語音。",
+		"contextManagementDescription": "控制 AI 上下文視窗中包含的資訊，影響代幣使用和回應品質。",
+		"terminalDescription": "設定終端機整合設定，包括 shell 整合、輸出限制和命令執行行為。",
+		"slashCommandsDescription": "為常用提示和工作流程建立可重複使用的斜線命令捷徑。",
+		"promptsDescription": "設定用於快速動作的支援提示，如增強提示、解釋程式碼和修正問題。",
+		"uiDescription": "自訂使用者介面行為，包括訊息顯示和輸入偏好。",
+		"experimentalDescription": "啟用和設定正在積極開發中的實驗性功能。這些功能可能會變更或移除，恕不另行通知。",
+		"languageDescription": "變更擴充功能介面的顯示語言。",
+		"aboutDescription": "檢視版本資訊、社群資源、遙測設定和除錯選項。",
+		"kaizenDescription": "設定持續改善週期，隨時間自動增強您的程式碼庫。"
 	},
 	"about": {
 		"bugReport": {
@@ -923,49 +923,72 @@
 		},
 		"categories": {
 			"selfImproving": "Self-Improving",
-			"selfImprovingDescription": "Enable background learning from task outcomes to improve prompt guidance, tool preferences, and error avoidance over time.",
+			"selfImprovingDescription": "啟用從任務結果中背景學習，以隨時間改善提示指導、工具偏好和錯誤避免。",
 			"verification": "Verification",
 			"verificationDescription": "Configure code quality verification and requirements tracking behavior.",
 			"memory": "Memory & Persistence",
-			"memoryDescription": "Configure memory backends and persistence settings for agent state across sessions.",
+			"memoryDescription": "設定跨工作階段的代理狀態的記憶體後端和持久化設定。",
 			"ui": "UI & Editing",
-			"uiDescription": "Experimental UI and file editing features that change how the agent interacts with your workspace.",
+			"uiDescription": "改變代理與工作區互動方式的實驗性 UI 和檔案編輯功能。",
 			"infrastructure": "Infrastructure & Reliability",
-			"infrastructureDescription": "Error prevention, resilience, and reliability services for production-grade agent operations.",
+			"infrastructureDescription": "面向生產級代理操作的錯誤預防、彈性和可靠性服務。",
 			"tools": "Tools & Integrations",
-			"toolsDescription": "Additional tool integrations and capabilities for extending agent functionality."
+			"toolsDescription": "用於擴充代理功能的額外工具整合和能力。"
 		},
 		"SELF_IMPROVING_AUTO_SKILLS": {
 			"name": "Auto-create and update skills from learned workflows",
-			"description": "When enabled, Self-Improving can turn repeated successful workflows into project skills and keep agent-created skills updated automatically."
+			"description": "啟用後，Self-Improving 可以將重複成功的工作流程轉化為專案技能，並自動保持代理建立的技能更新。"
 		},
 		"SELF_IMPROVING_AUTO_MODE": {
 			"name": "Full Auto Mode",
-			"description": "Enable fully autonomous self-improving mode with auto-healing and auto mode creation"
+			"description": "啟用完全自主的自我改進模式，具有自動修復和自動模式建立功能"
 		},
 		"SELF_IMPROVING_REVIEW_TEAM": {
 			"name": "Full Team",
-			"description": "Enable multi-agent review pipeline (Innovator, Contrarian, Devil's Advocate, The Decider)"
+			"description": "啟用多代理審查流程（創新者、反對者、魔鬼代言人、決策者）"
 		},
 		"SELF_IMPROVING_FULL_TRUST": {
 			"name": "Full Trust",
-			"description": "Enable auto-approve for commands without user confirmation"
+			"description": "啟用命令的自動核准，無需使用者確認"
 		},
 		"SELF_IMPROVING_SPECIALIZED_SKILLS": {
 			"name": "Self-Improving Specialized Skills",
-			"description": "Enables the system to automatically create and refine specialized skills based on task patterns and usage frequency, improving efficiency for repetitive tasks."
+			"description": "使系統能夠根據任務模式和使用頻率自動建立和優化專業技能，提高重複任務的效率。"
 		},
 		"TASK_PATTERN_LEARNING": {
 			"name": "Task Pattern Learning",
-			"description": "When enabled, the system learns from completed tasks by recording patterns, tool usage, and outcomes. These patterns are used to suggest improvements for similar future tasks."
+			"description": "啟用後，系統透過記錄模式、工具使用和結果從已完成的任務中學習。這些模式用於為類似的未來任務提出改善建議。"
 		},
 		"verification": {
-			"enableVerification": "Enable Verification",
+			"enableVerification": "啟用驗證",
 			"enableVerification.description": "Master toggle for all verification features. When disabled, code quality verification, requirements verification, and intent verification are skipped."
 		},
 		"RECOVERY_CONTEXT": {
 			"name": "Recovery Context",
-			"description": "When enabled, the system automatically generates recovery context after tool errors, injecting guidance into the next model prompt to help the model recover from failures."
+			"description": "啟用後，系統在工具錯誤後自動產生復原上下文，將指導注入下一個模型提示，幫助模型從故障中復原。"
+		},
+		"PARALLEL_SUBTASK": {
+			"name": "Parallel Subtask Execution",
+			"description": "啟用基於 DAG 的依賴解析和鎖感知排程的子任務並行執行",
+			"maxParallelLabel": "Max Parallel Subtasks",
+			"heartbeatLabel": "Heartbeat Interval (ms)",
+			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"PARALLEL_EXECUTION": {
+			"name": "Parallel Execution",
+			"description": "啟用基於DAG的依賴解析和鎖感知排程的命令並行執行"
+		},
+		"STRUCTURED_OUTPUT_PARSING": {
+			"name": "Structured Output Parsing",
+			"description": "啟用結構化輸出解析，提高處理模型回應時的可靠性"
+		},
+		"DEPENDENCY_GRAPH": {
+			"name": "Dependency Graph",
+			"description": "啟用依賴圖分析，實現智慧任務排序和並行執行規劃"
+		},
+		"MULTI_ROOT_WORKSPACE": {
+			"name": "Multi-Root Workspace",
+			"description": "啟用多根工作區支援，可同時處理多個專案目錄"
 		}
 	},
 	"promptCaching": {
