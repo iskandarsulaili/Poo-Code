@@ -3748,8 +3748,9 @@ export class ClineProvider
 
 	/**
 	 * Sends the current codebase mapping status to the webview.
+	 * Retries on "Not initialized" errors as the AST parser may still be loading.
 	 */
-	private _sendCodebaseMappingStatus(): void {
+	private _sendCodebaseMappingStatus(retries = 3, delay = 1000): void {
 		const instances = CodebaseMappingManager.getAllInstances()
 		if (instances.length === 0) {
 			this.postMessageToWebview({
@@ -3783,6 +3784,12 @@ export class ClineProvider
 				})
 			})
 			.catch((err) => {
+				const message = err instanceof Error ? err.message : String(err)
+				// Retry on "Not initialized" — AST parser may still be loading WASM
+				if (retries > 0 && message.includes("Not initialized")) {
+					setTimeout(() => this._sendCodebaseMappingStatus(retries - 1, delay * 2), delay)
+					return
+				}
 				this.postMessageToWebview({
 					type: "codebaseMappingStatusUpdate",
 					values: {
@@ -3791,7 +3798,7 @@ export class ClineProvider
 						edgeCount: 0,
 						deadSymbolCount: 0,
 						cacheHitRate: 0,
-						message: err instanceof Error ? err.message : String(err),
+						message,
 					},
 				})
 			})

@@ -7,7 +7,6 @@ import { vscode } from "@src/utils/vscode"
 import { useAppTranslation } from "@src/i18n/TranslationContext"
 import { Popover, PopoverContent, StandardTooltip, Button } from "@src/components/ui"
 import { useRooPortal } from "@src/components/ui/hooks/useRooPortal"
-import { useEscapeKey } from "@src/hooks/useEscapeKey"
 
 interface CodebaseMappingPopoverProps {
 	children: React.ReactNode
@@ -44,8 +43,6 @@ export const CodebaseMappingPopover: React.FC<CodebaseMappingPopoverProps> = ({
 		window.addEventListener("message", handleMessage)
 		return () => window.removeEventListener("message", handleMessage)
 	}, [])
-
-	useEscapeKey(open, () => setOpen(false))
 
 	const portalContainer = useRooPortal("roo-portal")
 
