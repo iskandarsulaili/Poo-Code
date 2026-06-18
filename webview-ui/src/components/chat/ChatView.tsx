@@ -935,6 +935,21 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 				case "parallelSubtaskStatus":
 					// Auto-open the parallel overlay when parallel tasks start
 					setShowParallelOverlay(true)
+					// Auto-close when all tasks are complete (terminal DAG status)
+					try {
+						const dagPayload = typeof message.text === "string" ? JSON.parse(message.text) : message.payload
+						const dagStatus = dagPayload?.status ?? dagPayload?.dagStatus
+						if (
+							dagStatus === "completed" ||
+							dagStatus === "failed" ||
+							dagStatus === "aborted"
+						) {
+							// Brief delay so user can see final state before closing
+							setTimeout(() => setShowParallelOverlay(false), 1500)
+						}
+					} catch {
+						// Silently ignore parse errors on status updates
+					}
 					break
 			}
 			// textAreaRef.current is not explicitly required here since React
