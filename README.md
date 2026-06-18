@@ -3,7 +3,7 @@
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
-> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
+> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer + parallel execution engine + codebase intelligence on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
 
 ---
 
@@ -16,52 +16,63 @@ The ultimate goal is to totally replace you, so you can be permanently "Ooo" (Ou
 
 ## What's different from Zoo-Code
 
-This fork adds **~10,600 lines** of self-improving infrastructure across **45 files** (25 source + 20 test), all behind experiment toggles. Every new feature is gated — Zoo-Code main's behaviour is preserved with everything off.
+This fork adds **~28,650 lines** of new infrastructure across **220 files**, all behind experiment toggles. Every new feature is gated — Zoo-Code main's behaviour is preserved with everything off.
 
-| Feature                        | Poo-Code (this branch)                                                                                                                                                              | Zoo-Code main                                                                                                                                                                                             |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| **Self-improving loop**        | `SelfImprovingManager` — background review pass every N turns/tool calls. Learns from mistakes, curates skills, suggests optimizations.                                             | ❌ No automated self-review                                                                                                                                                                               |
-| **Pattern analysis**           | `PatternAnalyzer` — detects recurring tool-use patterns, error signatures, and skill gaps from execution history.                                                                   | ❌ No pattern detection                                                                                                                                                                                   |
-| **Curator service**            | `CuratorService` — tar.gz-backed skill store (backup/rollback). Decides when to create/update/merge skills from learned patterns.                                                   | ❌ Manual skill authoring only                                                                                                                                                                            |
-| **Skill automation**           | `ActionExecutor` + `ImprovementApplier` — auto-creates and updates skills from reviewed patterns.                                                                                   | ❌ No auto skill creation                                                                                                                                                                                 |
-| **Insights engine**            | `InsightsEngine` — generates project-level insights (dead code, stale configs, architecture notes).                                                                                 | ❌ No project insights                                                                                                                                                                                    |
-| **Resilience**                 | `ResilienceService` — streaming backoff, tool error healer, auto-retry with learned recovery strategies.                                                                            | ❌ Basic retry only                                                                                                                                                                                       |
-| **Question evaluation**        | `QuestionEvaluatorService` — evaluates user questions for clarity/completeness; auto-selects best answer when choices are offered.                                                  | ❌ Always picks first choice                                                                                                                                                                              |
-| **Trust service**              | `TrustService` — learns tool-approval patterns over time. Full-trust mode auto-approves known-safe tools.                                                                           | ❌ Static auto-approval rules                                                                                                                                                                             |
-| **Review team**                | `ReviewTeamService` — multi-agent review (innovator + critic + decider) scores every learned pattern before applying it.                                                            | ❌ No pre-apply validation                                                                                                                                                                                |
-| **Agent memory**               | `AgentMemoryAdapter` + `MemoryStore` + `MemoryBackendFactory` — pluggable memory backend (SQLite default, configurable). Bounded context injection via `memory.ts` types.           | ❌ No persistent agent memory                                                                                                                                                                             |
-| **Learning store**             | `LearningStore` — stores/retrieves learned patterns with confidence scoring. Schema-versioned for forward compat.                                                                   | ❌ No learning storage                                                                                                                                                                                    |
-| **Transcript recall**          | `TranscriptRecall` — retrieves past conversation context for pattern learning.                                                                                                      | ❌ No historical context                                                                                                                                                                                  |
-| **Skill usage tracking**       | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions.                                                                                     | ❌ No usage metrics                                                                                                                                                                                       |
-| **Auto-mode orchestrator**     | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type.                                                                                           | ❌ Manual mode switching                                                                                                                                                                                  |
-| **Mode factory**               | `ModeFactoryService` — generates custom modes from learned workflows.                                                                                                               | ❌ Fixed mode set                                                                                                                                                                                         |
-| **Experiment toggles**         | 6 new experiment IDs: `selfImproving`, `selfImprovingAutoSkills`, `selfImprovingAutoMode`, `selfImprovingReviewTeam`, `selfImprovingFullTrust`, `selfImprovingQuestionEvaluation`   | ❌ None of these exist                                                                                                                                                                                    |
-| **ONE-SHOT Orchestrator**      | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass                                                              | ❌ No equivalent                                                                                                                                                                                          |
-| **KAIZEN Orchestrator**        | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals                         | ❌ No equivalent                                                                                                                                                                                          |
-| **Proactive Error Prevention** | Pre-execution tool call validation, structured error classification (12 categories), cascading failure detection, and prevention hint injection — catches errors BEFORE they happen | ❌ No equivalent                                                                                                                                                                                          |
-| **Git Auto-Push**              | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically                                                      | ❌ No equivalent                                                                                                                                                                                          |
-| **Self-Evolving Mini-Goals**   | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first                                                                   | ❌ No equivalent                                                                                                                                                                                          |
-|                                | **Full UI Coverage**                                                                                                                                                                | All 27 self-improving services now have toggles, config panels, or status displays in the settings UI                                                                                                     | ❌ No equivalent |
-|                                | **Skill name validation**                                                                                                                                                           | Validates skill name format (1-64 chars, lowercase alphanumeric/hyphens) in `SkillManageTool` (create/update/delete/merge) and `ActionExecutor`. Hash-truncated names pass validation with safe fallback. | ❌ No validation |
-|                                | **MemoryManager init**                                                                                                                                                              | Calls `initialize()` before `consolidate()` in F3 cycle — prevents silent init failures on cold start.                                                                                                    | ❌ No equivalent |
-|                                | **ConfidenceScorer wiring**                                                                                                                                                         | Fixed: only scores when patterns exist; passes proper typed args to `calculateScore()`.                                                                                                                   | ❌ No equivalent |
+| Feature | Poo-Code (this branch) | Zoo-Code main |
+|---------|--------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| **Self-improving loop** | `SelfImprovingManager` — background review pass every N turns/tool calls. Learns from mistakes, curates skills, suggests optimizations. | ❌ No automated self-review |
+| **Pattern analysis** | `PatternAnalyzer` — detects recurring tool-use patterns, error signatures, and skill gaps from execution history. | ❌ No pattern detection |
+| **Curator service** | `CuratorService` — tar.gz-backed skill store (backup/rollback). Decides when to create/update/merge skills from learned patterns. | ❌ Manual skill authoring only |
+| **Skill automation** | `ActionExecutor` + `ImprovementApplier` — auto-creates and updates skills from reviewed patterns. | ❌ No auto skill creation |
+| **Insights engine** | `InsightsEngine` — generates project-level insights (dead code, stale configs, architecture notes). | ❌ No project insights |
+| **Resilience** | `ResilienceService` — streaming backoff, tool error healer, auto-retry with learned recovery strategies. Separate streaming failure counter prevents cross-contamination. | ❌ Basic retry only |
+| **Question evaluation** | `QuestionEvaluatorService` — evaluates user questions for clarity/completeness; auto-selects best answer when choices are offered. | ❌ Always picks first choice |
+| **Trust service** | `TrustService` — learns tool-approval patterns over time. Full-trust mode auto-approves known-safe tools. | ❌ Static auto-approval rules |
+| **Review team** | `ReviewTeamService` — multi-agent review (innovator + critic + decider) scores every learned pattern before applying it. | ❌ No pre-apply validation |
+| **Agent memory** | `AgentMemoryAdapter` + `MemoryStore` + `MemoryBackendFactory` — pluggable memory backend (SQLite default, configurable). Bounded context injection via `memory.ts` types. | ❌ No persistent agent memory |
+| **Learning store** | `LearningStore` — stores/retrieves learned patterns with confidence scoring. Schema-versioned for forward compat. | ❌ No learning storage |
+| **Transcript recall** | `TranscriptRecall` — retrieves past conversation context for pattern learning. | ❌ No historical context |
+| **Skill usage tracking** | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions. | ❌ No usage metrics |
+| **Auto-mode orchestrator** | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type. | ❌ Manual mode switching |
+| **Mode factory** | `ModeFactoryService` — generates custom modes from learned workflows. | ❌ Fixed mode set |
+| **Parallel execution** | `ExecuteParallelSubtaskTool` + `ExecuteParallelChildTaskTool` — DAG-based parallel task execution with dependency resolution, lock-aware scheduling, and blackboard communication between subtasks. Real child agent spawning via SubtaskExecutor callback. | ❌ No parallel execution |
+| **Parallel orchestrator** | `ParallelSubtaskOrchestrator` — topological DAG wave scheduling, cycle detection, subtask heartbeat monitoring, automatic retry/failure handling, resume/skip/cancel controls. | ❌ No orchestrator |
+| **Parallel dashboard UI** | Slide-in overlay panel with tabbed views (Subtasks, Child Tasks, DAG, Logs). Live DAG visualization, subtask cards with status/duration/deps, intervention controls (pause/resume/cancel/retry/skip), agent thought stream, system log stream. Auto-opens on parallel task start; closeable via Escape/backdrop/X. | ❌ No UI |
+| **Codebase mapping** | `@zoo-code/codebase-mapping` package — AST parsing via web-tree-sitter, dependency graph with circular detection, symbol extraction, token compression for LLM context, multi-format serialization (JSON/Mermaid/Markdown/DOT), security layer (PII/secret scanning), AST cache with TTL. 3 VS Code commands: refresh/show/export map. | ❌ No equivalent |
+| **Prompt compression** | `compressPrompt()` — lossless compression for child agent prompts (verbose phrase shortening, whitespace optimization, markdown stripping, JSON compaction, file path shortening). Prevents child agent context overload. | ❌ No compression |
+| **i18n translation** | All 18 locales fully translated for parallel UI (dashboard, subtask cards, intervention controls, resume panel, detail panel, DAG labels). Languages: ca, de, en, es, fr, hi, id, it, ja, ko, nl, pl, pt-BR, ru, tr, vi, zh-CN, zh-TW. | ❌ Partial EN-only |
+| **ONE-SHOT Orchestrator** | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass | ❌ No equivalent |
+| **KAIZEN Orchestrator** | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals | ❌ No equivalent |
+| **Proactive Error Prevention** | Pre-execution tool call validation, structured error classification (12 categories), cascading failure detection, and prevention hint injection — catches errors BEFORE they happen | ❌ No equivalent |
+| **Git Auto-Push** | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically | ❌ No equivalent |
+| **Self-Evolving Mini-Goals** | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first | ❌ No equivalent |
+| **Skill name validation** | Validates skill name format (1-64 chars, lowercase alphanumeric/hyphens) in `SkillManageTool` (create/update/delete/merge) and `ActionExecutor`. Hash-truncated names pass validation with safe fallback. | ❌ No validation |
+| **MemoryManager init** | Calls `initialize()` before `consolidate()` in F3 cycle — prevents silent init failures on cold start. | ❌ No equivalent |
+| **ConfidenceScorer wiring** | Fixed: only scores when patterns exist; passes proper typed args to `calculateScore()`. | ❌ No equivalent |
+| **Always-available tools** | `list_files` + `read_file` promoted to always-available tools (available in any mode). | ❌ Gated per mode |
+| **Streaming failure resilience** | Separate `streamingFailureCount` counter so consecutive tool mistakes don't exhaust streaming retry budget. | ❌ Single counter |
 
 ### Experiment gate reference
 
-| Toggle                            | Enables                                                         |
-| --------------------------------- | --------------------------------------------------------------- |
-| `selfImproving`                   | Master switch — enables the entire learning loop                |
-| `selfImprovingAutoSkills`         | Auto-create/update/merge skills from learned patterns           |
-| `selfImprovingAutoMode`           | Auto-switch VS Code modes based on task                         |
-| `selfImprovingReviewTeam`         | Multi-agent review before applying learned patterns             |
-| `selfImprovingFullTrust`          | Auto-approve tools that TrustService considers safe             |
-| `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer    |
-| `oneShotOrchestrator`             | Enable ONE-SHOT Orchestrator mode for autonomous project builds |
-| `kaizenOrchestrator`              | Enable KAIZEN Orchestrator mode for continuous improvement      |
-| `proactiveErrorPrevention`        | Enable pre-execution tool call validation and cascade detection |
-| `gitAutoPush`                     | Enable auto-commit and push in KAIZEN mode                      |
-| `selfEvolvingMiniGoals`           | Enable self-evolving mini-goals with regression healing         |
-| `fullUICoverage`                  | Enable full UI coverage for all self-improving services         |
+| Toggle | Enables |
+| ------ | ------- |
+| `selfImproving` | Master switch — enables the entire learning loop |
+| `selfImprovingAutoSkills` | Auto-create/update/merge skills from learned patterns |
+| `selfImprovingAutoMode` | Auto-switch VS Code modes based on task |
+| `selfImprovingReviewTeam` | Multi-agent review before applying learned patterns |
+| `selfImprovingFullTrust` | Auto-approve tools that TrustService considers safe |
+| `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer |
+| `oneShotOrchestrator` | Enable ONE-SHOT Orchestrator mode for autonomous project builds |
+| `kaizenOrchestrator` | Enable KAIZEN Orchestrator mode for continuous improvement |
+| `proactiveErrorPrevention` | Enable pre-execution tool call validation and cascade detection |
+| `gitAutoPush` | Enable auto-commit and push in KAIZEN mode |
+| `selfEvolvingMiniGoals` | Enable self-evolving mini-goals with regression healing |
+| `fullUICoverage` | Enable full UI coverage for all self-improving services |
+| `parallelExecution` | Enable DAG-based parallel task execution |
+| `structuredOutputParsing` | Enable structured output parsing for model responses |
+| `dependencyGraph` | Enable dependency graph analysis for task ordering |
+| `multiRootWorkspace` | Enable multi-root workspace support |
+| `parallelSubtask` | Enable parallel subtask execution with blackboard communication |
 
 ## Use Case Examples
 
@@ -75,7 +86,21 @@ This fork adds **~10,600 lines** of self-improving infrastructure across **45 fi
     - Requirements analysis → Architecture design → Project scaffolding → Core implementation → Integration → Testing → Bug fixing → Verification
 4. Result: A fully tested, production-ready API server with zero manual intervention
 
-### Example 2: Continuous Codebase Improvement
+### Example 2: Parallel Task Execution
+
+**Scenario:** You need to update multiple independent files simultaneously.
+
+1. Enable **Parallel Execution** in Experimental Settings
+2. The agent splits your request into DAG-ordered subtasks:
+    - Subtask A: Update API schema (no deps) ✓
+    - Subtask B: Update backend logic (depends on A) ⟳
+    - Subtask C: Update frontend types (depends on A) ⟳
+    - Subtask D: Update tests (depends on B, C) ○
+3. The Parallel Dashboard shows live progress, DAG visualization, logs, and agent thoughts
+4. Each subtask spawns a real child agent via `waitForCompletion()` — parent awaits real completion
+5. Result: Structurally parallel execution with dependency-safe ordering
+
+### Example 3: Continuous Codebase Improvement
 
 **Scenario:** You have an existing codebase with technical debt and want continuous improvement.
 
@@ -88,7 +113,7 @@ This fork adds **~10,600 lines** of self-improving infrastructure across **45 fi
 4. Each cycle is one atomic change, verified, and pushed to CI/CD
 5. Result: Continuous, safe improvement without regressions
 
-### Example 3: Proactive Error Prevention
+### Example 4: Proactive Error Prevention
 
 **Scenario:** You're working on a large codebase and the model keeps hitting tool errors.
 
@@ -101,7 +126,7 @@ This fork adds **~10,600 lines** of self-improving infrastructure across **45 fi
 4. If 2+ errors occur within 30 seconds, a cascade warning is injected suggesting an approach change
 5. Result: Fewer wasted tool calls, faster task completion, lower API costs
 
-### Example 4: Self-Healing Production Deployment
+### Example 5: Self-Healing Production Deployment
 
 **Scenario:** A production deployment has regressions and needs immediate attention.
 
@@ -112,6 +137,16 @@ This fork adds **~10,600 lines** of self-improving infrastructure across **45 fi
 5. CI/CD pipeline auto-deploys each fix to staging/production
 6. Once regressions are resolved, mini-goal evolves upward to the next improvement
 7. Result: Self-healing deployment with zero manual intervention
+
+### Example 6: Codebase Understanding
+
+**Scenario:** You inherit a large unfamiliar codebase and need to understand its structure.
+
+1. Enable **Codebase Mapping** (via `zoo-code.refreshCodebaseMap` command)
+2. The system scans all files, parses ASTs, builds a dependency graph
+3. Use `zoo-code.showCodebaseMap` to see file count, edges, dead symbols, cache hit rate
+4. Use `zoo-code.exportCodebaseMap` to export Mermaid diagram for documentation
+5. Result: Instant codebase understanding without manual tracing
 
 ## Statistic
 
