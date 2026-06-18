@@ -46,6 +46,7 @@ import { type RouterName, toRouterName } from "../../shared/api"
 import { MessageEnhancer } from "./messageEnhancer"
 
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodebaseMappingManager } from "../../services/codebase-mapping"
 import { checkExistKey } from "../../shared/checkExistApiConfig"
 import { getRouterRemovalMessage, getRouterUnavailableSignInMessage } from "../config/routerRemoval"
 import { experimentDefault } from "../../shared/experiments"
@@ -2718,6 +2719,116 @@ export const webviewMessageHandler = async (
 					hasOpenRouterApiKey,
 				},
 			})
+			break
+		}
+		case "requestCodebaseMappingStatus": {
+			const instances = CodebaseMappingManager.getAllInstances()
+			if (instances.length === 0) {
+				provider.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "idle",
+						fileCount: 0,
+						edgeCount: 0,
+						deadSymbolCount: 0,
+						cacheHitRate: 0,
+						message: "No workspace open",
+					},
+				})
+				break
+			}
+			const svc = instances[0]
+			try {
+				const graph = await svc.getDependencyGraph()
+				const deadCode = await svc.getDeadCode()
+				const stats = await svc.getCacheStats()
+				provider.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "ready",
+						fileCount: graph.files.size,
+						edgeCount: graph.edges.length,
+						deadSymbolCount: deadCode.length,
+						cacheHitRate: stats.astHitRate,
+					},
+				})
+			} catch (err) {
+				provider.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "error",
+						fileCount: 0,
+						edgeCount: 0,
+						deadSymbolCount: 0,
+						cacheHitRate: 0,
+						message: err instanceof Error ? err.message : String(err),
+					},
+				})
+			}
+			break
+		}
+		case "refreshCodebaseMap": {
+			const instances = CodebaseMappingManager.getAllInstances()
+			if (instances.length > 0) {
+				provider.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "scanning",
+						fileCount: 0,
+						edgeCount: 0,
+						deadSymbolCount: 0,
+						cacheHitRate: 0,
+						message: "Scanning...",
+					},
+				})
+				await Promise.all(instances.map((svc) => svc.scanWorkspace()))
+				const svc = instances[0]
+				const graph = await svc.getDependencyGraph()
+				const deadCode = await svc.getDeadCode()
+				const stats = await svc.getCacheStats()
+				provider.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "ready",
+						fileCount: graph.files.size,
+						edgeCount: graph.edges.length,
+						deadSymbolCount: deadCode.length,
+						cacheHitRate: stats.astHitRate,
+						message: `Refreshed ${instances.length} workspace(s)`,
+					},
+				})
+			}
+			break
+		}
+		case "showCodebaseMap": {
+			const instances = CodebaseMappingManager.getAllInstances()
+			if (instances.length > 0) {
+				const svc = instances[0]
+				const graph = await svc.getDependencyGraph()
+				const deadCode = await svc.getDeadCode()
+				const stats = await svc.getCacheStats()
+				const message = [
+					`**Codebase Map**`,
+					`- Files: ${graph.files.size}`,
+					`- Edges: ${graph.edges.length}`,
+					`- Dead symbols: ${deadCode.length}`,
+					`- Cache hit rate: ${(stats.astHitRate * 100).toFixed(1)}%`,
+				].join("\n")
+				vscode.window.showInformationMessage(message)
+			}
+			break
+		}
+		case "exportCodebaseMap": {
+			const instances = CodebaseMappingManager.getAllInstances()
+			if (instances.length > 0) {
+				const svc = instances[0]
+				const mermaid = await svc.serialize(4 as any)
+				const doc = await vscode.workspace.openTextDocument({
+					content: mermaid,
+					language: "markdown",
+				})
+				vscode.window.showTextDocument(doc)
+			}
 			break
 		}
 		case "startIndexing": {

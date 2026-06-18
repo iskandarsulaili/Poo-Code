@@ -74,6 +74,7 @@ import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodebaseMappingManager } from "../../services/codebase-mapping"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import {
@@ -2933,6 +2934,9 @@ export class ClineProvider
 				values: currentManager.getCurrentStatus(),
 			})
 		}
+
+		// Send initial codebase mapping status
+		this._sendCodebaseMappingStatus()
 	}
 
 	/**
@@ -3740,5 +3744,56 @@ export class ClineProvider
 			// Return file URI as fallback
 			return vscode.Uri.file(filePath).toString()
 		}
+	}
+
+	/**
+	 * Sends the current codebase mapping status to the webview.
+	 */
+	private _sendCodebaseMappingStatus(): void {
+		const instances = CodebaseMappingManager.getAllInstances()
+		if (instances.length === 0) {
+			this.postMessageToWebview({
+				type: "codebaseMappingStatusUpdate",
+				values: {
+					status: "idle",
+					fileCount: 0,
+					edgeCount: 0,
+					deadSymbolCount: 0,
+					cacheHitRate: 0,
+					message: "No workspace open",
+				},
+			})
+			return
+		}
+		const svc = instances[0]
+		svc.getDependencyGraph()
+			.then((graph) => {
+				return Promise.all([graph, svc.getDeadCode(), svc.getCacheStats()])
+			})
+			.then(([graph, deadCode, stats]) => {
+				this.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "ready",
+						fileCount: graph.files.size,
+						edgeCount: graph.edges.length,
+						deadSymbolCount: deadCode.length,
+						cacheHitRate: stats.astHitRate,
+					},
+				})
+			})
+			.catch((err) => {
+				this.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "error",
+						fileCount: 0,
+						edgeCount: 0,
+						deadSymbolCount: 0,
+						cacheHitRate: 0,
+						message: err instanceof Error ? err.message : String(err),
+					},
+				})
+			})
 	}
 }
