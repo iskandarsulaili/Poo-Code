@@ -241,6 +241,13 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 				return { taskId: child.taskId, result: "" }
 			}
 			this.orchestrator.setSubtaskExecutor(executor)
+			// Wire log forwarding to send live log entries to the webview
+			this.logAggregator!.onLog = (entry) => {
+				task.providerRef.deref()?.postMessageToWebview({
+					type: "parallelSubtaskLog",
+					payload: entry,
+				})
+			}
 			// Wire status callback to send live DAG updates to the webview
 			const statusCallback: StatusCallback = (dag) => {
 				task.providerRef.deref()?.postMessageToWebview({
