@@ -1,6 +1,6 @@
 import { memo, useRef, useState, useMemo } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft } from "lucide-react"
+import { ChevronUp, ChevronDown, HardDriveDownload, HardDriveUpload, FoldVertical, ArrowLeft, GitBranch } from "lucide-react"
 import prettyBytes from "pretty-bytes"
 
 import type { ClineMessage } from "@roo-code/types"
@@ -36,6 +36,7 @@ export interface TaskHeaderProps {
 	contextTokens: number
 	buttonsDisabled: boolean
 	handleCondenseContext: (taskId: string) => void
+	onOpenParallel?: () => void
 	todos?: any[]
 }
 
@@ -53,6 +54,7 @@ const TaskHeader = ({
 	contextTokens,
 	buttonsDisabled,
 	handleCondenseContext,
+	onOpenParallel,
 	todos,
 }: TaskHeaderProps) => {
 	const { t } = useTranslation()
@@ -298,6 +300,20 @@ const TaskHeader = ({
 						<div onClick={(e) => e.stopPropagation()}>
 							<TaskActions item={currentTaskItem} buttonsDisabled={buttonsDisabled} />
 						</div>
+
+						{onOpenParallel && (
+							<div className="mt-1" onClick={(e) => e.stopPropagation()}>
+								<button
+									onClick={onOpenParallel}
+									className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
+										bg-vscode-button-background text-vscode-button-foreground
+										hover:bg-vscode-button-hoverBackground
+										transition-colors duration-150 cursor-pointer border-none">
+									<GitBranch size={12} />
+									<span>Parallel</span>
+								</button>
+							</div>
+						)}
 
 						<div className="pt-3 mt-2 -mx-2.5 px-2.5 border-t border-vscode-sideBar-background">
 							<table className="w-full text-sm">

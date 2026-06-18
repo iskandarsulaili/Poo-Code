@@ -44,6 +44,7 @@ import { QueuedMessages } from "./QueuedMessages"
 import { WorktreeSelector } from "./WorktreeSelector"
 import FileChangesPanel from "./FileChangesPanel"
 import { useScrollLifecycle } from "@src/hooks/useScrollLifecycle"
+import ParallelOverlay from "@src/components/parallel/ParallelOverlay"
 
 export interface ChatViewProps {
 	isHidden: boolean
@@ -155,6 +156,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 	>(undefined)
 	const [isCondensing, setIsCondensing] = useState<boolean>(false)
 	const [showAnnouncementModal, setShowAnnouncementModal] = useState(false)
+	const [showParallelOverlay, setShowParallelOverlay] = useState(false)
 	const everVisibleMessagesTsRef = useRef<LRUCache<number, boolean>>(
 		new LRUCache({
 			max: 100,
@@ -1611,6 +1613,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						contextTokens={apiMetrics.contextTokens}
 						buttonsDisabled={sendingDisabled}
 						handleCondenseContext={handleCondenseContext}
+						onOpenParallel={() => setShowParallelOverlay(true)}
 						todos={latestTodos}
 					/>
 
@@ -1803,6 +1806,8 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			)}
 
 			<div id="roo-portal" />
+
+			<ParallelOverlay open={showParallelOverlay} onClose={() => setShowParallelOverlay(false)} />
 		</div>
 	)
 }

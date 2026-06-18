@@ -590,3 +590,22 @@ input[cmdk-input]:focus {
 	padding: 8px;
 	margin: -8px;
 }
+
+/* Parallel overlay animations */
+@keyframes parallelOverlayFadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes parallelOverlaySlideIn {
+	from {
+		transform: translateX(100%);
+	}
+	to {
+		transform: translateX(0);
+	}
+}

@@ -23,10 +23,10 @@ export const ExperimentalFeature = ({ enabled, onChange, experimentKey, checkbox
 					checked={enabled}
 					onChange={(e: any) => onChange(e.target.checked)}
 					data-testid={checkboxTestId}>
-					<span className="font-medium">{t(nameKey)}</span>
+					<span className="font-medium">{t(nameKey, { defaultValue: experimentKey ?? "" })}</span>
 				</VSCodeCheckbox>
 			</div>
-			<p className="text-vscode-descriptionForeground text-sm mt-0">{t(descriptionKey)}</p>
+			<p className="text-vscode-descriptionForeground text-sm mt-0">{t(descriptionKey, { defaultValue: "" })}</p>
 		</div>
 	)
 }
