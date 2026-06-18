@@ -932,6 +932,10 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 						})
 					}
 					break
+				case "parallelSubtaskStatus":
+					// Auto-open the parallel overlay when parallel tasks start
+					setShowParallelOverlay(true)
+					break
 			}
 			// textAreaRef.current is not explicitly required here since React
 			// guarantees that ref will be stable across re-renders, and we're
@@ -949,6 +953,7 @@ const ChatViewComponent: React.ForwardRefRenderFunction<ChatViewRef, ChatViewPro
 			handleSecondaryButtonClick,
 			setCheckpointWarning,
 			playSound,
+			setShowParallelOverlay,
 		],
 	)
 
