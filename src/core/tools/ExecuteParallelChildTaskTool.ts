@@ -237,7 +237,14 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 			const statusCallback: StatusCallback = (dag) => {
 				task.providerRef.deref()?.postMessageToWebview({
 					type: "parallelSubtaskStatus",
-					text: JSON.stringify(dag),
+					payload: {
+						nodes: Object.fromEntries(dag.nodes),
+						edges: Object.fromEntries(
+							[...dag.edges.entries()].map(([k, v]) => [k, [...v]])
+						),
+						waves: dag.waves,
+						status: dag.status,
+					},
 				})
 			}
 			this.orchestrator.setStatusCallback(statusCallback)
