@@ -121,7 +121,14 @@
 			"no_subtasks": "Keine Teilaufgaben aktiv",
 			"no_child_tasks": "Keine Unteraufgaben aktiv",
 			"agent_thoughts": "Agent-Gedanken",
-			"system_logs": "Systemprotokolle"
+			"system_logs": "Systemprotokolle",
+			"no_dag_data": "Keine DAG-Daten verfügbar",
+			"no_logs": "Noch keine Protokolleinträge...",
+			"no_thoughts": "Noch keine Agent-Gedanken...",
+			"completed": "Abgeschlossen",
+			"running": "Laufend",
+			"failed": "Fehlgeschlagen",
+			"total": "Gesamt"
 		},
 		"subtask_card": {
 			"status_label": "Status:",

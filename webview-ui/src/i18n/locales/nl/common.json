@@ -121,7 +121,14 @@
 			"no_subtasks": "Geen subtaken actief",
 			"no_child_tasks": "Geen kindtaken actief",
 			"agent_thoughts": "Agentgedachten",
-			"system_logs": "Systeemlogboeken"
+			"system_logs": "Systeemlogboeken",
+			"no_dag_data": "Geen DAG-gegevens beschikbaar",
+			"no_logs": "Nog geen logboekitems...",
+			"no_thoughts": "Nog geen agentgedachten...",
+			"completed": "Voltooid",
+			"running": "Bezig",
+			"failed": "Mislukt",
+			"total": "Totaal"
 		},
 		"subtask_card": {
 			"status_label": "Status:",

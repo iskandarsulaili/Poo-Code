@@ -121,7 +121,14 @@
 			"no_subtasks": "Không có tác vụ con nào đang chạy",
 			"no_child_tasks": "Không có tác vụ con cấp dưới nào đang chạy",
 			"agent_thoughts": "Suy nghĩ của tác nhân",
-			"system_logs": "Nhật ký hệ thống"
+			"system_logs": "Nhật ký hệ thống",
+			"no_dag_data": "Không có dữ liệu DAG",
+			"no_logs": "Chưa có mục nhật ký nào...",
+			"no_thoughts": "Chưa có suy nghĩ của tác nhân...",
+			"completed": "Đã hoàn thành",
+			"running": "Đang chạy",
+			"failed": "Thất bại",
+			"total": "Tổng"
 		},
 		"subtask_card": {
 			"status_label": "Trạng thái:",

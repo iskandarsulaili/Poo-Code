@@ -121,7 +121,14 @@
 			"no_subtasks": "Çalışan alt görev yok",
 			"no_child_tasks": "Çalışan çocuk görev yok",
 			"agent_thoughts": "Ajan Düşünceleri",
-			"system_logs": "Sistem Günlükleri"
+			"system_logs": "Sistem Günlükleri",
+			"no_dag_data": "DAG verisi mevcut değil",
+			"no_logs": "Henüz günlük girişi yok...",
+			"no_thoughts": "Henüz ajan düşüncesi yok...",
+			"completed": "Tamamlandı",
+			"running": "Çalışıyor",
+			"failed": "Başarısız",
+			"total": "Toplam"
 		},
 		"subtask_card": {
 			"status_label": "Durum:",

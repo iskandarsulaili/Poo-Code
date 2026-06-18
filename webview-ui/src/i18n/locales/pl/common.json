@@ -121,7 +121,14 @@
 			"no_subtasks": "Brak uruchomionych podzadań",
 			"no_child_tasks": "Brak uruchomionych zadań potomnych",
 			"agent_thoughts": "Myśli agenta",
-			"system_logs": "Logi systemowe"
+			"system_logs": "Logi systemowe",
+			"no_dag_data": "Brak danych DAG",
+			"no_logs": "Brak jeszcze wpisów dziennika...",
+			"no_thoughts": "Brak jeszcze myśli agenta...",
+			"completed": "Ukończono",
+			"running": "Uruchomiono",
+			"failed": "Niepowodzenie",
+			"total": "Łącznie"
 		},
 		"subtask_card": {
 			"status_label": "Status:",

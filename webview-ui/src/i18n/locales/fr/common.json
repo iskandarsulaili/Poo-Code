@@ -121,7 +121,14 @@
 			"no_subtasks": "Aucune sous-tâche en cours",
 			"no_child_tasks": "Aucune tâche enfant en cours",
 			"agent_thoughts": "Pensées de l'agent",
-			"system_logs": "Journaux système"
+			"system_logs": "Journaux système",
+			"no_dag_data": "Aucune donnée DAG disponible",
+			"no_logs": "Pas encore d'entrées de journal...",
+			"no_thoughts": "Pas encore de pensées de l'agent...",
+			"completed": "Terminé",
+			"running": "En cours",
+			"failed": "Échoué",
+			"total": "Total"
 		},
 		"subtask_card": {
 			"status_label": "Statut :",

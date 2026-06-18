@@ -121,7 +121,14 @@
 			"no_subtasks": "कोई उप-कार्य नहीं चल रहे हैं",
 			"no_child_tasks": "कोई चाइल्ड कार्य नहीं चल रहे हैं",
 			"agent_thoughts": "एजेंट के विचार",
-			"system_logs": "सिस्टम लॉग"
+			"system_logs": "सिस्टम लॉग",
+			"no_dag_data": "कोई DAG डेटा उपलब्ध नहीं",
+			"no_logs": "अभी तक कोई लॉग प्रविष्टियाँ नहीं...",
+			"no_thoughts": "अभी तक कोई एजेंट विचार नहीं...",
+			"completed": "पूर्ण",
+			"running": "चल रहा है",
+			"failed": "विफल",
+			"total": "कुल"
 		},
 		"subtask_card": {
 			"status_label": "स्थिति:",

@@ -121,7 +121,14 @@
 			"no_subtasks": "Tidak ada sub-tugas yang berjalan",
 			"no_child_tasks": "Tidak ada tugas anak yang berjalan",
 			"agent_thoughts": "Pemikiran Agen",
-			"system_logs": "Log Sistem"
+			"system_logs": "Log Sistem",
+			"no_dag_data": "Data DAG tidak tersedia",
+			"no_logs": "Belum ada entri log...",
+			"no_thoughts": "Belum ada pemikiran agen...",
+			"completed": "Selesai",
+			"running": "Berjalan",
+			"failed": "Gagal",
+			"total": "Total"
 		},
 		"subtask_card": {
 			"status_label": "Status:",
