@@ -235,29 +235,18 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const lenientModes = task.experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)
 
-			// Fix 4: Check escalation before running gates
-			if (!isLenientMode) {
-				const shouldExit = await this.checkEscalation(task, pushToolResult)
-				if (shouldExit) return
-			}
+			// Resolve verification level once for all gates (Bug 2)
+			const vLevel = task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
 
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier && !isLenientMode) {
-				const experiments = task.experiments
-
-				// Per-mode resolution: check verificationLevels[currentMode] first,
-				// fall back to verificationLevel, then "strict"
-				const verificationLevel =
-					experiments?.verificationLevels?.[currentMode] ?? experiments?.verificationLevel ?? "strict"
-
-				// Apply verificationLevel to the verifier config
-				this.requirementsVerifier.updateConfig({ verificationLevel })
+				// Apply verification level to the verifier config
+				this.requirementsVerifier.updateConfig({ verificationLevel: vLevel })
 
 				// Bypass mode: skip verification entirely
-				if (verificationLevel === "bypass") {
-				} else {
+				if (vLevel !== "bypass") {
 					const reqResult = await this.requirementsVerifier.verify()
-					const isBlocking = verificationLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
+					const isBlocking = vLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
 						// Don't increment consecutiveMistakeCount — verification has its own counter
@@ -266,7 +255,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
 					}
-					if (verificationLevel === "lenient" && !reqResult.passed) {
+					if (vLevel === "lenient" && !reqResult.passed) {
 						this.consecutiveVerificationFailures++
 						if (this.consecutiveVerificationFailures >= 3) {
 							const bypassResponse = (
@@ -311,8 +300,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// This checks whether files were actually modified in ways that match
 			// the extracted requirements, providing concrete evidence.
 			// ========================================================================
-			// Skip when verification level is bypass (Fix D)
-			const vLevel = task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
 			if (this.requirementsVerifier && !isLenientMode && vLevel !== "bypass") {
 				try {
 					// CRITICAL: Pass apiConversationHistory, NOT clineMessages.
@@ -333,7 +320,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Check if the result text mentions files that weren't actually modified.
 			// Blocking when >50% of claims are unverifiable.
 			// ========================================================================
-			if (!isLenientMode && result) {
+			if (!isLenientMode && result && vLevel !== "bypass") {
 				const filePattern = /(?:^|[\/\s])([\w_.-]+\.\w{1,5})\b/g
 				const mentionedFiles = [...result.matchAll(filePattern)].map((m) => m[1].toLowerCase())
 				if (mentionedFiles.length > 0) {
@@ -372,7 +359,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// ========================================================================
 			// Result substance check — reject empty or trivial result text
 			// ========================================================================
-			if (!isLenientMode && result) {
+			if (!isLenientMode && result && vLevel !== "bypass") {
 				const stripped = result.replace(/[*_~`#\n\r]/g, "").trim()
 				if (stripped.length < 20) {
 					const errorMsg = `Completion result is too short (${stripped.length} chars). Please provide a substantive summary of what was implemented.\n\n` +
@@ -398,9 +385,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// Guard 6: Code quality verification (VerificationEngine)
-			// Skip verification for lenient modes — research tasks and other user-configured modes
-			// don't need build/lint/types/tests. Default: ["research"]
-			if (this.verificationEngine && !isLenientMode) {
+			// Skip verification for lenient modes and bypass mode
+			// Default lenient modes: ["research"]
+			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass") {
 				// Set cwd from task context — the directory the agent is working in
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
@@ -437,6 +424,15 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Even on pass, show warning counts if any
 				// (VerificationEngine already logs details via its own logger)
+			}
+
+			// ========================================================================
+			// Bug 1: Escalation check — after ALL gates have run
+			// Prompt user after MAX_CONSECUTIVE_FAILURES consecutive gate failures
+			// ========================================================================
+			if (!isLenientMode) {
+				const shouldExit = await this.checkEscalation(task, pushToolResult)
+				if (shouldExit) return
 			}
 
 			task.consecutiveMistakeCount = 0
@@ -635,7 +631,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
-		// Clean up child task file tracking to prevent memory leak (Fix B)
+		// Clean up child task file tracking to prevent memory leak (Fix B + Bug 5)
+		// Prune this task's own child records AND any completed grandchildren
+		const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+		if (ownChildren) {
+			for (const childId of ownChildren.keys()) {
+				AttemptCompletionTool.childTaskFiles.delete(childId)
+			}
+		}
 		AttemptCompletionTool.childTaskFiles.delete(task.taskId)
 
 		// Store the result text to guard against duplicate completions

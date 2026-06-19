@@ -491,6 +491,7 @@ export class ParallelSubtaskOrchestrator {
 		subtask.metadata.startedAt = startTime
 		subtask.metadata.correlationId = correlationId
 		this.emitStatusUpdate(dag)
+		this.thoughtCallback?.(subtask.id, `Starting subtask "${subtask.id}" (mode: ${subtask.mode})`)
 
 		// Create heartbeat
 		const heartbeatPath = this.lockManager.createHeartbeat(subtask.id)
@@ -549,6 +550,7 @@ export class ParallelSubtaskOrchestrator {
 				subtask.metadata.completedAt = Date.now()
 				subtask.metadata.result = result.result
 				this.emitStatusUpdate(dag)
+				this.thoughtCallback?.(subtask.id, `Completed subtask "${subtask.id}" — result: ${result.result.slice(0, 100)}`)
 
 				this.logAggregator.log({
 					correlationId,
@@ -588,6 +590,7 @@ export class ParallelSubtaskOrchestrator {
 			subtask.metadata.completedAt = Date.now()
 			subtask.metadata.error = error instanceof Error ? error.message : String(error)
 			this.emitStatusUpdate(dag)
+			this.thoughtCallback?.(subtask.id, `Failed subtask "${subtask.id}": ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`)
 
 			this.logAggregator.log({
 				correlationId,

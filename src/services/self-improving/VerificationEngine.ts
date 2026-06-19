@@ -1111,10 +1111,10 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 
 		// Build config integrity gate (Fix 1) — checks if build config files changed since snapshot
 		if (this.config.checkBuildConfigIntegrity && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+			const _bci_start = Date.now()
 			const changedConfigs = await this.checkBuildConfigIntegrity(cwd)
 			if (changedConfigs.length > 0) {
-				const start = Date.now()
-				const durationMs = Date.now() - start
+				const durationMs = Date.now() - _bci_start
 				this.logger?.appendLine(
 					`[VerificationEngine] Gate "build-config-integrity" FAILED [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed`,
 				)
@@ -1130,8 +1130,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 					strictness,
 				})
 			} else {
-				const start = Date.now()
-				const durationMs = Date.now() - start
+				const durationMs = Date.now() - _bci_start
 				gates.push({
 					name: "build-config-integrity",
 					passed: true,
