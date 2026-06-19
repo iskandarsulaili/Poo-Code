@@ -121,7 +121,14 @@
 			"no_subtasks": "実行中のサブタスクはありません",
 			"no_child_tasks": "実行中の子タスクはありません",
 			"agent_thoughts": "エージェントの思考",
-			"system_logs": "システムログ"
+			"system_logs": "システムログ",
+			"no_dag_data": "DAGデータが利用できません",
+			"no_logs": "ログエントリはまだありません...",
+			"no_thoughts": "エージェントの思考はまだありません...",
+			"completed": "完了",
+			"running": "実行中",
+			"failed": "失敗",
+			"total": "合計"
 		},
 		"subtask_card": {
 			"status_label": "ステータス:",

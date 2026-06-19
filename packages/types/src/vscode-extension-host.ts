@@ -68,6 +68,7 @@ export interface ExtensionMessage {
 		| "condenseTaskContextResponse"
 		| "singleRouterModelFetchResponse"
 		| "indexingStatusUpdate"
+		| "codebaseMappingStatusUpdate"
 		| "indexCleared"
 		| "codebaseIndexConfig"
 		| "marketplaceInstallResult"
@@ -572,6 +573,10 @@ export interface WebviewMessage {
 		| "switchOrganization"
 		| "condenseTaskContextRequest"
 		| "requestIndexingStatus"
+		| "requestCodebaseMappingStatus"
+		| "refreshCodebaseMap"
+		| "showCodebaseMap"
+		| "exportCodebaseMap"
 		| "startIndexing"
 		| "stopIndexing"
 		| "clearIndexData"
@@ -816,6 +821,20 @@ export interface IndexingStatus {
 export interface IndexingStatusUpdateMessage {
 	type: "indexingStatusUpdate"
 	values: IndexingStatus
+}
+
+export interface CodebaseMappingStatus {
+	status: "idle" | "scanning" | "ready" | "error"
+	fileCount: number
+	edgeCount: number
+	deadSymbolCount: number
+	cacheHitRate: number
+	message?: string
+}
+
+export interface CodebaseMappingStatusUpdateMessage {
+	type: "codebaseMappingStatusUpdate"
+	values: CodebaseMappingStatus
 }
 
 export interface LanguageModelChatSelector {

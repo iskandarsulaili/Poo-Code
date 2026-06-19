@@ -121,7 +121,14 @@
 			"no_subtasks": "No hi ha subtasques en execució",
 			"no_child_tasks": "No hi ha tasques filles en execució",
 			"agent_thoughts": "Pensaments de l'agent",
-			"system_logs": "Registres del sistema"
+			"system_logs": "Registres del sistema",
+			"no_dag_data": "No hi ha dades DAG disponibles",
+			"no_logs": "Encara no hi ha entrades de registre...",
+			"no_thoughts": "Encara no hi ha pensaments de l'agent...",
+			"completed": "Completat",
+			"running": "Executant-se",
+			"failed": "Fallit",
+			"total": "Total"
 		},
 		"subtask_card": {
 			"status_label": "Estat:",

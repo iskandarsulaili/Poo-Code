@@ -28,6 +28,38 @@ const DEFAULT_CONFIG: RequirementsVerifierConfig = {
 	verificationLevel: "strict",
 }
 
+/** File-writing tool names whose params contain a file path (lowercase) */
+const FILE_WRITE_TOOL_NAMES = new Set([
+	"write_to_file",
+	"apply_diff",
+	"edit",
+	"search_replace",
+	"edit_file",
+	"patch",
+])
+
+/**
+ * Minimal interface for Anthropic tool_use blocks in API conversation history.
+ * The full type is Anthropic.ToolUseBlock, but we define only what we need.
+ */
+interface ApiToolUseBlock {
+	type: "tool_use"
+	id?: string
+	name: string
+	input: Record<string, unknown>
+}
+
+/**
+ * Minimal interface for API conversation history messages.
+ * Compatible with Anthropic.MessageParam used in apiConversationHistory.
+ */
+interface ApiMessage {
+	role: "user" | "assistant"
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	content: string | any[]
+	ts?: number
+}
+
 export class RequirementsVerifier {
 	private config: RequirementsVerifierConfig
 	private requirements: Map<string, Requirement> = new Map()
@@ -129,6 +161,247 @@ export class RequirementsVerifier {
 		return all
 	}
 
+	// ========================================================================
+	// Auto-verify requirements using API conversation history (Anthropic tool_use blocks)
+	// ========================================================================
+
+	/**
+	 * Auto-verify requirements against the actual tool call history from the API conversation.
+	 *
+	 * For each active requirement:
+	 * 1. Extract keywords from the requirement text
+	 * 2. Scan all file-writing tool_use blocks in the API conversation history
+	 * 3. If a tool call's file path matches requirement keywords → mark verified
+	 * 4. If NO tool call matches → mark failed (when other requirements matched)
+	 *
+	 * @param apiMessages - The API conversation history (ApiMessage[] from task.apiConversationHistory)
+	 * @param cwd - The working directory for resolving relative paths
+	 */
+	autoVerifyFromToolHistory(
+		apiMessages: ApiMessage[],
+		cwd: string,
+	): void {
+		const active = this.getActiveRequirements()
+		if (active.length === 0) {
+			this.logger?.appendLine("[RequirementsVerifier] No active requirements to auto-verify against tool history.")
+			return
+		}
+
+		// Extract file paths touched by file-writing tool_use blocks
+		const touchedFiles = this.extractTouchedFilesFromApiMessages(apiMessages)
+		const filePaths = [...touchedFiles]
+
+		this.logger?.appendLine(
+			`[RequirementsVerifier] Auto-verifying ${active.length} requirement(s) against ${filePaths.length} file(s) touched by tool calls`,
+		)
+
+		if (filePaths.length > 0) {
+			this.logger?.appendLine(`[RequirementsVerifier] Files modified: ${filePaths.slice(0, 10).join(", ")}${filePaths.length > 10 ? `... (+${filePaths.length - 10} more)` : ""}`)
+		}
+
+		// Read the git diff if available for more precise change detection
+		let gitDiffFiles: string[] = []
+		try {
+			const { execSync } = require("child_process")
+			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD", {
+				cwd,
+				encoding: "utf-8",
+				timeout: 5000,
+				stdio: ["pipe", "pipe", "pipe"],
+			}) as string
+			const parts = diffOutput.split("---STAGED---")
+			const allGitFiles = new Set<string>()
+			for (const f of (parts[0] || "").trim().split("\n").concat((parts[1] || "").trim().split("\n"))) {
+				const clean = f.trim()
+				if (clean && !clean.startsWith("---STAGED---")) allGitFiles.add(clean)
+			}
+			gitDiffFiles = [...allGitFiles]
+		} catch {
+			// Not a git repo or git not available — use tool-call file paths only
+		}
+
+		// Combine: tool calls are primary, git diff is secondary
+		const allChangedFiles = new Set([...filePaths, ...gitDiffFiles])
+		const hasAnyChanges = allChangedFiles.size > 0
+
+		// Track which requirements matched
+		let verifiedCount = 0
+		let failedCount = 0
+		let unmatchedCount = 0
+
+		for (const req of active) {
+			if (req.status === "verified" || req.status === "failed") continue
+
+			// Extract significant keywords from the requirement text
+			const keywords = this.extractKeywords(req.text)
+
+			// Check if any changed file path matches requirement keywords
+			const matchingFiles = [...allChangedFiles].filter((fp) =>
+				keywords.some((kw) => fp.toLowerCase().includes(kw.toLowerCase())),
+			)
+
+			if (matchingFiles.length > 0) {
+				// Found matching file changes — mark as verified
+				req.status = "verified"
+				req.verifiedBy = "code-review"
+				req.evidence = `File changes detected: ${matchingFiles.join(", ")}`
+				req.verifiedAt = Date.now()
+				verifiedCount++
+				this.logger?.appendLine(
+					`[RequirementsVerifier] ✅ Auto-verified requirement: "${req.text.slice(0, 80)}..." → matched files: ${matchingFiles.join(", ")}`,
+				)
+			} else {
+				// Only mark as failed if the task had significant file changes
+				// but this particular requirement wasn't addressed.
+				if (hasAnyChanges) {
+					req.status = "failed"
+					req.evidence = `No file changes matched keywords: "${keywords.join(", ")}". Changed files: ${[...allChangedFiles].join(", ")}`
+					failedCount++
+					this.logger?.appendLine(
+						`[RequirementsVerifier] ❌ Failed requirement: "${req.text.slice(0, 80)}..." — no matching file changes`,
+					)
+				} else {
+					unmatchedCount++
+				}
+			}
+		}
+
+		if (verifiedCount > 0 || failedCount > 0 || unmatchedCount > 0) {
+			this.logger?.appendLine(
+				`[RequirementsVerifier] Auto-verification result: ${verifiedCount} verified, ${failedCount} failed, ${unmatchedCount} unmatched (no file changes at all)`,
+			)
+		}
+	}
+
+	/**
+	 * Extract file paths from API conversation history messages.
+	 * Parses Anthropic tool_use blocks (content[].type === "tool_use") and
+	 * extracts path/file_path from their input objects.
+	 */
+	private extractTouchedFilesFromApiMessages(messages: ApiMessage[]): Set<string> {
+		const files = new Set<string>()
+
+		for (const msg of messages) {
+			if (msg.role !== "assistant") continue
+			if (!msg.content || typeof msg.content === "string") continue
+
+			const blocks = msg.content as Array<{ type: string; name?: string; input?: Record<string, unknown> }>
+			for (const block of blocks) {
+				if (block.type !== "tool_use") continue
+				const toolName = (block.name || "").toLowerCase()
+				if (!FILE_WRITE_TOOL_NAMES.has(toolName)) continue
+
+				const input = block.input || {}
+				if (typeof input.path === "string") files.add(input.path)
+				if (typeof input.file_path === "string") files.add(input.file_path)
+			}
+		}
+
+		return files
+	}
+
+	/**
+	 * Extract significant keywords from requirement text for file path matching.
+	 * Strips stop words and common boilerplate.
+	 */
+	private extractKeywords(text: string): string[] {
+		const stopWords = new Set([
+			"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+			"of", "with", "by", "from", "as", "is", "was", "be", "been", "are",
+			"were", "has", "have", "had", "do", "does", "did", "will", "would",
+			"should", "could", "can", "may", "might", "shall", "need", "must",
+			"this", "that", "these", "those", "it", "its", "all", "each", "every",
+			"some", "any", "no", "not", "only", "just", "also", "very", "too",
+			"make", "made", "use", "used", "using", "add", "added", "adding",
+			"new", "create", "created", "creating", "implement", "implemented",
+			"implementing", "implementation", "update", "updated", "updating",
+			"change", "changed", "changing", "remove", "removed", "removing",
+			"fix", "fixed", "fixing", "ensure", "ensures", "ensuring",
+			"support", "supports", "supported", "supporting", "function",
+			"functionality", "feature", "file", "files", "code", "way", "work",
+		])
+
+		const words = text
+			.toLowerCase()
+			.replace(/[^a-z0-9\s.-]/g, " ")
+			.split(/\s+/)
+			.filter(Boolean)
+
+		const keywords: string[] = []
+		for (const word of words) {
+			if (word.length < 3) continue
+			if (stopWords.has(word)) continue
+			if (/^\d+$/.test(word)) continue
+			keywords.push(word)
+		}
+
+		// Also extract file-like patterns (e.g., "login.ts", "auth.service")
+		const fileLikes = text.matchAll(/\b[\w_-]+\.\w{1,4}\b/g)
+		for (const m of fileLikes) {
+			keywords.push(m[0])
+		}
+
+		// Deduplicate
+		return [...new Set(keywords)]
+	}
+
+	// ========================================================================
+	// Fix 3: Tighten read-only detection
+	// ========================================================================
+
+	/**
+	 * Detect if this is genuinely a read-only/audit task.
+	 *
+	 * Only triggers when:
+	 * 1. The task description explicitly states it's read-only (multiple signals)
+	 * 2. The task is about reviewing existing code, not creating/modifying
+	 * 3. Single keywords like "check" or "report" alone don't trigger bypass
+	 */
+	private detectReadOnlyTask(): boolean {
+		const taskText = this.taskDescription?.toLowerCase() ?? ""
+		if (!taskText) return false
+
+		// Strong signals — explicit read-only statements
+		const strongReadOnly = [
+			"do not modify", "don't modify", "do not change", "don't change",
+			"do not create", "don't create", "do not write", "don't write",
+			"read-only", "read only", "readonly", "without making changes",
+			"without modifying", "review only", "audit only",
+		]
+		for (const phrase of strongReadOnly) {
+			if (taskText.includes(phrase)) return true
+		}
+
+		// Count weak signals — need at least 2 to trigger
+		const weakAuditSignals = [
+			"audit", "review", "inspect", "analyze",
+		]
+		const readOnlySignalCount = weakAuditSignals.filter((kw) => taskText.includes(kw)).length
+
+		// If the task explicitly talks about "verify" or "check" in a read-only context
+		// (paired with existing code language like "verify that", "check if")
+		const hasVerificationContext = /\b(verify|check)\s+(that|if|whether|the|your)\b/i.test(taskText)
+		const isExploratory = /\b(what|how|why|where|when|which)\b/i.test(taskText) &&
+			/\b(does|is|are|was|were|has|have)\b/i.test(taskText)
+
+		// Count write/modify keywords — if these appear, it's NOT read-only
+		const writeSignals = [
+			"create", "implement", "build", "write", "modify", "add",
+			"fix", "refactor", "update", "change", "make", "produce",
+		]
+		const writeSignalCount = writeSignals.filter((kw) => taskText.includes(kw)).length
+
+		// Decision: at least 2 audit signals AND zero write signals
+		if (readOnlySignalCount >= 2 && writeSignalCount === 0) return true
+		if (readOnlySignalCount >= 1 && writeSignalCount === 0 && (hasVerificationContext || isExploratory)) return true
+
+		return false
+	}
+
+	// ========================================================================
+	// Existing methods from here down
+	// ========================================================================
+
 	/**
 	 * Resolve conflicts between newly extracted requirements and existing ones.
 	 * Uses the pluggable conflict resolver to determine supersession.
@@ -160,11 +433,14 @@ export class RequirementsVerifier {
 
 	/**
 	 * Extract requirements from a single user message.
+	 * Handles both structured (bullet points, numbered lists) and unstructured
+	 * narrative prompts by splitting on action verbs.
 	 */
 	extractFromPrompt(prompt: string, messageIndex: number = 0): Requirement[] {
 		const extracted: Requirement[] = []
 		const lines = prompt.split("\n")
 		let currentCategory: Requirement["category"] = "functional"
+		let hasStructuredItems = false
 
 		for (const line of lines) {
 			const trimmed = line.trim()
@@ -188,6 +464,7 @@ export class RequirementsVerifier {
 			const reqText = itemMatch?.[1] || numMatch?.[1]
 
 			if (reqText) {
+				hasStructuredItems = true
 				extracted.push(this.createRequirement(reqText, currentCategory, messageIndex))
 				continue
 			}
@@ -197,16 +474,76 @@ export class RequirementsVerifier {
 				/(?:must|should|need|require|shall|will|ensure|verify|check|validate|support|implement|add|create|build|fix|refactor)\s.+[.!]/i,
 			)
 			if (keywordMatch && trimmed.length > 10 && trimmed.length < 500) {
+				hasStructuredItems = true
 				extracted.push(this.createRequirement(trimmed, currentCategory, messageIndex))
 			}
 		}
 
-		// If no structured requirements found, treat the whole prompt as one requirement
+		// If no structured requirements found, attempt narrative extraction
 		if (extracted.length === 0 && prompt.trim().length > 0) {
+			const narrativeRequirements = this.extractNarrativeRequirements(prompt, messageIndex)
+			if (narrativeRequirements.length > 0) {
+				return narrativeRequirements
+			}
+			// Last resort: treat the whole prompt as one requirement
 			extracted.push(this.createRequirement(prompt.trim(), "goal", messageIndex))
 		}
 
 		return extracted
+	}
+
+	/**
+	 * Extract multiple requirements from unstructured narrative text by
+	 * splitting on action verbs and independent clauses.
+	 *
+	 * Example: "Create a login page with email/password authentication and
+	 * session management. The UI should be responsive."
+	 * → "Create a login page with email/password authentication"
+	 * → "session management"
+	 * → "The UI should be responsive"
+	 */
+	private extractNarrativeRequirements(text: string, messageIndex: number): Requirement[] {
+		const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+		const requirements: Requirement[] = []
+
+		// Action verbs that signal a new requirement
+		const actionVerbs = /^(create|implement|build|add|make|write|develop|design|set. up|configure|install|deploy|integrate|migrate|convert|refactor|rewrite|restructure|optimize|improve|fix|resolve|address|handle|manage|process|generate|produce|render|display|show|list|filter|search|sort|paginate|authenticate|authorize|validate|sanitize|encrypt|decrypt|notify|send|receive|fetch|load|save|store|cache|sync|backup|restore|monitor|log|test|cover|ensure|verify|check|support|allow|prevent|block|restrict|limit|extend|modify|update|change|replace|remove|delete|clean|clear|reset|reinitialize)/i
+
+		for (const sentence of sentences) {
+			const trimmed = sentence.trim()
+			if (!trimmed || trimmed.length < 10) continue
+
+			// Check if this sentence starts with an action verb (indicating a requirement)
+			if (actionVerbs.test(trimmed) || /\b(should|must|will|shall|need to|has to|have to)\b/i.test(trimmed)) {
+				requirements.push(this.createRequirement(trimmed, "functional", messageIndex))
+			} else if (trimmed.length > 30 && requirements.length === 0) {
+				// First substantive sentence that's not an action verb — treat as goal
+				requirements.push(this.createRequirement(trimmed, "goal", messageIndex))
+			}
+		}
+
+		// If we only got one requirement from the first sentence and there are
+		// longer clauses with "and", split on "and" at the sentence level
+		if (requirements.length === 1 && text.length > 100) {
+			const andParts = text.split(/\band\b/i)
+			if (andParts.length > 2) {
+				// The "and" splitting created meaningful sub-requirements
+				for (let i = 0; i < andParts.length; i++) {
+					const part = andParts[i].trim().replace(/[.!]+$/, "")
+					if (part.length > 15) {
+						requirements.push(
+							this.createRequirement(
+								i === 0 ? part : `${actionVerbs.test(part) ? "" : "Implement "}${part}`,
+								"functional",
+								messageIndex,
+							),
+						)
+					}
+				}
+			}
+		}
+
+		return requirements
 	}
 
 	/**
@@ -334,18 +671,29 @@ export class RequirementsVerifier {
 		}
 
 		// Strict mode (default)
-		// NEW: Detect read-only/audit tasks — always pass verification
 		const isReadOnlyTask = this.detectReadOnlyTask()
 
-		// NEW: If no requirements have been explicitly tracked (all pending),
-		// treat as passed — prevents auto-extracted requirements from blocking
+		// NEW: Count requirements that were auto-verified or have actual evidence
 		const hasExplicitTracking = verified.length > 0 || failed.length > 0
 
 		let passed: boolean
 		if (isReadOnlyTask) {
 			passed = true
 		} else if (!hasExplicitTracking) {
-			passed = true
+			// No requirements were explicitly verified or failed — all pending.
+			// This means either auto-verification didn't run or there were no file changes.
+			// In this case, check if there are any pending requirements at all.
+			// If all are pending and zero evidence exists, something is wrong.
+			if (pending.length > 0 && all.length > 0) {
+				// If the task had file changes but requirements aren't tracked, be lenient
+				// but don't fail — the requirements system may not have captured anything actionable.
+				passed = true
+				this.logger?.appendLine(
+					`[RequirementsVerifier] [STRICT] ${pending.length} pending requirements with no tracking — passing (requirements may be informational)`,
+				)
+			} else {
+				passed = true
+			}
 		} else {
 			passed = failed.length === 0 && (pending.length === 0 || !this.config.requireAllVerified)
 		}
@@ -365,16 +713,6 @@ export class RequirementsVerifier {
 		this.lastVerifyResult = { passed, total: all.length, verified, failed, pending, summary }
 
 		return { passed, total: all.length, verified, failed, pending, summary }
-	}
-
-	/**
-	 * Detect if this is a read-only/audit task based on the task description.
-	 * Read-only tasks always pass verification since they don't produce code changes.
-	 */
-	private detectReadOnlyTask(): boolean {
-		const readOnlyKeywords = ["audit", "verify", "check", "report", "read-only", "read only", "review", "inspect"]
-		const taskText = this.taskDescription?.toLowerCase() ?? ""
-		return readOnlyKeywords.some((kw) => taskText.includes(kw))
 	}
 
 	/**

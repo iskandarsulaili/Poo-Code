@@ -185,17 +185,6 @@
 		},
 		"dag": {
 			"wave_label": "Wave {{number}}"
-		},
-		"dashboard": {
-			"title": "Parallel Dashboard",
-			"tab_subtasks": "Subtasks",
-			"tab_child_tasks": "Child Tasks",
-			"tab_dag": "DAG",
-			"tab_logs": "Logs",
-			"no_subtasks": "No subtasks running",
-			"no_child_tasks": "No child tasks running",
-			"agent_thoughts": "Agent Thoughts",
-			"system_logs": "System Logs"
 		}
 	}
 }

@@ -63,6 +63,16 @@ export interface VerificationConfig {
 	checkTypes: boolean
 	/** Whether to run tests */
 	checkTests: boolean
+	/** Whether to check for actual file changes (git diff). Default: true */
+	checkFileChanges: boolean
+	/** Whether to scan modified files for stub/TODO patterns. Default: true */
+	enableStubDetection: boolean
+	/** Whether to verify build config integrity (package.json hasn't been tampered with). Default: true */
+	checkBuildConfigIntegrity: boolean
+	/** Test coverage command (e.g., "npm test -- --coverage"). Default: undefined */
+	coverageCommand?: string
+	/** Minimum test coverage percentage (0-100). Default: 0 = no check */
+	minCoverage: number
 	/** Build command (e.g., "npm run build") */
 	buildCommand?: string
 	/** Lint command (e.g., "npm run lint") */
@@ -97,6 +107,10 @@ const DEFAULT_CONFIG: VerificationConfig = {
 	checkLint: true,
 	checkTypes: true,
 	checkTests: false,
+	checkFileChanges: true,
+	enableStubDetection: true,
+	checkBuildConfigIntegrity: true,
+	minCoverage: 0,
 	gateTimeoutMs: 60_000,
 	mandatory: true,
 	strictness: "moderate",
@@ -446,6 +460,15 @@ export class VerificationEngine {
 	private lastResult?: VerificationResult
 	private enabled: boolean
 	private autoProfiled: ProjectProfile | null = null
+	/**
+	 * Snapshot of build config file hashes at task start.
+	 * Used by checkBuildConfigIntegrity to detect config tampering.
+	 * Maps relative file path → SHA256 hex digest.
+	 * Keyed by cwd so each workspace directory gets its own snapshot.
+	 */
+	private buildConfigSnapshot: Map<string, string> | null = null
+	/** The cwd this snapshot was taken in. Prevents re-snapshot for same dir. */
+	private snapshotCwd: string | null = null
 
 	/**
 	 * In-memory cache for isProjectWithTooling results per directory.
@@ -817,6 +840,31 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			this.config.testCommand = profile.testCommand
 			this.config.checkTests = true
 		}
+		// Auto-detect coverage command (Blindspot 5)
+		// Common patterns: pytest --cov, vitest run --coverage, go test -cover, cargo tarpaulin
+		if (!this.config.coverageCommand) {
+			const lang = profile.language?.toLowerCase() || ""
+			if (lang.includes("python")) {
+				this.config.coverageCommand = "pytest --cov --cov-report=term"
+			} else if (lang.includes("rust")) {
+				this.config.coverageCommand = "cargo tarpaulin --out Xml"
+			} else if (lang.includes("go")) {
+				this.config.coverageCommand = "go test -cover -coverprofile=coverage.out ./..."
+			} else if (lang.includes("typescript") || lang.includes("javascript") || lang.includes("node") || lang.includes("js")) {
+				const hasVitest = this.config.testCommand?.includes("vitest")
+				this.config.coverageCommand = hasVitest ? "vitest run --coverage" : "npx jest --coverage"
+			} else if (lang.includes("java") || lang.includes("kotlin")) {
+				this.config.coverageCommand = "./gradlew testCoverage"
+			} else if (lang.includes("zig")) {
+				this.config.coverageCommand = "zig build test --summary all"
+			}
+			if (this.config.coverageCommand) {
+				this.config.minCoverage = this.config.minCoverage || 0
+				this.logger?.appendLine(
+					`[VerificationEngine] Auto-detected coverage command: ${this.config.coverageCommand}`,
+				)
+			}
+		}
 
 		this.logger?.appendLine(
 			`[VerificationEngine] Auto-config applied: build=${
@@ -862,6 +910,90 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 	}
 
+	/**
+	 * Snapshot build config files at task start for integrity checking (Fix 1).
+	 *
+	 * Hashes known build config files (package.json, Cargo.toml, pyproject.toml, etc.)
+	 * so that verify() can detect if the agent tampered with build scripts.
+	 * Call this at task start (before the agent makes any changes).
+	 */
+	async snapshotBuildConfig(cwd: string): Promise<void> {
+		// Skip if snapshot already taken for this exact cwd (prevents child task overwrite)
+		if (this.snapshotCwd === path.resolve(cwd) && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+			this.logger?.appendLine(
+				`[VerificationEngine] Build config snapshot already exists (${this.buildConfigSnapshot.size} files). Skipping re-snapshot.`,
+			)
+			return
+		}
+
+		const BUILD_CONFIG_FILES = [
+			"package.json",
+			"package-lock.json",
+			"Cargo.toml",
+			"pyproject.toml",
+			"setup.py",
+			"go.mod",
+			"Gemfile",
+			"build.gradle",
+			"build.gradle.kts",
+			"pom.xml",
+			"Makefile",
+			"CMakeLists.txt",
+			"build.zig",
+			"Deno.json",
+			"Deno.jsonc",
+		]
+
+		const crypto = await import("crypto")
+		const snapshots = new Map<string, string>()
+
+		for (const configFile of BUILD_CONFIG_FILES) {
+			const fullPath = path.resolve(cwd, configFile)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const hash = crypto.createHash("sha256").update(content).digest("hex")
+				snapshots.set(configFile, hash)
+			} catch {
+				// File doesn't exist — not an error
+			}
+		}
+
+		this.buildConfigSnapshot = snapshots
+		this.snapshotCwd = path.resolve(cwd)
+		this.logger?.appendLine(
+			`[VerificationEngine] Build config snapshot: ${snapshots.size} file(s) hashed`,
+		)
+	}
+
+	/**
+	 * Check if build config files have changed since snapshot (Fix 1).
+	 * Returns list of config files that changed.
+	 */
+	private async checkBuildConfigIntegrity(cwd: string): Promise<string[]> {
+		if (!this.buildConfigSnapshot || this.buildConfigSnapshot.size === 0) {
+			return [] // No snapshot — cannot check
+		}
+
+		const crypto = await import("crypto")
+		const changed: string[] = []
+
+		for (const [configFile, originalHash] of this.buildConfigSnapshot.entries()) {
+			const fullPath = path.resolve(cwd, configFile)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const currentHash = crypto.createHash("sha256").update(content).digest("hex")
+				if (currentHash !== originalHash) {
+					changed.push(configFile)
+				}
+			} catch {
+				// File deleted since snapshot — flag as changed
+				changed.push(configFile)
+			}
+		}
+
+		return changed
+	}
+
 	setEnabled(enabled: boolean): void {
 		this.enabled = enabled
 		this.logger?.appendLine(`[VerificationEngine] ${enabled ? "Enabled" : "Disabled"}`)
@@ -888,7 +1020,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 	}
 
-	async verify(): Promise<VerificationResult> {
+	async verify(toolCallFiles?: string[]): Promise<VerificationResult> {
 		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
 		const gates: GateResult[] = []
 		let strictness = this.config.strictness
@@ -896,7 +1028,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		// Check if the working directory has actual project tooling.
 		// Only consider the result authoritative when we can read the directory.
 		// null = unknown (dir unreadable) — proceed with gates
-		// false = definitively no tooling — skip gates
+		// false = definitively no tooling — skip build/lint/types/tests gates
 		// true = has tooling — run gates normally
 		let hasTooling: boolean | null = null
 		if (this.config.cwd) {
@@ -914,64 +1046,119 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			)
 		}
 
-		// Only skip gates when we're CERTAIN there's no tooling (hasTooling === false).
-		// When hasTooling is null (unknown/unreadable dir) or true, run gates normally.
-		// This prevents false-positive skips when the check can't determine tooling.
+		// ====================================================================
+		// Fix B + H: File-changes gate runs FIRST, before any tooling check
+		// This gate is independent of project tooling — it works on any
+		// git repo or tool call history.
+		// ====================================================================
+		if (this.config.checkFileChanges) {
+			gates.push(await this.runFileChangesGate(strictness, toolCallFiles))
+		}
+
+		// ====================================================================
+		// Only skip build/lint/types/tests gates when we're CERTAIN there's
+		// no project tooling. The file-changes gate above already ran.
+		// ====================================================================
 		if (hasTooling === false) {
 			const reason = isMarkdown
 				? "markdown-only directory — no project tooling detected"
 				: "no project tooling detected"
-			this.logger?.appendLine(`[VerificationEngine] ${reason}. All gates skipped.`)
+			this.logger?.appendLine(`[VerificationEngine] ${reason}. Build/lint/types/test gates skipped.`)
 
-			const skippedGates: GateResult[] = []
-
-			if (this.config.checkBuild) {
-				skippedGates.push(this.makeSkippedGate("build", reason, strictness))
-			}
-			if (this.config.checkLint) {
-				skippedGates.push(this.makeSkippedGate("lint", reason, strictness))
-			}
-			if (this.config.checkTypes) {
-				skippedGates.push(this.makeSkippedGate("type-check", reason, strictness))
-			}
-			if (this.config.checkTests) {
-				skippedGates.push(this.makeSkippedGate("tests", reason, strictness))
+			for (const gateName of ["build", "lint", "type-check", "tests"]) {
+				if (gateName === "build" && this.config.checkBuild) {
+					gates.push(this.makeSkippedGate("build", reason, strictness))
+				} else if (gateName === "lint" && this.config.checkLint) {
+					gates.push(this.makeSkippedGate("lint", reason, strictness))
+				} else if (gateName === "type-check" && this.config.checkTypes) {
+					gates.push(this.makeSkippedGate("type-check", reason, strictness))
+				} else if (gateName === "tests" && this.config.checkTests) {
+					gates.push(this.makeSkippedGate("tests", reason, strictness))
+				}
 			}
 
-			const allSkipped = true
-			const summary = `All verification gates skipped [${strictness}]: ${reason}`
-			this.logger?.appendLine(`[VerificationEngine] ${summary}`)
-			this.lastVerifyAt = Date.now()
-			this.lastResult = { passed: true, gates: skippedGates, summary, strictness, allSkipped }
-			return { passed: true, gates: skippedGates, summary, strictness, allSkipped }
+			// File-changes gate already ran above. Skip individual gate execution
+			// since there's no project tooling to run.
+		} else {
+			// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
+			const stripCd = (cmd: string | undefined): string | undefined => {
+				if (!cmd) return cmd
+				const trimmed = cmd.trim()
+				if (trimmed === "cd") return undefined
+				return cmd
+			}
+
+			if (this.config.checkBuild && this.config.buildCommand) {
+				const cmd = stripCd(this.config.buildCommand)
+				if (cmd) gates.push(await this.runGate("build", cmd, strictness))
+			}
+
+			if (this.config.checkLint && this.config.lintCommand) {
+				const cmd = stripCd(this.config.lintCommand)
+				if (cmd) gates.push(await this.runGate("lint", cmd, strictness))
+			}
+
+			if (this.config.checkTypes && this.config.typeCheckCommand) {
+				const cmd = stripCd(this.config.typeCheckCommand)
+				if (cmd) gates.push(await this.runGate("type-check", cmd, strictness))
+			}
+
+			if (this.config.checkTests && this.config.testCommand) {
+				const cmd = stripCd(this.config.testCommand)
+				if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
+			}
 		}
 
-		// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
-		const stripCd = (cmd: string | undefined): string | undefined => {
-			if (!cmd) return cmd
-			const trimmed = cmd.trim()
-			if (trimmed === "cd") return undefined
-			return cmd
+		// Build config integrity gate (Fix 1) — checks if build config files changed since snapshot
+		if (this.config.checkBuildConfigIntegrity && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+			const _bci_start = Date.now()
+			const changedConfigs = await this.checkBuildConfigIntegrity(cwd)
+			if (changedConfigs.length > 0) {
+				const durationMs = Date.now() - _bci_start
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "build-config-integrity" FAILED [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed`,
+				)
+				gates.push({
+					name: "build-config-integrity",
+					passed: false,
+					error: `${changedConfigs.length} build config file(s) changed since task start: ${changedConfigs.join(", ")}. The agent may have modified build scripts.`,
+					output: `Changed configs: ${changedConfigs.join(", ")}`,
+					durationMs,
+					warnings: 0,
+					errors: 1,
+					stderrSummary: `ERR: ${changedConfigs.length} config(s) changed`,
+					strictness,
+				})
+			} else {
+				const durationMs = Date.now() - _bci_start
+				gates.push({
+					name: "build-config-integrity",
+					passed: true,
+					durationMs,
+					warnings: 0,
+					errors: 0,
+					strictness,
+				})
+			}
 		}
 
-		if (this.config.checkBuild && this.config.buildCommand) {
-			const cmd = stripCd(this.config.buildCommand)
-			if (cmd) gates.push(await this.runGate("build", cmd, strictness))
-		}
-
-		if (this.config.checkLint && this.config.lintCommand) {
-			const cmd = stripCd(this.config.lintCommand)
-			if (cmd) gates.push(await this.runGate("lint", cmd, strictness))
-		}
-
-		if (this.config.checkTypes && this.config.typeCheckCommand) {
-			const cmd = stripCd(this.config.typeCheckCommand)
-			if (cmd) gates.push(await this.runGate("type-check", cmd, strictness))
-		}
-
-		if (this.config.checkTests && this.config.testCommand) {
-			const cmd = stripCd(this.config.testCommand)
-			if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
+		// Test coverage gate (Fix 2) — runs coverage command and parses output
+		if (this.config.minCoverage > 0 && this.config.coverageCommand) {
+			const coverageGate = await this.runGate("coverage", this.config.coverageCommand, strictness)
+			// Parse coverage percentage from stdout — match LAST occurrence (e.g. "Total: 64.7%")
+			if (coverageGate.passed && coverageGate.output) {
+				const allMatches = [...coverageGate.output.matchAll(/(\d+(?:\.\d+)?)%/g)]
+				const coverageMatch = allMatches.length > 0 ? allMatches[allMatches.length - 1] : null
+				if (coverageMatch) {
+					const pct = parseFloat(coverageMatch[1])
+					if (pct < this.config.minCoverage) {
+						coverageGate.passed = false
+						coverageGate.error = `Coverage ${pct}% is below minimum ${this.config.minCoverage}%`
+						coverageGate.errors = 1
+					}
+				}
+			}
+			gates.push(coverageGate)
 		}
 
 		const passed = gates.every((g) => g.passed || g.skipped)
@@ -1023,6 +1210,227 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			skipped: true,
 			skipReason: reason,
 		}
+	}
+
+	/**
+	 * Run the file-changes verification gate.
+	 *
+	 * Checks whether files were actually modified during the task by:
+	 * 1. Running `git diff --name-only` to list changed, added, copied, renamed, or modified files
+	 * 2. Counting total modified files (excluding lock files, node_modules, .git)
+	 * 3. Optionally scanning modified files for stub/TODO patterns
+	 *
+	 * This gate passes if at least one non-trivial file was changed.
+	 * It fails with a warning if zero files changed (suggests the agent didn't implement anything).
+	 */
+	private async runFileChangesGate(
+		strictness: GateResult["strictness"],
+		toolCallFiles?: string[],
+	): Promise<GateResult> {
+		const start = Date.now()
+		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
+
+		try {
+			const { execSync } = await import("child_process")
+
+			// ====================================================================
+			// Fix H: Use tool call files as PRIMARY source, git diff as secondary
+			// ====================================================================
+			const changedFromToolCalls = new Set(toolCallFiles || [])
+			let changedFromGit: string[] = []
+
+			// Get list of changed files from git (staged + unstaged)
+			try {
+				const output = execSync(
+					"git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD",
+					{
+						cwd,
+						encoding: "utf-8",
+						timeout: 10000,
+						stdio: ["pipe", "pipe", "pipe"],
+					},
+				) as string
+
+				// Parse the output — combine staged and unstaged
+				const parts = output.split("---STAGED---")
+				const workingDir = (parts[0] || "").trim()
+				const staged = (parts[1] || "").trim()
+
+				const allGitFiles = new Set<string>()
+				for (const f of workingDir.split("\n").concat(staged.split("\n"))) {
+					const clean = f.trim()
+					if (clean && !clean.startsWith("---STAGED---")) {
+						allGitFiles.add(clean)
+					}
+				}
+
+				// Filter out irrelevant files
+				changedFromGit = [...allGitFiles].filter(
+					(f) =>
+						!f.startsWith("node_modules/") &&
+						!f.startsWith(".git/") &&
+						!f.includes("package-lock.json") &&
+						!f.includes("yarn.lock") &&
+						!f.includes("pnpm-lock.yaml") &&
+						!f.endsWith(".lock"),
+				)
+			} catch {
+				// Not a git repo — just use tool call files
+			}
+
+			// Combine: tool call files take priority over git changes
+			const allChangedFiles = new Set([...changedFromToolCalls, ...changedFromGit])
+
+			// ====================================================================
+			// Fix C: Content volume check — verify meaningful changes via git diff --stat
+			// ====================================================================
+			let totalLinesChanged = 0
+			if (changedFromGit.length > 0) {
+				try {
+					const statOutput = execSync("git diff --stat --diff-filter=ACMRTD", {
+						cwd,
+						encoding: "utf-8",
+						timeout: 5000,
+						stdio: ["pipe", "pipe", "pipe"],
+					}) as string
+					// Parse total insertions/deletions from last line: "X files changed, Y insertions(+), Z deletions(-)"
+					const lastLine = statOutput.trim().split("\n").pop() || ""
+					const insertMatch = lastLine.match(/(\d+) insertion/)
+					const deleteMatch = lastLine.match(/(\d+) deletion/)
+					totalLinesChanged = (insertMatch ? parseInt(insertMatch[1], 10) : 0) +
+						(deleteMatch ? parseInt(deleteMatch[1], 10) : 0)
+				} catch {
+					// stat failed — ignore
+				}
+			} else if (changedFromToolCalls.size > 0) {
+				// No git diff available but tool calls indicate work — count as meaningful
+				totalLinesChanged = 1
+			}
+
+			// Scan for stub/TODO patterns if enabled
+			let stubWarnings: string[] = []
+			if (this.config.enableStubDetection && allChangedFiles.size > 0) {
+				stubWarnings = await this.scanForStubs([...allChangedFiles], cwd)
+			}
+
+			const durationMs = Date.now() - start
+
+			// Determine pass/fail based on whether files changed
+			if (allChangedFiles.size === 0) {
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "file-changes" FAILED [${strictness}] (${durationMs}ms): zero files changed`,
+				)
+				return {
+					name: "file-changes",
+					passed: false,
+					error: "No files were modified during this task. The agent may not have implemented the requested changes.",
+					output: "Changed files: (none)\nStubs detected: (n/a)",
+					durationMs,
+					warnings: 0,
+					errors: 1,
+					stderrSummary: "ERR: zero files changed",
+					strictness,
+				}
+			}
+
+			// Content volume warning (Fix C)
+			const volumeWarning = totalLinesChanged === 0 && changedFromToolCalls.size === 0
+				? "⚠ Unable to verify content volume (no git diff available)."
+				: totalLinesChanged > 0 && totalLinesChanged < 5
+					? `⚠ Low content volume: only ${totalLinesChanged} line(s) changed across all files`
+					: ""
+
+			// Pass with info about what changed
+			const fileList = [...allChangedFiles].join(", ")
+			const stubNote = stubWarnings.length > 0
+				? `\n⚠ Stub patterns detected in ${stubWarnings.length} file(s): ${stubWarnings.join(", ")}`
+				: ""
+			const stderrContent = stubWarnings.length > 0
+				? `WRN: ${stubWarnings.length} file(s) with stub patterns`
+				: ""
+
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "file-changes" PASSED [${strictness}] (${durationMs}ms): ${allChangedFiles.size} file(s) changed${stubWarnings.length > 0 ? `, ${stubWarnings.length} stub(s) detected` : ""}`,
+			)
+
+			return {
+				name: "file-changes",
+				passed: true,
+				output: `Changed files (${allChangedFiles.size}): ${fileList.slice(0, 1000)}${stubNote}${volumeWarning ? `\n${volumeWarning}` : ""}`,
+				durationMs,
+				warnings: stubWarnings.length,
+				errors: 0,
+				stderrSummary: stderrContent,
+				strictness,
+			}
+		} catch (error: any) {
+			const durationMs = Date.now() - start
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "file-changes" FAILED [${strictness}] (${durationMs}ms): ${(error as Error).message.slice(0, 200)}`,
+			)
+			return {
+				name: "file-changes",
+				passed: false,
+				error: (error as Error).message.slice(0, 1000),
+				durationMs,
+				warnings: 0,
+				errors: 1,
+				strictness,
+			}
+		}
+	}
+
+	/**
+	 * Scan modified files for common stub/TODO patterns.
+	 * Returns a list of file paths that contain suspicious patterns.
+	 */
+	private async scanForStubs(changedFiles: string[], cwd: string): Promise<string[]> {
+		const stubPatterns = [
+			/throw\s+new\s+Error\(['"](not\s+implemented|unimplemented|todo|stub)/i,
+			/throw\s+new\s+Error\(['"].*TODO/i,
+			/\/\/\s+TODO/i,
+			/\/\/\s+FIXME/i,
+			/\/\/\s+HACK/i,
+			/\/\/\s+XXX\b/,
+			/implement\s+later/i,
+			/\/\/\s+@ts-ignore/,
+			/\/\/\s+@ts-nocheck/,
+			/\/\/\s+eslint-disable-next-line\s/,
+			/return\s+null\s*;\s*\/\/\s+TODO/i,
+			/function\s+\w+\s*\(\s*\)\s*\{\s*\}\s*\/\/\s+TODO/i,
+			/\w+\s*=\s*async\s*\(\s*\)\s*=>\s*\{\s*\}\s*\/\/\s+TODO/i,
+		]
+
+		const stubbedFiles: string[] = []
+
+		for (const filePath of changedFiles) {
+			const fullPath = path.resolve(cwd, filePath)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const lines = content.split("\n")
+				let suspiciousLineCount = 0
+
+				for (const line of lines) {
+					for (const pattern of stubPatterns) {
+						if (pattern.test(line)) {
+							suspiciousLineCount++
+							break
+						}
+					}
+				}
+
+				// Threshold: flag if >5% of lines match stub patterns
+				// (lowered from 10% to catch sparse stubs like single-line
+				// throw new Error('not implemented') in a 15-line function)
+				if (lines.length > 0 && suspiciousLineCount / lines.length > 0.05) {
+					stubbedFiles.push(filePath)
+				}
+			} catch {
+				// File deleted or unreadable — skip
+			}
+		}
+
+		return stubbedFiles
 	}
 
 	/**

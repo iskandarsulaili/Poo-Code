@@ -121,7 +121,14 @@
 			"no_subtasks": "Nessuna sotto-attività in esecuzione",
 			"no_child_tasks": "Nessuna attività figlia in esecuzione",
 			"agent_thoughts": "Pensieri dell'agente",
-			"system_logs": "Registri di sistema"
+			"system_logs": "Registri di sistema",
+			"no_dag_data": "Nessun dato DAG disponibile",
+			"no_logs": "Ancora nessuna voce di log...",
+			"no_thoughts": "Ancora nessun pensiero dell'agente...",
+			"completed": "Completato",
+			"running": "In esecuzione",
+			"failed": "Fallito",
+			"total": "Totale"
 		},
 		"subtask_card": {
 			"status_label": "Stato:",

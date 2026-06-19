@@ -70,18 +70,37 @@ const ParallelDashboard: React.FC = () => {
 
 		switch (message.type) {
 			case "parallelSubtaskStatus": {
-				const dagData = message.payload as SubtaskDAG
-				setDag(dagData)
+				const raw = message.payload as any
+				if (raw && typeof raw === "object") {
+					// Convert serialized plain objects back to Maps
+					// (JSON.stringify loses Map entries, so extension sends plain objects)
+					const nodes = new Map<string, SubtaskNode>(
+						Object.entries(raw.nodes || {}).map(([k, v]) => [k, v as SubtaskNode]),
+					)
+					const edges = new Map<string, Set<string>>(
+						Object.entries(raw.edges || {}).map(([k, v]) => [k, new Set(v as string[])]),
+					)
+					setDag({
+						nodes,
+						edges,
+						waves: raw.waves || [],
+						status: raw.status || "pending",
+					})
+				}
 				break
 			}
 			case "parallelSubtaskLog": {
 				const entry = message.payload as LogEntry
-				setLogs((prev) => [...prev, entry])
+				if (entry) {
+					setLogs((prev) => [...prev, entry])
+				}
 				break
 			}
 			case "parallelSubtaskThought": {
 				const thought = message.payload as ThoughtEntry
-				setThoughts((prev) => [...prev, thought])
+				if (thought) {
+					setThoughts((prev) => [...prev, thought])
+				}
 				break
 			}
 			case "parallelSubtaskProgress": {
@@ -91,7 +110,7 @@ const ParallelDashboard: React.FC = () => {
 			}
 			case "parallelSubtaskSavedDAGs": {
 				const dags = message.payload as SavedDAG[]
-				setSavedDAGs(dags)
+				setSavedDAGs(dags || [])
 				break
 			}
 		}

@@ -121,7 +121,14 @@
 			"no_subtasks": "沒有正在執行的子任務",
 			"no_child_tasks": "沒有正在執行的下級任務",
 			"agent_thoughts": "Agent 思考",
-			"system_logs": "系統日誌"
+			"system_logs": "系統日誌",
+			"no_dag_data": "沒有可用的DAG資料",
+			"no_logs": "還沒有日誌條目...",
+			"no_thoughts": "還沒有代理思考...",
+			"completed": "已完成",
+			"running": "執行中",
+			"failed": "失敗",
+			"total": "總計"
 		},
 		"subtask_card": {
 			"status_label": "狀態:",

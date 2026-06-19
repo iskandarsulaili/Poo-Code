@@ -19,7 +19,7 @@ import type { SubtaskNode } from "@roo-code/types"
 import { Task } from "../task/Task"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { experimentConfigsMap } from "../../shared/experiments"
-import { ParallelSubtaskOrchestrator, StatusCallback, SubtaskExecutor } from "../orchestration/ParallelSubtaskOrchestrator"
+import { ParallelSubtaskOrchestrator, StatusCallback, ThoughtCallback, SubtaskExecutor } from "../orchestration/ParallelSubtaskOrchestrator"
 import { LockManager } from "../orchestration/LockManager"
 import { Blackboard } from "../orchestration/Blackboard"
 import { ContextRouter } from "../orchestration/ContextRouter"
@@ -241,11 +241,33 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 				return { taskId: child.taskId, result: "" }
 			}
 			this.orchestrator.setSubtaskExecutor(executor)
+			// Wire log forwarding to send live log entries to the webview
+			this.logAggregator!.onLog = (entry) => {
+				task.providerRef.deref()?.postMessageToWebview({
+					type: "parallelSubtaskLog",
+					payload: entry,
+				})
+			}
+			// Wire thought forwarding to send thought tokens to the webview
+			const thoughtCallback: ThoughtCallback = (subtaskId, token) => {
+				task.providerRef.deref()?.postMessageToWebview({
+					type: "parallelSubtaskThought",
+					payload: { subtaskId, token },
+				})
+			}
+			this.orchestrator!.setThoughtCallback(thoughtCallback)
 			// Wire status callback to send live DAG updates to the webview
 			const statusCallback: StatusCallback = (dag) => {
 				task.providerRef.deref()?.postMessageToWebview({
 					type: "parallelSubtaskStatus",
-					text: JSON.stringify(dag),
+					payload: {
+						nodes: Object.fromEntries(dag.nodes),
+						edges: Object.fromEntries(
+							[...dag.edges.entries()].map(([k, v]) => [k, [...v]])
+						),
+						waves: dag.waves,
+						status: dag.status,
+					},
 				})
 			}
 			this.orchestrator.setStatusCallback(statusCallback)

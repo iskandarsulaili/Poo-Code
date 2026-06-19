@@ -8,6 +8,7 @@ import { CacheManager } from "./cache-manager"
 import { TelemetryService } from "@roo-code/telemetry"
 import { TelemetryEventName } from "@roo-code/types"
 import { t } from "../../i18n"
+import { CodebaseMappingManager } from "../codebase-mapping"
 
 /**
  * Manages the code indexing workflow, coordinating between different services and managers.
@@ -209,6 +210,9 @@ export class CodeIndexOrchestrator {
 				// Mark indexing as complete after successful incremental scan
 				await this.vectorStore.markIndexingComplete()
 
+				// Trigger codebase mapping scan after indexing completes
+				this._triggerCodebaseMappingScan()
+
 				this.stateManager.setSystemState("Indexed", t("embeddings:orchestrator.fileWatcherStarted"))
 			} else {
 				// No existing data or collection was just created - do a full scan
@@ -297,6 +301,9 @@ export class CodeIndexOrchestrator {
 
 				// Mark indexing as complete after successful full scan
 				await this.vectorStore.markIndexingComplete()
+
+				// Trigger codebase mapping scan after indexing completes
+				this._triggerCodebaseMappingScan()
 
 				this.stateManager.setSystemState("Indexed", t("embeddings:orchestrator.fileWatcherStarted"))
 			}
@@ -424,5 +431,24 @@ export class CodeIndexOrchestrator {
 	 */
 	public get state(): IndexingState {
 		return this.stateManager.state
+	}
+
+	/**
+	 * Triggers a codebase mapping scan after indexing completes.
+	 * This ensures the dependency graph and symbol data are in sync with indexed code.
+	 * Runs asynchronously and does not block the indexing flow.
+	 */
+	private _triggerCodebaseMappingScan(): void {
+		const instances = CodebaseMappingManager.getAllInstances()
+		if (instances.length === 0) {
+			console.warn("[CodeIndexOrchestrator] Cannot trigger codebase mapping: no instances available")
+			return
+		}
+		// Scan all workspace instances
+		for (const svc of instances) {
+			svc.scanWorkspace().catch((err: unknown) => {
+				console.error("[CodeIndexOrchestrator] Codebase mapping scan failed:", err)
+			})
+		}
 	}
 }

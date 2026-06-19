@@ -74,6 +74,7 @@ import { McpServerManager } from "../../services/mcp/McpServerManager"
 import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
+import { CodebaseMappingManager } from "../../services/codebase-mapping"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import {
@@ -93,7 +94,7 @@ import { getWorkspacePath } from "../../utils/path"
 import { OrganizationAllowListViolationError } from "../../utils/errors"
 
 import { setPanel } from "../../activate/registerCommands"
-import { attemptCompletionTool } from "../tools/AttemptCompletionTool"
+import { attemptCompletionTool, AttemptCompletionTool } from "../tools/AttemptCompletionTool"
 
 import { t } from "../../i18n"
 
@@ -277,8 +278,9 @@ export class ClineProvider
 		)
 
 		// Wire RequirementsVerifier and VerificationEngine into AttemptCompletionTool
+		// Verification is ON by default; disable with experiments.disableVerification = true
 		const experiments = this.getGlobalStateSafe("experiments")
-		if (experiments?.requirementsVerification) {
+		if (!experiments?.disableVerification) {
 			const apiConfiguration = this.contextProxy.getProviderSettings()
 			const conflictResolver = apiConfiguration?.apiProvider
 				? new LLMConflictResolver(apiConfiguration)
@@ -293,19 +295,21 @@ export class ClineProvider
 				{
 					// cwd is set dynamically in AttemptCompletionTool.execute() from task.cwd
 					// Commands are auto-detected per-task — no global command overrides
-					checkBuild: experiments.verificationCheckBuild ?? true,
-					checkLint: experiments.verificationCheckLint ?? true,
-					checkTypes: experiments.verificationCheckTypes ?? true,
-					checkTests: experiments.verificationCheckTests ?? true,
+					checkBuild: experiments?.verificationCheckBuild ?? true,
+					checkLint: experiments?.verificationCheckLint ?? true,
+					checkTypes: experiments?.verificationCheckTypes ?? true,
+					checkTests: experiments?.verificationCheckTests ?? true,
+					checkFileChanges: true,
+					checkBuildConfigIntegrity: true,
 					mandatory: true,
-					gateTimeoutMs: experiments.verificationTimeoutMs ?? 120_000,
+					gateTimeoutMs: experiments?.verificationTimeoutMs ?? 120_000,
 				},
 				true,
 				apiConfiguration ?? undefined,
 			)
 			// Auto-detection and cwd are applied lazily in AttemptCompletionTool.execute()
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
-			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")
+			this.log("[ClineProvider] Verification engines wired into AttemptCompletionTool")
 		}
 
 		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)
@@ -314,6 +318,11 @@ export class ClineProvider
 		// We do something fairly similar for the IPC-based API.
 		this.taskCreationCallback = (instance: Task) => {
 			this.emit(RooCodeEventName.TaskCreated, instance)
+
+			// Snapshot build config at task start (Bug 1) — before agent makes changes
+			AttemptCompletionTool.snapshotConfigAtTaskStart(instance).catch((error) => {
+				this.log(`[VerificationEngine] Snapshot error: ${(error as Error)?.message ?? String(error)}`)
+			})
 
 			const recordTaskCompletionForLearning = (success: boolean) => {
 				void instance
@@ -2933,6 +2942,9 @@ export class ClineProvider
 				values: currentManager.getCurrentStatus(),
 			})
 		}
+
+		// Send initial codebase mapping status
+		this._sendCodebaseMappingStatus()
 	}
 
 	/**
@@ -3740,5 +3752,63 @@ export class ClineProvider
 			// Return file URI as fallback
 			return vscode.Uri.file(filePath).toString()
 		}
+	}
+
+	/**
+	 * Sends the current codebase mapping status to the webview.
+	 * Retries on "Not initialized" errors as the AST parser may still be loading.
+	 */
+	private _sendCodebaseMappingStatus(retries = 3, delay = 1000): void {
+		const instances = CodebaseMappingManager.getAllInstances()
+		if (instances.length === 0) {
+			this.postMessageToWebview({
+				type: "codebaseMappingStatusUpdate",
+				values: {
+					status: "idle",
+					fileCount: 0,
+					edgeCount: 0,
+					deadSymbolCount: 0,
+					cacheHitRate: 0,
+					message: "No workspace open",
+				},
+			})
+			return
+		}
+		const svc = instances[0]
+		svc.getDependencyGraph()
+			.then((graph) => {
+				return Promise.all([graph, svc.getDeadCode(), svc.getCacheStats()])
+			})
+			.then(([graph, deadCode, stats]) => {
+				this.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "ready",
+						fileCount: graph.files.size,
+						edgeCount: graph.edges.length,
+						deadSymbolCount: deadCode.length,
+						cacheHitRate: stats.astHitRate,
+					},
+				})
+			})
+			.catch((err) => {
+				const message = err instanceof Error ? err.message : String(err)
+				// Retry on "Not initialized" — AST parser may still be loading WASM
+				if (retries > 0 && message.includes("Not initialized")) {
+					setTimeout(() => this._sendCodebaseMappingStatus(retries - 1, delay * 2), delay)
+					return
+				}
+				this.postMessageToWebview({
+					type: "codebaseMappingStatusUpdate",
+					values: {
+						status: "error",
+						fileCount: 0,
+						edgeCount: 0,
+						deadSymbolCount: 0,
+						cacheHitRate: 0,
+						message,
+					},
+				})
+			})
 	}
 }

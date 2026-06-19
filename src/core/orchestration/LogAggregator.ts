@@ -91,6 +91,12 @@ export class LogAggregator {
 	private logFilePath: string
 
 	/**
+	 * Optional callback invoked after each log entry is recorded.
+	 * Used to forward log entries to the webview for live display.
+	 */
+	public onLog: ((entry: LogEntry) => void) | null = null
+
+	/**
 	 * @param logFilePath - Path to the log file (default: `.roo/.roosync/logs/execution.jsonl`)
 	 * @param maxBufferSize - Maximum in-memory entries (default: 10,000)
 	 */
@@ -122,6 +128,9 @@ export class LogAggregator {
 		} catch (error) {
 			console.error(`[LogAggregator] Failed to write log entry: ${error}`)
 		}
+
+		// Forward to webview via callback if wired
+		this.onLog?.(entry)
 	}
 
 	/**

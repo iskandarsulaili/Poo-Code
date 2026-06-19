@@ -59,6 +59,12 @@ export type SubtaskExecutor = (params: {
  */
 export type StatusCallback = (dag: import("@roo-code/types").SubtaskDAG) => void
 
+/**
+ * Callback for forwarding per-thought-token updates to the webview.
+ * Called with subtask ID and the thought token string.
+ */
+export type ThoughtCallback = (subtaskId: string, token: string) => void
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -106,6 +112,11 @@ export class ParallelSubtaskOrchestrator {
 	 * Called after each subtask status change.
 	 */
 	private statusCallback: StatusCallback | null = null
+	/**
+	 * Optional callback for forwarding thought tokens to the webview.
+	 * Called during subtask execution with each thought token.
+	 */
+	private thoughtCallback: ThoughtCallback | null = null
 
 	/**
 	 * @param lockManager - LockManager instance
@@ -143,6 +154,10 @@ export class ParallelSubtaskOrchestrator {
 	 */
 	setStatusCallback(callback: StatusCallback): void {
 		this.statusCallback = callback
+	}
+
+	setThoughtCallback(callback: ThoughtCallback): void {
+		this.thoughtCallback = callback
 	}
 
 	/**
@@ -476,6 +491,7 @@ export class ParallelSubtaskOrchestrator {
 		subtask.metadata.startedAt = startTime
 		subtask.metadata.correlationId = correlationId
 		this.emitStatusUpdate(dag)
+		this.thoughtCallback?.(subtask.id, `Starting subtask "${subtask.id}" (mode: ${subtask.mode})`)
 
 		// Create heartbeat
 		const heartbeatPath = this.lockManager.createHeartbeat(subtask.id)
@@ -534,6 +550,7 @@ export class ParallelSubtaskOrchestrator {
 				subtask.metadata.completedAt = Date.now()
 				subtask.metadata.result = result.result
 				this.emitStatusUpdate(dag)
+				this.thoughtCallback?.(subtask.id, `Completed subtask "${subtask.id}" — result: ${result.result.slice(0, 100)}`)
 
 				this.logAggregator.log({
 					correlationId,
@@ -573,6 +590,7 @@ export class ParallelSubtaskOrchestrator {
 			subtask.metadata.completedAt = Date.now()
 			subtask.metadata.error = error instanceof Error ? error.message : String(error)
 			this.emitStatusUpdate(dag)
+			this.thoughtCallback?.(subtask.id, `Failed subtask "${subtask.id}": ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`)
 
 			this.logAggregator.log({
 				correlationId,

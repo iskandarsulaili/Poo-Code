@@ -54,12 +54,146 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	/** Tracks consecutive verification failures for lenient mode retry logic */
 	private consecutiveVerificationFailures = 0
 
+	// ========================================================================
+	// Fix 2+3: Child task file tracking — files modified by delegated children
+	// are stored here so the parent's verification can include them.
+	// Key: parentTaskId → childTaskId → file paths modified by that child
+	// ========================================================================
+	private static childTaskFiles = new Map<string, Map<string, string[]>>()
+	/** Aggregate file paths from this task and its own child tasks only (no sibling pollution). */
+	private aggregateTaskFiles(task: Task): string[] {
+		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
+		const allFiles = new Set(ownFiles)
+		// Only include children whose DIRECT parent is this task (parentTaskId)
+		// This prevents sibling A's files from leaking into sibling B's aggregate.
+		const children = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+		if (children) {
+			for (const [childId, childFiles] of children.entries()) {
+				if (childId === '__thoughts__') continue // Fix 3: Skip thought entries
+				for (const f of childFiles) allFiles.add(f)
+			}
+		}
+		return [...allFiles]
+	}
+
+	/** Fix 1: Prune a child task's files from its parent's map. */
+	private static pruneChildFiles(taskId: string): void {
+		// Scan all parent maps for entries containing this child
+		for (const [parentKey, childrenMap] of AttemptCompletionTool.childTaskFiles) {
+			if (childrenMap.has(taskId)) {
+				childrenMap.delete(taskId)
+				if (childrenMap.size === 0) {
+					AttemptCompletionTool.childTaskFiles.delete(parentKey)
+				}
+				break
+			}
+		}
+	}
+
+	// ========================================================================
+	// Fix 4: Cross-call verification failure tracking & escalation
+	// ========================================================================
+	private static readonly MAX_CONSECUTIVE_FAILURES = 5
+	private static verificationFailures = new Map<
+		string,
+		{ count: number; lastFailAt: number; blockedGates: string[] }
+	>()
+
+	/** Record a verification failure for a specific task and gate. */
+	private static recordGateFailure(taskId: string, gateName: string): void {
+		const existing = AttemptCompletionTool.verificationFailures.get(taskId) ?? {
+			count: 0,
+			lastFailAt: 0,
+			blockedGates: [],
+		}
+		existing.count++
+		existing.lastFailAt = Date.now()
+		if (!existing.blockedGates.includes(gateName)) {
+			existing.blockedGates.push(gateName)
+		}
+		AttemptCompletionTool.verificationFailures.set(taskId, existing)
+	}
+
+	/** Clear verification failure tracking for a task + prune stale entries. */
+	private static clearVerificationFailures(taskId: string): void {
+		AttemptCompletionTool.verificationFailures.delete(taskId)
+		// Fix 2: Also prune all entries older than 1 hour on any clear operation
+		try {
+			const ONE_HOUR_MS = 3600_000
+			for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+				if (Date.now() - rec.lastFailAt > ONE_HOUR_MS) {
+					AttemptCompletionTool.verificationFailures.delete(tid)
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
+	}
+
+	/**
+	 * Snapshot build config at task start (Bug 1 fix).
+	 * Called from ClineProvider at task creation time, before the agent works.
+	 */
+	static async snapshotConfigAtTaskStart(task: Task): Promise<void> {
+		const tool = attemptCompletionTool
+		const engine = tool.getVerificationEngine()
+		if (engine && task.cwd) {
+			try {
+				await engine.snapshotBuildConfig(task.cwd)
+			} catch {
+				// Non-blocking — snapshot is optional
+			}
+		}
+	}
+
+	/**
+	 * Check if verification escalation is needed for this task.
+	 * After MAX_CONSECUTIVE_FAILURES consecutive failures, prompt the user.
+	 */
+	private async checkEscalation(
+		task: Task,
+		pushToolResult: (result: string) => void,
+	): Promise<boolean> {
+		// Fix 2: Auto-expire entries older than 1 hour
+		const ONE_HOUR_MS = 3600_000
+		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+			if (Date.now() - rec.lastFailAt > ONE_HOUR_MS) {
+				AttemptCompletionTool.verificationFailures.delete(tid)
+			}
+		}
+		const record = AttemptCompletionTool.verificationFailures.get(task.taskId)
+		if (!record || record.count < AttemptCompletionTool.MAX_CONSECUTIVE_FAILURES) {
+			return false // No escalation needed
+		}
+
+		// Escalation threshold reached — ask the user
+		const { response } = await task.ask(
+			"verification_bypass_prompt",
+			`Verification has failed ${record.count} times. Recurring failures: ${record.blockedGates.join(", ")}.\n\nBypass verification and proceed, retry, or cancel?`,
+		)
+
+		if (response === "yesButtonClicked") {
+			// User approved bypass — clear failures and continue
+			AttemptCompletionTool.clearVerificationFailures(task.taskId)
+			return false // Don't block
+		}
+
+		// User wants to retry — push a retry tool result
+		pushToolResult("Retrying task after verification failure. Please address the verification issues.")
+		return true // Signal that we've handled it (caller should return)
+	}
+
 	/**
 	 * Set the verifiers used to guard completion.
 	 */
 	setVerifiers(requirementsVerifier?: RequirementsVerifier, verificationEngine?: VerificationEngine): void {
 		this.requirementsVerifier = requirementsVerifier
 		this.verificationEngine = verificationEngine
+	}
+
+	/** Public accessor for build config snapshot (Bug 1). */
+	getVerificationEngine(): VerificationEngine | undefined {
+		return this.verificationEngine
 	}
 
 	/**
@@ -134,31 +268,27 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const lenientModes = task.experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)
 
+			// Resolve verification level once for all gates (Bug 2)
+			const vLevel = task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
+
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier && !isLenientMode) {
-				const experiments = task.experiments
-
-				// Per-mode resolution: check verificationLevels[currentMode] first,
-				// fall back to verificationLevel, then "strict"
-				const verificationLevel =
-					experiments?.verificationLevels?.[currentMode] ?? experiments?.verificationLevel ?? "strict"
-
-				// Apply verificationLevel to the verifier config
-				this.requirementsVerifier.updateConfig({ verificationLevel })
+				// Apply verification level to the verifier config
+				this.requirementsVerifier.updateConfig({ verificationLevel: vLevel })
 
 				// Bypass mode: skip verification entirely
-				if (verificationLevel === "bypass") {
-				} else {
+				if (vLevel !== "bypass") {
 					const reqResult = await this.requirementsVerifier.verify()
-					const isBlocking = verificationLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
+					const isBlocking = vLevel === "strict" && this.requirementsVerifier.getConfig().mandatory
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
 						// Don't increment consecutiveMistakeCount — verification has its own counter
+						AttemptCompletionTool.recordGateFailure(task.taskId, "requirements")
 						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
 					}
-					if (verificationLevel === "lenient" && !reqResult.passed) {
+					if (vLevel === "lenient" && !reqResult.passed) {
 						this.consecutiveVerificationFailures++
 						if (this.consecutiveVerificationFailures >= 3) {
 							const bypassResponse = (
@@ -180,15 +310,125 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
+			// ========================================================================
+			// Fix G: Tool error rate check
+			// ========================================================================
+			if (!isLenientMode) {
+				const toolErrors = task.clineMessages.filter(
+					(msg) => msg.type === "say" && msg.say === "error" && msg.text?.includes("tool"),
+				).length
+				if (toolErrors > 5) {
+					console.log(
+						`[AttemptCompletionTool] ⚠ ${toolErrors} tool error(s) during task — high error rate detected`,
+					)
+				} else if (toolErrors > 0) {
+					console.log(
+						`[AttemptCompletionTool] ${toolErrors} tool error(s) during task`,
+					)
+				}
+			}
+
+			// ========================================================================
+			// Cross-reference: auto-verify requirements against API conversation history (Fix A)
+			// This checks whether files were actually modified in ways that match
+			// the extracted requirements, providing concrete evidence.
+			// ========================================================================
+			if (this.requirementsVerifier && !isLenientMode && vLevel !== "bypass") {
+				try {
+					// CRITICAL: Pass apiConversationHistory, NOT clineMessages.
+					// tool_use blocks with actual file paths live in API history,
+					// not in clineMessages (which only contain display text).
+					this.requirementsVerifier.autoVerifyFromToolHistory(task.apiConversationHistory, task.cwd)
+				} catch (error) {
+					// Non-blocking — auto-verification is advisory
+					console.error(
+						`[AttemptCompletionTool] Error during requirements auto-verification: ${(error as Error)?.message ?? String(error)}`,
+					)
+				}
+			}
+
+
+			// ========================================================================
+			// Fix F: Cross-reference completion claim against actual file changes
+			// Check if the result text mentions files that weren't actually modified.
+			// Blocking when >50% of claims are unverifiable.
+			// ========================================================================
+			if (!isLenientMode && result && vLevel !== "bypass") {
+				const filePattern = /(?:^|[\/\s])([\w_.-]+\.\w{1,5})\b/g
+				const mentionedFiles = [...result.matchAll(filePattern)].map((m) => m[1].toLowerCase())
+				if (mentionedFiles.length > 0) {
+					const changedForClaim = new Set([
+						...this.aggregateTaskFiles(task).map((f) => {
+							// Strip leading ./ and directory prefix for matching
+							const clean = f.replace(/^\.\//, "").toLowerCase()
+							return clean
+						}),
+					])
+					const verified = mentionedFiles.filter(
+						(f) => changedForClaim.has(f) || changedForClaim.has(`/${f}`) || [...changedForClaim].some((a) => a.endsWith(`/${f}`) || a === f),
+					)
+					const unverified = mentionedFiles.filter((f) => !verified.includes(f))
+
+					if (unverified.length > mentionedFiles.length * 0.5) {
+						const errorMsg = `Completion result claims changes to ${mentionedFiles.length} file(s), but ${unverified.length}/${mentionedFiles.length} cannot be verified from tool call history:\n` +
+							unverified.map((f) => `  ❌ ${f}`).join("\n") +
+							`\n\nActually modified files: ${[...changedForClaim].join(", ") || "(none)"}` +
+							`\n\nPlease verify these files exist and were correctly modified before completing.`
+						task.recordToolError("attempt_completion")
+						pushToolResult(formatResponse.toolError(errorMsg))
+						return
+					}
+
+					if (unverified.length > 0) {
+						console.log(
+							`[AttemptCompletionTool] \u26a0 ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
+						)
+					}
+				}
+			}
+
+			// ========================================================================
+			// Result substance check
+			// ========================================================================
+			// Result substance check — reject empty or trivial result text
+			// ========================================================================
+			if (!isLenientMode && result && vLevel !== "bypass") {
+				const stripped = result.replace(/[*_~`#\n\r]/g, "").trim()
+				if (stripped.length < 20) {
+					const errorMsg = `Completion result is too short (${stripped.length} chars). Please provide a substantive summary of what was implemented.\n\n` +
+						`Current result: "${result.slice(0, 100)}"\n\nInclude specific details about what was changed, added, or fixed.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+
+				// Check for evasion language
+				const evasionPatterns = [
+					/nothing/i, /no changes/i, /did nothing/i, /could not/i,
+					/failed/i, /unable to/i, /not implemented/i,
+				]
+				const evasionMatches = evasionPatterns.filter((p) => p.test(stripped))
+				if (evasionMatches.length >= 2 && stripped.length < 80) {
+					const errorMsg = `Completion result appears to indicate failure: "${result.slice(0, 120)}"\n\n` +
+						`If the task is incomplete, explain what was attempted and what remains. Do not mark the task as complete when work was unsuccessful.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+			}
+
 			// Guard 6: Code quality verification (VerificationEngine)
-			// Skip verification for lenient modes — research tasks and other user-configured modes
-			// don't need build/lint/types/tests. Default: ["research"]
-			if (this.verificationEngine && !isLenientMode) {
+			// Skip verification for lenient modes and bypass mode
+			// Default lenient modes: ["research"]
+			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass") {
 				// Set cwd from task context — the directory the agent is working in
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
-				const verResult = await this.verificationEngine.verify()
+				// Extract tool call file paths (scoped inside verification block, not before)
+				const toolCallFilePaths = this.aggregateTaskFiles(task)
+				// Pass tool call file paths for file-changes gate scoping
+				const verResult = await this.verificationEngine.verify(toolCallFilePaths)
 				const strictness = this.verificationEngine.getConfig().strictness || "moderate"
 
 				// Build detailed gate results for display
@@ -209,7 +449,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
 					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
-					// Don't increment consecutiveMistakeCount — verification has its own counter
+					AttemptCompletionTool.recordGateFailure(task.taskId, "code-quality")
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
 					return
@@ -217,6 +457,15 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Even on pass, show warning counts if any
 				// (VerificationEngine already logs details via its own logger)
+			}
+
+			// ========================================================================
+			// Bug 1: Escalation check — after ALL gates have run
+			// Prompt user after MAX_CONSECUTIVE_FAILURES consecutive gate failures
+			// ========================================================================
+			if (!isLenientMode) {
+				const shouldExit = await this.checkEscalation(task, pushToolResult)
+				if (shouldExit) return
 			}
 
 			task.consecutiveMistakeCount = 0
@@ -235,11 +484,37 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 						if (status === "completed") {
 							// Subtask already completed - skip delegation flow entirely
+							// Clean up child files (Fix 1)
+							AttemptCompletionTool.pruneChildFiles(task.taskId)
 							// Fall through to normal completion ask flow below (outside this if block)
 							// This shows the user the completion result and waits for acceptance
 							// without injecting another tool_result to the parent
 						} else if (status === "active") {
 							// Normal subtask completion - do delegation
+							// Store child tool call files for parent aggregation (Bug 2)
+							// Keyed by rootTask/parentTaskId so sibling tasks don't pollute
+							try {
+								const childFiles = this.extractToolCallFiles(task.apiConversationHistory)
+								if (childFiles.length > 0) {
+									const parentKey = task.parentTaskId ?? task.rootTaskId ?? task.taskId
+									let childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+									if (!childrenMap) {
+										childrenMap = new Map()
+										AttemptCompletionTool.childTaskFiles.set(parentKey, childrenMap)
+									}
+									childrenMap.set(task.taskId, childFiles)
+									// Fix 3: Extract thought tokens from child's API history
+									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
+									if (childThoughts.length > 0) {
+										// Store thoughts as special entry with key '__thoughts__'
+										const thoughtEntry = childrenMap.get('__thoughts__') ?? []
+										thoughtEntry.push(...childThoughts)
+										childrenMap.set('__thoughts__', thoughtEntry)
+									}
+								}
+							} catch {
+								// Non-blocking
+							}
 							const delegation = await this.delegateToParent(
 								task,
 								result,
@@ -249,6 +524,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							)
 							if (delegation === "delegated") {
 								this.emitTaskCompleted(task, result)
+							} else {
+								// Fix 1: Child didn't complete normally — clean up its files
+								AttemptCompletionTool.pruneChildFiles(task.taskId)
 							}
 							if (delegation !== "continue") return
 						} else {
@@ -262,6 +540,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							// Fall through to normal completion ask flow
 						}
 					} catch (err) {
+						// Clean up child files even on error (Fix 1)
+						AttemptCompletionTool.pruneChildFiles(task.taskId)
 						// If we can't get the history, log error and skip delegation
 						console.error(
 							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
@@ -275,6 +555,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
+				AttemptCompletionTool.clearVerificationFailures(task.taskId)
 				this.emitTaskCompleted(task, result)
 				return
 			}
@@ -348,6 +629,60 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	/**
+	 * Extract reasoning/thought tokens from child task's API conversation history (Fix 3).
+	 */
+	private static extractChildThoughts(task: Task): string[] {
+		const thoughts: string[] = []
+		try {
+			for (const msg of task.apiConversationHistory) {
+				if (msg.role !== "assistant") continue
+				if (!msg.content || typeof msg.content === "string") continue
+				// Extract reasoning_content (DeepSeek) or type=reasoning blocks
+				const content = msg.content as any[]
+				for (const block of content) {
+					if (block.type === "reasoning" && block.text) {
+						thoughts.push(block.text.slice(0, 200))
+					}
+				}
+				// Also check for reasoning_content at the message level (OpenAI/DeepSeek)
+				if ((msg as any).reasoning_content) {
+					thoughts.push((msg as any).reasoning_content.slice(0, 200))
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
+		return thoughts
+	}
+
+	/**
+	 * Extract file paths from the agent's tool call history for file-changes gate scoping (Fix H).
+	 */
+	private extractToolCallFiles(
+		apiMessages: Array<{ role: string; content: string | any[] }>,
+	): string[] {
+		const files = new Set<string>()
+		const FILE_WRITE_TOOLS = new Set([
+			"write_to_file", "apply_diff", "edit", "search_replace", "edit_file", "patch",
+		])
+
+		for (const msg of apiMessages) {
+			if (msg.role !== "assistant") continue
+			if (!msg.content || typeof msg.content === "string") continue
+			for (const block of msg.content) {
+				if (block?.type !== "tool_use") continue
+				const toolName = (block.name || "").toLowerCase()
+				if (!FILE_WRITE_TOOLS.has(toolName)) continue
+				const input = block?.input || {}
+				if (typeof input.path === "string") files.add(input.path)
+				if (typeof input.file_path === "string") files.add(input.file_path)
+			}
+		}
+
+		return [...files]
+	}
+
+	/**
 	 * Extract all user messages from the task's conversation history.
 	 * Includes the initial task prompt and all user_feedback messages.
 	 */
@@ -371,6 +706,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
+		// Clean up child task file tracking to prevent memory leak (Fix B + Bug 5)
+		// Prune this task's own child records AND any completed grandchildren
+		const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+		if (ownChildren) {
+			for (const childId of ownChildren.keys()) {
+				AttemptCompletionTool.childTaskFiles.delete(childId)
+			}
+		}
+		AttemptCompletionTool.childTaskFiles.delete(task.taskId)
+
 		// Store the result text to guard against duplicate completions
 		AttemptCompletionTool.lastResults.set(task.taskId, result)
 

@@ -1,9 +1,9 @@
-## Poo Code (v3.56.0)
+## Poo Code (v3.57.0)
 
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
-> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer + parallel execution engine + codebase intelligence on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
+> **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer + parallel execution engine + codebase intelligence + verification system on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
 
 ---
 
@@ -16,7 +16,9 @@ The ultimate goal is to totally replace you, so you can be permanently "Ooo" (Ou
 
 ## What's different from Zoo-Code
 
-This fork adds **~28,650 lines** of new infrastructure across **220 files**, all behind experiment toggles. Every new feature is gated — Zoo-Code main's behaviour is preserved with everything off.
+This fork adds **~31,000 lines** of new infrastructure across **230+ files**, all behind experiment toggles. Every new feature is gated — Zoo-Code main's behaviour is preserved with everything off.
+
+### Core Features
 
 | Feature | Poo-Code (this branch) | Zoo-Code main |
 |---------|--------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
@@ -35,22 +37,62 @@ This fork adds **~28,650 lines** of new infrastructure across **220 files**, all
 | **Skill usage tracking** | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions. | ❌ No usage metrics |
 | **Auto-mode orchestrator** | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type. | ❌ Manual mode switching |
 | **Mode factory** | `ModeFactoryService` — generates custom modes from learned workflows. | ❌ Fixed mode set |
+
+### Parallel Execution Engine
+
+| Feature | Poo-Code | Zoo-Code |
+|---------|----------|----------|
 | **Parallel execution** | `ExecuteParallelSubtaskTool` + `ExecuteParallelChildTaskTool` — DAG-based parallel task execution with dependency resolution, lock-aware scheduling, and blackboard communication between subtasks. Real child agent spawning via SubtaskExecutor callback. | ❌ No parallel execution |
 | **Parallel orchestrator** | `ParallelSubtaskOrchestrator` — topological DAG wave scheduling, cycle detection, subtask heartbeat monitoring, automatic retry/failure handling, resume/skip/cancel controls. | ❌ No orchestrator |
 | **Parallel dashboard UI** | Slide-in overlay panel with tabbed views (Subtasks, Child Tasks, DAG, Logs). Live DAG visualization, subtask cards with status/duration/deps, intervention controls (pause/resume/cancel/retry/skip), agent thought stream, system log stream. Auto-opens on parallel task start; closeable via Escape/backdrop/X. | ❌ No UI |
+| **Log forwarding** | Live log streaming from orchestrator to webview via onLog callback. Every subtask lifecycle event (start, complete, fail) pushed to dashboard in real-time. | ❌ No equivalent |
+
+### Verification System
+
+| Feature | Poo-Code | Zoo-Code |
+|---------|----------|----------|
+| **Requirements extraction** | `RequirementsVerifier` — parses user prompts for bullet points, numbered lists, and narrative action verbs. Splits "Create a login page with auth and session management" into 3+ granular requirements. | ❌ No requirement tracking |
+| **Auto-verification** | Cross-references requirements against actual tool_use blocks in API conversation history. Marks requirements as verified when matching file paths found, failed when no corresponding file changes. | ❌ No equivalent |
+| **File-changes gate** | `VerificationEngine` runs `git diff --diff-filter=ACMRTD` at completion time to verify files were actually modified (not just claimed). | ❌ No file-change validation |
+| **Content volume check** | Parses `git diff --stat` to count lines inserted+deleted. Warns when <5 lines changed across all files (suggests stubs/placeholders). | ❌ No equivalent |
+| **Stub detection** | Scans modified files for TODO, FIXME, HACK, `throw new Error('not implemented')`, `@ts-ignore`, `@ts-nocheck`. Flags files where >5% of lines match. | ❌ No stub scanning |
+| **Build config integrity** | SHA256-hashes 15 build config files (package.json, Cargo.toml, pyproject.toml, etc.) at task start. Re-checks at completion — fails if agent tampered with build scripts. | ❌ No integrity check |
+| **Claim cross-reference** | Extracts file names from the agent's `attempt_completion` result text. Blocks completion when >50% of claimed files were not actually modified by tool calls. | ❌ No claim validation |
+| **Result substance check** | Rejects empty or evasion-language result text. Minimum 20 meaningful characters, blocks "nothing/failed/unable to" patterns under 80 chars. | ❌ No validation |
+| **Test coverage gate** | Supports `coverageCommand` + `minCoverage` config. Parses `XX%` from coverage tool output (matches last occurrence for total). Auto-detects coverage command per language. | ❌ No coverage check |
+| **Escalation** | After 5 consecutive verification failures across any gate, prompts user to bypass, retry, or cancel. Cross-call tracking persists across `attempt_completion` retries. | ❌ No escalation |
+| **Bypass mode** | Single `verificationLevel: "bypass"` skips ALL 5 gate sections (requirements, auto-verify, claim check, substance check, code quality). Opt-out from verification. | ❌ No equivalent |
+| **Child task scoping** | Aggregates tool call files from delegated children into parent's verification. Children store files under direct parent taskId; no sibling pollution. Cleaned up on delegation completion/denied/error. | ❌ No equivalent |
+| **Gate consistency** | `vLevel` resolved once, enforced uniformly across all 5 checks. No gate runs when bypassed. | ❌ No equivalent |
+
+### Codebase Intelligence & Developer Experience
+
+| Feature | Poo-Code | Zoo-Code |
+|---------|----------|----------|
 | **Codebase mapping** | `@zoo-code/codebase-mapping` package — AST parsing via web-tree-sitter, dependency graph with circular detection, symbol extraction, token compression for LLM context, multi-format serialization (JSON/Mermaid/Markdown/DOT), security layer (PII/secret scanning), AST cache with TTL. 3 VS Code commands: refresh/show/export map. | ❌ No equivalent |
 | **Prompt compression** | `compressPrompt()` — lossless compression for child agent prompts (verbose phrase shortening, whitespace optimization, markdown stripping, JSON compaction, file path shortening). Prevents child agent context overload. | ❌ No compression |
-| **i18n translation** | All 18 locales fully translated for parallel UI (dashboard, subtask cards, intervention controls, resume panel, detail panel, DAG labels). Languages: ca, de, en, es, fr, hi, id, it, ja, ko, nl, pl, pt-BR, ru, tr, vi, zh-CN, zh-TW. | ❌ Partial EN-only |
+| **i18n translation** | All 18 locales fully translated for parallel UI (dashboard, subtask cards, intervention controls, resume panel, detail panel, DAG labels). Languages: ca, de, en, es, fr, hi, id, it, ja, ko, nl, pl, pt-BR, ru, tr, vi, zh-CN, zh-TW. Fixed `defaultNS: "common"` so dashboard renders labels instead of raw keys. | ❌ Partial EN-only |
+
+### Orchestrator Modes
+
+| Feature | Poo-Code | Zoo-Code |
+|---------|----------|----------|
 | **ONE-SHOT Orchestrator** | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass | ❌ No equivalent |
 | **KAIZEN Orchestrator** | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals | ❌ No equivalent |
 | **Proactive Error Prevention** | Pre-execution tool call validation, structured error classification (12 categories), cascading failure detection, and prevention hint injection — catches errors BEFORE they happen | ❌ No equivalent |
 | **Git Auto-Push** | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically | ❌ No equivalent |
 | **Self-Evolving Mini-Goals** | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first | ❌ No equivalent |
+
+### Infrastructure
+
+| Feature | Poo-Code | Zoo-Code |
+|---------|----------|----------|
 | **Skill name validation** | Validates skill name format (1-64 chars, lowercase alphanumeric/hyphens) in `SkillManageTool` (create/update/delete/merge) and `ActionExecutor`. Hash-truncated names pass validation with safe fallback. | ❌ No validation |
 | **MemoryManager init** | Calls `initialize()` before `consolidate()` in F3 cycle — prevents silent init failures on cold start. | ❌ No equivalent |
 | **ConfidenceScorer wiring** | Fixed: only scores when patterns exist; passes proper typed args to `calculateScore()`. | ❌ No equivalent |
 | **Always-available tools** | `list_files` + `read_file` promoted to always-available tools (available in any mode). | ❌ Gated per mode |
 | **Streaming failure resilience** | Separate `streamingFailureCount` counter so consecutive tool mistakes don't exhaust streaming retry budget. | ❌ Single counter |
+| **Verification ON by default** | Verification engines created on extension activation. Opt-out with `experiments.disableVerification: true`. Previously required opt-in. | ❌ No default |
 
 ### Experiment gate reference
 
@@ -73,6 +115,7 @@ This fork adds **~28,650 lines** of new infrastructure across **220 files**, all
 | `dependencyGraph` | Enable dependency graph analysis for task ordering |
 | `multiRootWorkspace` | Enable multi-root workspace support |
 | `parallelSubtask` | Enable parallel subtask execution with blackboard communication |
+| `disableVerification` | Disable ALL verification gates (verification ON by default) |
 
 ## Use Case Examples
 
@@ -147,6 +190,24 @@ This fork adds **~28,650 lines** of new infrastructure across **220 files**, all
 3. Use `zoo-code.showCodebaseMap` to see file count, edges, dead symbols, cache hit rate
 4. Use `zoo-code.exportCodebaseMap` to export Mermaid diagram for documentation
 5. Result: Instant codebase understanding without manual tracing
+
+### Example 7: Verification-Gated Completion
+
+**Scenario:** You want to ensure the agent actually implements what it claims before marking work as done.
+
+1. Verification runs automatically at `attempt_completion` (no manual toggle needed)
+2. The system checks:
+    - **File-changes**: Were files actually modified? (`git diff --diff-filter=ACMRTD`)
+    - **Build config**: Was `package.json` tampered with? (SHA256 snapshot comparison)
+    - **Claims**: Do the files mentioned in the result text match actual tool calls?
+    - **Stubs**: Are there TODO/FIXME patterns in the modified files?
+    - **Content volume**: Were at least ~5 lines changed? (anti-stub)
+    - **Build/Lint/Types**: Do auto-detected project commands pass?
+    - **Requirements**: Was each extracted requirement addressed by a file change?
+    - **Substance**: Is the completion result non-empty and non-evasive?
+3. Failures block `attempt_completion` with detailed error messages
+4. After 5 consecutive failures, user is prompted to bypass or retry
+5. Result: Honest completion results with verifiable evidence
 
 ## Statistic
 
