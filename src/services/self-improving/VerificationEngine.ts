@@ -1061,7 +1061,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			// Get list of changed files from git (staged + unstaged)
 			try {
 				const output = execSync(
-					"git diff --name-only --diff-filter=ACMRT && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRT",
+					"git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD",
 					{
 						cwd,
 						encoding: "utf-8",
@@ -1106,7 +1106,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			let totalLinesChanged = 0
 			if (changedFromGit.length > 0) {
 				try {
-					const statOutput = execSync("git diff --stat --diff-filter=ACMRT", {
+					const statOutput = execSync("git diff --stat --diff-filter=ACMRTD", {
 						cwd,
 						encoding: "utf-8",
 						timeout: 5000,
@@ -1205,23 +1205,19 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	 */
 	private async scanForStubs(changedFiles: string[], cwd: string): Promise<string[]> {
 		const stubPatterns = [
-			/\bTODO\b/i,
-			/\bFIXME\b/i,
-			/\bHACK\b/i,
-			/\bXXX\b/,
+			/throw\s+new\s+Error\(['"](not\s+implemented|unimplemented|todo|stub)/i,
+			/throw\s+new\s+Error\(['"].*TODO/i,
+			/\/\/\s+TODO/i,
+			/\/\/\s+FIXME/i,
+			/\/\/\s+HACK/i,
+			/\/\/\s+XXX\b/,
 			/implement\s+later/i,
-			/stub\b/i,
-			/throw\s+new\s+Error\(['"]not\s+implemented/i,
-			/throw\s+new\s+Error\(['"]unimplemented/i,
 			/\/\/\s+@ts-ignore/,
-			/\/\/\s+@ts-expect-error/,
 			/\/\/\s+@ts-nocheck/,
-			/\/\/\s+eslint-disable-next-line/,
-			/fn\s*[\(]\s*[\)]\s*{/,
-			/function\s+\w+\s*[\(]\s*[\)]\s*{\s*}/,
-			/async\s+function\s+\w+\s*[\(]/,
-			/const\s+\w+\s*=\s*async\s*[\(]/,
-			/\.\.\./,
+			/\/\/\s+eslint-disable-next-line\s/,
+			/return\s+null\s*;\s*\/\/\s+TODO/i,
+			/function\s+\w+\s*\(\s*\)\s*\{\s*\}\s*\/\/\s+TODO/i,
+			/\w+\s*=\s*async\s*\(\s*\)\s*=>\s*\{\s*\}\s*\/\/\s+TODO/i,
 		]
 
 		const stubbedFiles: string[] = []
@@ -1242,8 +1238,10 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 					}
 				}
 
-				// If more than 10% of lines match stub patterns, flag it
-				if (lines.length > 0 && suspiciousLineCount / lines.length > 0.1) {
+				// Threshold: flag if >5% of lines match stub patterns
+				// (lowered from 10% to catch sparse stubs like single-line
+				// throw new Error('not implemented') in a 15-line function)
+				if (lines.length > 0 && suspiciousLineCount / lines.length > 0.05) {
 					stubbedFiles.push(filePath)
 				}
 			} catch {

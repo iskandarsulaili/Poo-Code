@@ -203,7 +203,7 @@ export class RequirementsVerifier {
 		let gitDiffFiles: string[] = []
 		try {
 			const { execSync } = require("child_process")
-			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRT && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRT", {
+			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD", {
 				cwd,
 				encoding: "utf-8",
 				timeout: 5000,

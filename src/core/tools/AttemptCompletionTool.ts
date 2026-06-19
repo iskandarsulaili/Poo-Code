@@ -222,23 +222,68 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			// ========================================================================
 			// Fix F: Cross-reference completion claim against actual file changes
-			// Check if the result text mentions files that weren't actually modified
+			// Check if the result text mentions files that weren't actually modified.
+			// Blocking when >50% of claims are unverifiable.
 			// ========================================================================
 			if (!isLenientMode && result) {
-				const filePattern = /(?:\b|\/)([\w_.-]+\.\w{1,5})\b/g
+				const filePattern = /(?:^|[\/\s])([\w_.-]+\.\w{1,5})\b/g
 				const mentionedFiles = [...result.matchAll(filePattern)].map((m) => m[1].toLowerCase())
 				if (mentionedFiles.length > 0) {
 					const actuallyChanged = new Set([
-						...toolCallFilePaths.map((f) => f.toLowerCase()),
+						...toolCallFilePaths.map((f) => {
+							// Strip leading ./ and directory prefix for matching
+							const clean = f.replace(/^\.\//, "").toLowerCase()
+							return clean
+						}),
 					])
-					const unverifiedClaims = mentionedFiles.filter(
-						(f) => !actuallyChanged.has(f) && !actuallyChanged.has(`/${f}`),
+					const verified = mentionedFiles.filter(
+						(f) => actuallyChanged.has(f) || actuallyChanged.has(`/${f}`) || [...actuallyChanged].some((a) => a.endsWith(`/${f}`) || a === f),
 					)
-					if (unverifiedClaims.length > 0) {
+					const unverified = mentionedFiles.filter((f) => !verified.includes(f))
+
+					if (unverified.length > mentionedFiles.length * 0.5) {
+						const errorMsg = `Completion result claims changes to ${mentionedFiles.length} file(s), but ${unverified.length}/${mentionedFiles.length} cannot be verified from tool call history:\n` +
+							unverified.map((f) => `  ❌ ${f}`).join("\n") +
+							`\n\nActually modified files: ${[...actuallyChanged].join(", ") || "(none)"}` +
+							`\n\nPlease verify these files exist and were correctly modified before completing.`
+						task.recordToolError("attempt_completion")
+						pushToolResult(formatResponse.toolError(errorMsg))
+						return
+					}
+
+					if (unverified.length > 0) {
 						console.log(
-							`[AttemptCompletionTool] ⚠ Completion result mentions ${unverifiedClaims.length} file(s) not verified as changed: ${unverifiedClaims.join(", ")}`,
+							`[AttemptCompletionTool] ⚠ ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
 						)
 					}
+				}
+			}
+
+			// ========================================================================
+			// Result substance check — reject empty or trivial result text
+			// ========================================================================
+			if (!isLenientMode && result) {
+				const stripped = result.replace(/[*_~`#\n\r]/g, "").trim()
+				if (stripped.length < 20) {
+					const errorMsg = `Completion result is too short (${stripped.length} chars). Please provide a substantive summary of what was implemented.\n\n` +
+						`Current result: "${result.slice(0, 100)}"\n\nInclude specific details about what was changed, added, or fixed.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+
+				// Check for evasion language
+				const evasionPatterns = [
+					/nothing/i, /no changes/i, /did nothing/i, /could not/i,
+					/failed/i, /unable to/i, /not implemented/i,
+				]
+				const evasionMatches = evasionPatterns.filter((p) => p.test(stripped))
+				if (evasionMatches.length >= 2 && stripped.length < 80) {
+					const errorMsg = `Completion result appears to indicate failure: "${result.slice(0, 120)}"\n\n` +
+						`If the task is incomplete, explain what was attempted and what remains. Do not mark the task as complete when work was unsuccessful.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
 				}
 			}
 
