@@ -33,6 +33,7 @@ console.log("Dynamically loaded translations:", Object.keys(translations))
 i18next.use(initReactI18next).init({
 	lng: "en", // Default language (will be overridden)
 	fallbackLng: "en",
+	defaultNS: "common",
 	debug: false,
 	interpolation: {
 		escapeValue: false, // React already escapes by default
