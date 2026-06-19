@@ -37,6 +37,7 @@ describe("EXPERIMENT_IDS", () => {
 		"MULTI_ROOT_WORKSPACE",
 		"PARALLEL_SUBTASK",
 		"DISABLE_CODEBASE_DEPENDENCY",
+		"DISABLE_ORCHESTRATOR_WIRING",
 	] as const
 
 	it("has all expected keys", () => {

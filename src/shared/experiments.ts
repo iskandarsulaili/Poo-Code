@@ -33,6 +33,7 @@ export const EXPERIMENT_IDS = {
 	MULTI_ROOT_WORKSPACE: "multiRootWorkspace",
 	PARALLEL_SUBTASK: "parallelSubtask",
 	DISABLE_CODEBASE_DEPENDENCY: "disableCodebaseDependency",
+	DISABLE_ORCHESTRATOR_WIRING: "disableOrchestratorWiring",
 } as const satisfies Record<string, ExperimentId>
 
 type ExperimentKey = Keys<typeof EXPERIMENT_IDS>
@@ -74,6 +75,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	MULTI_ROOT_WORKSPACE: { enabled: true },
 	PARALLEL_SUBTASK: { enabled: true },
 	DISABLE_CODEBASE_DEPENDENCY: { enabled: true },
+	DISABLE_ORCHESTRATOR_WIRING: { enabled: true },
 }
 
 export const experimentDefault = Object.fromEntries(

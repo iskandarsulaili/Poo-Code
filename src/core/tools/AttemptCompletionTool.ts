@@ -86,7 +86,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		return [...allFiles]
 	}
 
-	/** Fix 2+3: Expire child task file entries older than 1 hour to prevent leaks. */
+	/** Fix 2+3+5: Expire child task file entries older than 1 hour to prevent leaks. */
 	private static expireChildTaskFiles(): void {
 		const ONE_HOUR_MS = 3600_000
 		const now = Date.now()
@@ -96,6 +96,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!childrenMap) continue
 			// Sweep children older than 1 hour (Fix 3 — real expiry using timestamps)
 			for (const [childId, entry] of [...childrenMap.entries()]) {
+				if (childId === '__thoughts__') continue // Fix 5: transient, don't sweep
 				if (now - entry.createdAt > ONE_HOUR_MS) {
 					childrenMap.delete(childId)
 				}
@@ -530,7 +531,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Only runs in orchestrator modes when Guard 6 did NOT already verify
 			// build/lint/types/tests (Fix 2 — skip double-run).
 			// ========================================================================
-			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine && !task.experiments?.disableOrchestratorWiring
 				// Fix 2: Skip if Guard 6 already verified build/lint/types/test gates
 				&& (this as any)._guard6HasCodeGates === undefined) {
 				// Clone config with build/lint/types/tests forced on
@@ -587,7 +588,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Non-blocking: findings appended to completion result for user review.
 			// Only runs after wiring verification passes in orchestrator modes.
 			// ========================================================================
-			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId) {
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && !task.experiments?.disableOrchestratorWiring) {
 				const auditSections: string[] = []
 				auditSections.push("# Deep Code Audit Report")
 				auditSections.push("")
@@ -1048,14 +1049,26 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 		}
 
-		// Fix 3: Also scan apiConversationHistory for user messages missed by clineMessages
+		// Fix 4: Also scan apiConversationHistory for user messages (handles string AND array content)
 		try {
 			const apiHistory = task.apiConversationHistory || []
 			for (const msg of apiHistory) {
-				if (msg.role === "user" && typeof msg.content === "string" && msg.content.length >= 10) {
+				if (msg.role !== "user") continue
+				// Fix 4: Handle both string content and array-typed content
+				let msgText = ""
+				if (typeof msg.content === "string") {
+					msgText = msg.content
+				} else if (Array.isArray(msg.content)) {
+					for (const block of msg.content) {
+						if (block.type === "text" && typeof block.text === "string") {
+							msgText += block.text + "\n"
+						}
+					}
+				}
+				if (msgText.trim().length >= 10) {
 					// Deduplicate against what we already have from clineMessages
-					if (!messages.some((m) => m === msg.content)) {
-						messages.push(msg.content)
+					if (!messages.some((m) => m === msgText.trim())) {
+						messages.push(msgText.trim())
 					}
 				}
 			}
