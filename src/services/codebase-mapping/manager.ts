@@ -110,8 +110,15 @@ export class CodebaseMappingManager {
       }
     });
 
-    // Initialize asynchronously
-    service.initialize(config).catch((err: unknown) => {
+    // Initialize and scan asynchronously (independent of code indexing — Fix 1)
+    service.initialize(config).then(() => {
+      // Trigger workspace scan immediately after initialization
+      // This runs independently of code indexing, so the dependency graph
+      // is available even when vector search is not configured.
+      service.scanWorkspace().catch((scanErr: unknown) => {
+        console.error(`[codebase-mapping:${workspacePath}] Scan failed`, scanErr);
+      });
+    }).catch((err: unknown) => {
       console.error(`[codebase-mapping:${workspacePath}] Initialization failed`, err);
     });
 

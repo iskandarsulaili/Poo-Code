@@ -42,61 +42,27 @@ async function getCodebaseMappingSection(cwd: string, extContext: vscode.Extensi
 		const graph = await service.getDependencyGraph()
 		if (!graph || graph.files.size === 0) return ""
 		
-		const allSymbols = await service.getSymbols()
-		const deadCode = await service.getDeadCode()
-		
 		const totalFiles = graph.files.size
 		const totalEdges = graph.edges.length
-		const totalSymbols = allSymbols.length
-		const deadSymbolCount = deadCode.length
 		
-		// Find top hub files (most connected)
-		const hubs: Array<{ path: string; score: number }> = []
-		for (const [, fn] of graph.files) {
-			const fp = (fn as any).filePath || (fn as any).path || ""
-			const imports = (fn as any).imports || []
-			const exports = (fn as any).exports || []
-			const score = imports.length + exports.length
-			if (score > 2 && fp) {
-				hubs.push({ path: fp, score })
-			}
-		}
-		hubs.sort((a, b) => b.score - a.score)
-		const topHubs = hubs.slice(0, 10).map(h => h.path).join(", ")
-		
-		// Detect layer violations
-		let violationCount = 0
-		for (const [, fn] of graph.files) {
-			const fp = ((fn as any).filePath || (fn as any).path || "").toLowerCase()
-			for (const imp of (fn as any).imports || []) {
-				const impLower = imp.toLowerCase()
-				if (fp.includes("/infrastructure/") && (impLower.includes("/domain/") || impLower.includes("/core/"))) {
-					violationCount++
-				} else if (fp.includes("/application/") && (impLower.includes("/infrastructure/") || impLower.includes("/data/"))) {
-					violationCount++
-				}
-			}
-		}
-		
+		// Fix 4: Lightweight — just one line pointing to the tool, no full duplication
+		// The codebase_dependency tool provides the full query interface
 		return `
 ====
 
 CODEBASE ARCHITECTURE
 
-This project has ${totalFiles} files, ${totalSymbols} symbols, and ${totalEdges} dependency edges.
-${deadSymbolCount > 0 ? `⚠ ${deadSymbolCount} potentially dead symbol(s) detected.` : "No dead symbols detected."}
-${violationCount > 0 ? `⚠ ${violationCount} layered architecture violation(s) detected.` : "No layered architecture violations detected."}
-${topHubs ? `Hub files (most connected): ${topHubs}` : ""}
-
-Use the \`codebase_dependency\` tool to query the dependency graph before refactoring.`
+This project has ${totalFiles} files with ${totalEdges} dependency edges.
+Use the \`codebase_dependency\` tool to query the dependency graph before refactoring:
+- \`codebase_dependency(action="reverse_deps", target="src/file.ts")\` — find what depends on a file
+- \`codebase_dependency(action="forward_deps", target="src/file.ts")\` — find what a file imports
+- \`codebase_dependency(action="file_info", target="src/file.ts")\` — detailed file analysis
+- \`codebase_dependency(action="module_map", module="src/feature")\` — module overview
+- \`codebase_dependency(action="dead_symbols")\` — find unreferenced code
+- \`codebase_dependency(action="cycles")\` — detect circular dependencies`
 	} catch {
 		return ""
 	}
-}
-
-interface HubEntry {
-	path: string
-	score: number
 }
 
 // Helper function to get prompt component, filtering out empty objects

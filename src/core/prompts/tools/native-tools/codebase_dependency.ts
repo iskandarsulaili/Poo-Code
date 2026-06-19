@@ -16,10 +16,11 @@ Use this tool when:
 - You need to find unused/dead code that can be safely removed
 - You need a quick summary of a module's structure without reading every file
 
-Parameters:
+|Parameters:
 - action: (required) One of: "reverse_deps", "forward_deps", "file_info", "dead_symbols", "module_map", "cycles"
 - target: (optional) File path or symbol name to query. Required for: reverse_deps, forward_deps, file_info
 - module: (optional) Directory path to scope a module_map query
+- limit: (optional) Maximum number of results to return. Default: 30. Set to null for unlimited.
 
 Examples:
 { "action": "reverse_deps", "target": "src/services/auth.service.ts" }
@@ -61,6 +62,10 @@ export default {
 				module: {
 					type: ["string", "null"],
 					description: "Directory path for module_map query",
+				},
+				limit: {
+					type: ["number", "null"],
+					description: "Maximum results to return (default: 30, null for unlimited)",
 				},
 			},
 			required: ["action", "target", "module"],
