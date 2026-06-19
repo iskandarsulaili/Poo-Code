@@ -950,34 +950,37 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 					gates.push(this.makeSkippedGate("tests", reason, strictness))
 				}
 			}
-		}
 
-		// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
-		const stripCd = (cmd: string | undefined): string | undefined => {
-			if (!cmd) return cmd
-			const trimmed = cmd.trim()
-			if (trimmed === "cd") return undefined
-			return cmd
-		}
+			// File-changes gate already ran above. Skip individual gate execution
+			// since there's no project tooling to run.
+		} else {
+			// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
+			const stripCd = (cmd: string | undefined): string | undefined => {
+				if (!cmd) return cmd
+				const trimmed = cmd.trim()
+				if (trimmed === "cd") return undefined
+				return cmd
+			}
 
-		if (this.config.checkBuild && this.config.buildCommand) {
-			const cmd = stripCd(this.config.buildCommand)
-			if (cmd) gates.push(await this.runGate("build", cmd, strictness))
-		}
+			if (this.config.checkBuild && this.config.buildCommand) {
+				const cmd = stripCd(this.config.buildCommand)
+				if (cmd) gates.push(await this.runGate("build", cmd, strictness))
+			}
 
-		if (this.config.checkLint && this.config.lintCommand) {
-			const cmd = stripCd(this.config.lintCommand)
-			if (cmd) gates.push(await this.runGate("lint", cmd, strictness))
-		}
+			if (this.config.checkLint && this.config.lintCommand) {
+				const cmd = stripCd(this.config.lintCommand)
+				if (cmd) gates.push(await this.runGate("lint", cmd, strictness))
+			}
 
-		if (this.config.checkTypes && this.config.typeCheckCommand) {
-			const cmd = stripCd(this.config.typeCheckCommand)
-			if (cmd) gates.push(await this.runGate("type-check", cmd, strictness))
-		}
+			if (this.config.checkTypes && this.config.typeCheckCommand) {
+				const cmd = stripCd(this.config.typeCheckCommand)
+				if (cmd) gates.push(await this.runGate("type-check", cmd, strictness))
+			}
 
-		if (this.config.checkTests && this.config.testCommand) {
-			const cmd = stripCd(this.config.testCommand)
-			if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
+			if (this.config.checkTests && this.config.testCommand) {
+				const cmd = stripCd(this.config.testCommand)
+				if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
+			}
 		}
 
 		const passed = gates.every((g) => g.passed || g.skipped)
