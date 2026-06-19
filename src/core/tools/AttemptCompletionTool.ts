@@ -478,6 +478,69 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// ========================================================================
+			// Orchestrator Code Wiring Verification — build/lint/test/typecheck
+			// Only runs in orchestrator modes (orchestrator, one-shot-orchestrator,
+			// kaizen-orchestrator, vigorous-stlc-orchestrator). Uses a fresh
+			// VerificationEngine instance to run build/lint/test/typecheck commands
+			// regardless of lenient mode or bypass settings.
+			// ========================================================================
+			const ORCHESTRATOR_SLUGS = [
+				"orchestrator",
+				"one-shot-orchestrator",
+				"kaizen-orchestrator",
+				"vigorous-stlc-orchestrator",
+			]
+			if (ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine) {
+				// Clone config with build/lint/types/tests forced on
+				this.verificationEngine.updateConfig({ cwd: task.cwd })
+				await this.verificationEngine.applyAutoProfile(task.cwd)
+				// Force enable all code quality checks
+				const currentConfig = this.verificationEngine.getConfig()
+				this.verificationEngine.updateConfig({
+					checkBuild: currentConfig.buildCommand ? true : false,
+					checkLint: currentConfig.lintCommand ? true : false,
+					checkTypes: currentConfig.typeCheckCommand ? true : false,
+					checkTests: currentConfig.testCommand ? true : false,
+					checkFileChanges: false,
+					checkBuildConfigIntegrity: false,
+				})
+				const codeResult = await this.verificationEngine.verify(this.aggregateTaskFiles(task))
+				const codeGates = codeResult.gates.filter((g) =>
+					["build", "lint", "type-check", "tests"].includes(g.name),
+				)
+				const codeFailed = codeGates.filter((g) => !g.passed && !g.skipped)
+				if (codeFailed.length > 0) {
+					const gateDetails = codeGates
+						.map((g) => {
+							const icon = g.passed ? "✅" : g.skipped ? "⏭️" : "❌"
+							const note = g.passed
+								? `PASS (${g.durationMs}ms)`
+								: g.skipped
+									? `SKIP (${g.skipReason || "not available"})`
+									: `FAIL (${g.durationMs}ms)${g.error ? `: ${g.error.slice(0, 200)}` : ""}`
+							return `  ${icon} ${g.name}: ${note}`
+						})
+						.join("\n")
+					const errorMsg =
+						`[Orchestrator Code Wiring Verification] ${codeFailed.length}/${codeGates.length} gate(s) FAILED.\n\n` +
+						`Orchestrator mode requires passing code quality gates before completing.\n\n${gateDetails}` +
+						`\n\nPlease fix these issues and retry with attempt_completion.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+				// Log passing gates for transparency
+				const passCount = codeGates.filter((g) => g.passed).length
+				const skipCount = codeGates.filter((g) => g.skipped).length
+				if (passCount > 0 || skipCount > 0) {
+					console.log(
+						`[Orchestrator] Code wiring verification: ${passCount} passed, ${skipCount} skipped`,
+					)
+				}
+			}
+			// ========================================================================
+
+			// ========================================================================
 			// Bug 1: Escalation check — after ALL gates have run
 			// Prompt user after MAX_CONSECUTIVE_FAILURES consecutive gate failures
 			// ========================================================================
