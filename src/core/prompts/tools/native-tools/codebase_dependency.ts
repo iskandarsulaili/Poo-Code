@@ -69,7 +69,6 @@ export default {
 				},
 			},
 			required: ["action"],
-			additionalProperties: false,
 		},
 	},
 } satisfies OpenAI.Chat.ChatCompletionTool

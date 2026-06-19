@@ -157,6 +157,9 @@ const ParallelDashboard: React.FC = () => {
 	const nodes = dag?.nodes ?? new Map<string, SubtaskNode>()
 	const waves = dag?.waves ?? []
 	const nodeList = [...nodes.values()]
+	// Fix 5: Filter by source tool — subtask tab vs child-tasks tab
+	const subtaskNodes = nodeList.filter((n) => n.source === "execute_parallel_subtask" || !n.source)
+	const childTaskNodes = nodeList.filter((n) => n.source === "execute_parallel_child_task")
 	const selectedNode = selectedSubtaskId ? (nodes.get(selectedSubtaskId) ?? null) : null
 
 	const completedCount = nodeList.filter((n) => n.status === "completed").length
@@ -239,10 +242,10 @@ const ParallelDashboard: React.FC = () => {
 
 			{/* Content */}
 			<div style={{ flex: 1, overflow: "auto", padding: "8px" }}>
-				{/* Subtasks Tab */}
+				{/* Subtasks Tab (Fix 5: filtered to subtask nodes) */}
 				{activeTab === "subtasks" && (
 					<div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-						{nodeList.length === 0 && (
+						{subtaskNodes.length === 0 && (
 							<div
 								style={{
 									padding: "16px",
@@ -253,7 +256,7 @@ const ParallelDashboard: React.FC = () => {
 								{t("parallel.dashboard.no_subtasks")}
 							</div>
 						)}
-						{nodeList.map((node) => (
+						{subtaskNodes.map((node) => (
 							<div key={node.id}>
 								<SubtaskCard
 									id={node.id}
@@ -285,10 +288,10 @@ const ParallelDashboard: React.FC = () => {
 					</div>
 				)}
 
-				{/* Child Tasks Tab */}
+				{/* Child Tasks Tab (Fix 5: filtered to child task nodes) */}
 				{activeTab === "child-tasks" && (
 					<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-						{nodeList.length === 0 && (
+						{childTaskNodes.length === 0 && (
 							<div
 								style={{
 									padding: "16px",
@@ -299,7 +302,7 @@ const ParallelDashboard: React.FC = () => {
 								{t("parallel.dashboard.no_child_tasks")}
 							</div>
 						)}
-						{nodeList.map((node) => (
+						{childTaskNodes.map((node) => (
 							<div key={node.id}>
 								<SubtaskCard
 									id={node.id}

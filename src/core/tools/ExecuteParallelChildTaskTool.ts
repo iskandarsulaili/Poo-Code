@@ -195,6 +195,7 @@ export class ExecuteParallelChildTaskTool extends BaseTool<"execute_parallel_chi
 				id: t.id,
 				name: t.id,
 				mode: t.mode,
+				source: "execute_parallel_child_task",
 				prompt: t.message,
 				inputFiles: t.inputFiles ?? [],
 				outputFiles: t.outputFiles ?? [],

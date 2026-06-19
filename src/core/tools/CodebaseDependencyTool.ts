@@ -61,7 +61,7 @@ export class CodebaseDependencyTool extends BaseTool<"codebase_dependency"> {
 				case "file_info": result = await this.queryFileInfo(graph, allSymbols, target); break
 				case "dead_symbols": result = this.queryDeadSymbols(deadCode, maxResults); break
 				case "module_map":
-				if (!modulePath && modulePath !== null) {
+				if (modulePath === null || modulePath === "" || modulePath === undefined) {
 					result = "Error: 'module' parameter is required for module_map action. Example: codebase_dependency(action=\"module_map\", module=\"src/feature\")"
 				} else {
 					result = this.queryModuleMap(graph, modulePath, maxResults)

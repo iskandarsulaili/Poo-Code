@@ -56,14 +56,14 @@ export interface SubtaskMetadata {
  * A single node in the subtask DAG.
  */
 export interface SubtaskNode {
-	/** Unique identifier within the task run */
 	id: string
-	/** Human-readable name */
 	name: string
-	/** The mode/agent to execute this subtask */
+	/** The mode slug to execute this subtask in */
 	mode: string
-	/** The task prompt for this subtask */
+	/** The prompt/instructions for this subtask */
 	prompt: string
+	/** Source tool: "execute_parallel_subtask" or "execute_parallel_child_task" */
+	source?: "execute_parallel_subtask" | "execute_parallel_child_task"
 	/** Files this subtask is expected to read (for context injection) */
 	inputFiles: string[]
 	/** Files this subtask is expected to write (for lock acquisition) */

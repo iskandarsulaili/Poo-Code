@@ -161,7 +161,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				AttemptCompletionTool.verificationFailures.delete(tid)
 			}
 		}
-		const record = AttemptCompletionTool.verificationFailures.get(task.taskId)
+		const record = AttemptCompletionTool.verificationFailures.get(task.rootTaskId ?? task.taskId)
 		if (!record || record.count < AttemptCompletionTool.MAX_CONSECUTIVE_FAILURES) {
 			return false // No escalation needed
 		}
@@ -174,7 +174,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 		if (response === "yesButtonClicked") {
 			// User approved bypass — clear failures and continue
-			AttemptCompletionTool.clearVerificationFailures(task.taskId)
+			AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
 			return false // Don't block
 		}
 
@@ -283,7 +283,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
 						// Don't increment consecutiveMistakeCount — verification has its own counter
-						AttemptCompletionTool.recordGateFailure(task.taskId, "requirements")
+						AttemptCompletionTool.recordGateFailure(task.rootTaskId ?? task.taskId, "requirements")
 						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
@@ -467,7 +467,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
 					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
-					AttemptCompletionTool.recordGateFailure(task.taskId, "code-quality")
+					AttemptCompletionTool.recordGateFailure(task.rootTaskId ?? task.taskId, "code-quality")
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
 					return
@@ -573,7 +573,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
-				AttemptCompletionTool.clearVerificationFailures(task.taskId)
+				AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
 				this.emitTaskCompleted(task, result)
 				return
 			}
