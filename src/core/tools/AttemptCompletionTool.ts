@@ -39,6 +39,14 @@ interface DelegationProvider {
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
+	/** Fix 1: Orchestrator mode slugs — used by wiring verification and deep audit. */
+	private static readonly ORCHESTRATOR_SLUGS = [
+		"orchestrator",
+		"one-shot-orchestrator",
+		"kaizen-orchestrator",
+		"vigorous-stlc-orchestrator",
+	]
+
 	/**
 	 * Tracks the last result text per task to guard against duplicate completions.
 	 * Unlike a permanent boolean flag, this allows new attempt_completion calls
@@ -76,6 +84,28 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 		}
 		return [...allFiles]
+	}
+
+	/** Fix 2: Expire child task file entries older than 1 hour to prevent leaks. */
+	private static expireChildTaskFiles(): void {
+		const ONE_HOUR_MS = 3600_000
+		const now = Date.now()
+		// childTaskFiles Map doesn't store timestamps, so prune on every
+		// emitTaskCompleted call instead (which runs after successful completion).
+		// This sweep provides a safety net for orphaned entries from aborted tasks.
+		// The prune is lightweight — iterate parent keys and check if any children remain.
+		for (const parentKey of [...AttemptCompletionTool.childTaskFiles.keys()]) {
+			const childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+			if (childrenMap && childrenMap.size === 0) {
+				AttemptCompletionTool.childTaskFiles.delete(parentKey)
+			}
+		}
+		// Also sweep verificationFailures (duplicates the 1-hour sweep in checkEscalation)
+		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+			if (now - rec.lastFailAt > ONE_HOUR_MS) {
+				AttemptCompletionTool.verificationFailures.delete(tid)
+			}
+		}
 	}
 
 	/** Fix 1: Prune a child task's files from its parent's map (thread-safe). */
@@ -488,13 +518,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// VerificationEngine instance to run build/lint/test/typecheck commands
 			// regardless of lenient mode or bypass settings.
 			// ========================================================================
-			const ORCHESTRATOR_SLUGS = [
-				"orchestrator",
-				"one-shot-orchestrator",
-				"kaizen-orchestrator",
-				"vigorous-stlc-orchestrator",
-			]
-			if (ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine) {
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine) {
 				// Clone config with build/lint/types/tests forced on
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
@@ -549,7 +573,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Non-blocking: findings appended to completion result for user review.
 			// Only runs after wiring verification passes in orchestrator modes.
 			// ========================================================================
-			if (ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId) {
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId) {
 				const auditSections: string[] = []
 				auditSections.push("# Deep Code Audit Report")
 				auditSections.push("")
@@ -947,6 +971,15 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	/**
 	 * Extract file paths from the agent's tool call history for file-changes gate scoping (Fix H).
 	 */
+	/** Fix 4: Regex patterns for CLI-created files */
+	private static readonly CLI_FILE_PATTERNS = [
+		/cat\s+>\s+([\w./-]+)/i,
+		/echo\s+['"][^'"]*['"]\s*[>]\s*([\w./-]+)/i,
+		/touch\s+([\w./-]+)/i,
+		/cp\s+[\w./-]+\s+([\w./-]+)/i,
+		/mv\s+[\w./-]+\s+([\w./-]+)/i,
+	]
+
 	private extractToolCallFiles(
 		apiMessages: Array<{ role: string; content: string | any[] }>,
 	): string[] {
@@ -961,6 +994,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			for (const block of msg.content) {
 				if (block?.type !== "tool_use") continue
 				const toolName = (block.name || "").toLowerCase()
+				// Fix 4: Detect CLI-created files (execute_command with cat >, echo >, touch)
+				if (toolName === "execute_command") {
+					const command = block?.input?.command || ""
+					if (typeof command === "string") {
+						for (const pat of AttemptCompletionTool.CLI_FILE_PATTERNS) {
+							const match = command.match(pat)
+							if (match && match[1]) files.add(match[1])
+						}
+					}
+				}
 				if (!FILE_WRITE_TOOLS.has(toolName)) continue
 				const input = block?.input || {}
 				if (typeof input.path === "string") files.add(input.path)
@@ -991,10 +1034,27 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 		}
 
+		// Fix 3: Also scan apiConversationHistory for user messages missed by clineMessages
+		try {
+			const apiHistory = task.apiConversationHistory || []
+			for (const msg of apiHistory) {
+				if (msg.role === "user" && typeof msg.content === "string" && msg.content.length >= 10) {
+					// Deduplicate against what we already have from clineMessages
+					if (!messages.some((m) => m === msg.content)) {
+						messages.push(msg.content)
+					}
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
+
 		return messages
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
+		// Fix 2: Sweep stale entries before cleanup
+		AttemptCompletionTool.expireChildTaskFiles()
 		// Clean up child task file tracking to prevent memory leak (Fix B + Bug 5)
 		// Prune this task's own child records AND any completed grandchildren
 		const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)

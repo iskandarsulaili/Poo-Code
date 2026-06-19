@@ -555,4 +555,112 @@ describe("attemptCompletionTool", () => {
 			})
 		})
 	})
+
+	describe("extractToolCallFiles", () => {
+		it("should extract file paths from write_to_file tool calls", () => {
+			const history = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "tool_use", name: "write_to_file", input: { path: "/test/output.ts" } },
+						{ type: "tool_use", name: "read_file", input: { path: "/test/input.ts" } },
+					],
+				},
+			]
+			// Access private method via bracket notation for testing
+			const files = (AttemptCompletionTool.prototype as any)["extractToolCallFiles"](history)
+			expect(files).toContain("/test/output.ts")
+			expect(files).not.toContain("/test/input.ts")
+		})
+
+		it("should detect CLI-created files from execute_command (cat >)", () => {
+			const history = [
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "tool_use",
+							name: "execute_command",
+							input: { command: "cat > /tmp/test.js << EOF\nconst x = 1;\nEOF" },
+						},
+					],
+				},
+			]
+			const files = (AttemptCompletionTool.prototype as any)["extractToolCallFiles"](history)
+			expect(files).toContain("/tmp/test.js")
+		})
+
+		it("should detect CLI-created files from execute_command (echo >)", () => {
+			const history = [
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "tool_use",
+							name: "execute_command",
+							input: { command: "echo 'hello' > /tmp/out.txt" },
+						},
+					],
+				},
+			]
+			const files = (AttemptCompletionTool.prototype as any)["extractToolCallFiles"](history)
+			expect(files).toContain("/tmp/out.txt")
+		})
+
+		it("should detect CLI-created files from execute_command (touch)", () => {
+			const history = [
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "tool_use",
+							name: "execute_command",
+							input: { command: "touch /tmp/newfile.ts" },
+						},
+					],
+				},
+			]
+			const files = (AttemptCompletionTool.prototype as any)["extractToolCallFiles"](history)
+			expect(files).toContain("/tmp/newfile.ts")
+		})
+
+		it("should handle empty command string", () => {
+			const history = [
+				{
+					role: "assistant",
+					content: [
+						{ type: "tool_use", name: "execute_command", input: { command: "" } },
+					],
+				},
+			]
+			const files = (AttemptCompletionTool.prototype as any)["extractToolCallFiles"](history)
+			expect(files).toEqual([])
+		})
+	})
+
+	describe("getAllUserMessages", () => {
+		it("should include user messages from apiConversationHistory", () => {
+			const mockTask = {
+				metadata: { task: "Initial" },
+				clineMessages: [],
+				apiConversationHistory: [
+					{ role: "user", content: "Add error handling" },
+					{ role: "assistant", content: [{ type: "text", text: "I will" }] },
+					{ role: "user", content: "Now add tests" },
+				],
+			}
+			const messages = (AttemptCompletionTool.prototype as any)["getAllUserMessages"](mockTask)
+			expect(messages).toContain("Add error handling")
+			expect(messages).toContain("Now add tests")
+		})
+	})
+
+	describe("ORCHESTRATOR_SLUGS", () => {
+		it("should include all 4 orchestrator modes", () => {
+			expect((AttemptCompletionTool as any)["ORCHESTRATOR_SLUGS"]).toContain("orchestrator")
+			expect((AttemptCompletionTool as any)["ORCHESTRATOR_SLUGS"]).toContain("one-shot-orchestrator")
+			expect((AttemptCompletionTool as any)["ORCHESTRATOR_SLUGS"]).toContain("kaizen-orchestrator")
+			expect((AttemptCompletionTool as any)["ORCHESTRATOR_SLUGS"]).toContain("vigorous-stlc-orchestrator")
+		})
+	})
 })
