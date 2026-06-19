@@ -36,6 +36,7 @@ export const experimentIds = [
 	"dependencyGraph",
 	"multiRootWorkspace",
 	"parallelSubtask",
+	"disableCodebaseDependency",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)

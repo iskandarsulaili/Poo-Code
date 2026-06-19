@@ -35,6 +35,8 @@ describe("EXPERIMENT_IDS", () => {
 		"STRUCTURED_OUTPUT_PARSING",
 		"DEPENDENCY_GRAPH",
 		"MULTI_ROOT_WORKSPACE",
+		"PARALLEL_SUBTASK",
+		"DISABLE_CODEBASE_DEPENDENCY",
 	] as const
 
 	it("has all expected keys", () => {

@@ -67,7 +67,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	// are stored here so the parent's verification can include them.
 	// Key: parentTaskId → childTaskId → file paths modified by that child
 	// ========================================================================
-	private static childTaskFiles = new Map<string, Map<string, string[]>>()
+	private static childTaskFiles = new Map<string, Map<string, { files: string[]; createdAt: number }>>()
 	/** Aggregate file paths from this task and its own child tasks only (no sibling pollution). */
 	private aggregateTaskFiles(task: Task): string[] {
 		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
@@ -80,27 +80,32 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const snapshot = new Map(childrenMap)
 			for (const [childId, childFiles] of snapshot.entries()) {
 				if (childId === '__thoughts__') continue // Skip thought entries
-				for (const f of childFiles) allFiles.add(f)
+				for (const f of childFiles.files) allFiles.add(f)
 			}
 		}
 		return [...allFiles]
 	}
 
-	/** Fix 2: Expire child task file entries older than 1 hour to prevent leaks. */
+	/** Fix 2+3: Expire child task file entries older than 1 hour to prevent leaks. */
 	private static expireChildTaskFiles(): void {
 		const ONE_HOUR_MS = 3600_000
 		const now = Date.now()
-		// childTaskFiles Map doesn't store timestamps, so prune on every
-		// emitTaskCompleted call instead (which runs after successful completion).
-		// This sweep provides a safety net for orphaned entries from aborted tasks.
-		// The prune is lightweight — iterate parent keys and check if any children remain.
+		// Fix 3: Real time-based sweep — each child entry now has a createdAt timestamp
 		for (const parentKey of [...AttemptCompletionTool.childTaskFiles.keys()]) {
 			const childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
-			if (childrenMap && childrenMap.size === 0) {
+			if (!childrenMap) continue
+			// Sweep children older than 1 hour (Fix 3 — real expiry using timestamps)
+			for (const [childId, entry] of [...childrenMap.entries()]) {
+				if (now - entry.createdAt > ONE_HOUR_MS) {
+					childrenMap.delete(childId)
+				}
+			}
+			// Remove empty parent entries
+			if (childrenMap.size === 0) {
 				AttemptCompletionTool.childTaskFiles.delete(parentKey)
 			}
 		}
-		// Also sweep verificationFailures (duplicates the 1-hour sweep in checkEscalation)
+		// Also sweep verificationFailures
 		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
 			if (now - rec.lastFailAt > ONE_HOUR_MS) {
 				AttemptCompletionTool.verificationFailures.delete(tid)
@@ -368,7 +373,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!isLenientMode) {
 				const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
 				if (ownChildren) {
-					const childThoughts = ownChildren.get('__thoughts__') || []
+					const childThoughts = ((ownChildren.get('__thoughts__') as any)?.files) || []
 					for (const thought of childThoughts) {
 						task.providerRef.deref()?.postMessageToWebview?.({
 							type: "parallelSubtaskThought",
@@ -509,16 +514,25 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Even on pass, show warning counts if any
 				// (VerificationEngine already logs details via its own logger)
+				// Fix 2: Track that Guard 6 ran with build/lint/types gate results
+				const guard6PassedCodeGates = verResult.gates.filter((g: any) =>
+					["build", "lint", "type-check", "tests"].includes(g.name) && g.passed
+				).length
+				// Store on tool instance so orchestrator block can check
+				;(this as any)._guard6CodeGatesPassed = guard6PassedCodeGates
+				;(this as any)._guard6HasCodeGates = ["build", "lint", "type-check", "tests"].some(
+					(g) => verResult.gates.some((vg: any) => vg.name === g && !vg.skipped)
+				)
 			}
 
 			// ========================================================================
 			// Orchestrator Code Wiring Verification — build/lint/test/typecheck
-			// Only runs in orchestrator modes (orchestrator, one-shot-orchestrator,
-			// kaizen-orchestrator, vigorous-stlc-orchestrator). Uses a fresh
-			// VerificationEngine instance to run build/lint/test/typecheck commands
-			// regardless of lenient mode or bypass settings.
+			// Only runs in orchestrator modes when Guard 6 did NOT already verify
+			// build/lint/types/tests (Fix 2 — skip double-run).
 			// ========================================================================
-			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine) {
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine
+				// Fix 2: Skip if Guard 6 already verified build/lint/types/test gates
+				&& (this as any)._guard6HasCodeGates === undefined) {
 				// Clone config with build/lint/types/tests forced on
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
@@ -798,7 +812,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 										childrenMap = new Map()
 										AttemptCompletionTool.childTaskFiles.set(parentKey, childrenMap)
 									}
-									childrenMap.set(task.taskId, childFiles)
+									childrenMap.set(task.taskId, { files: childFiles, createdAt: Date.now() })
 									// Fix 3: Extract thought tokens from child's API history
 									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
 									if (childThoughts.length > 0) {
@@ -810,9 +824,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 											})
 										}
 										// Also store for parent aggregation (post-hoc forwarding)
-										const thoughtEntry = childrenMap.get('__thoughts__') ?? []
+										const thoughtEntry = ((childrenMap.get('__thoughts__') as any)?.files) || []
 										thoughtEntry.push(...childThoughts)
-										childrenMap.set('__thoughts__', thoughtEntry)
+										childrenMap.set('__thoughts__', { files: thoughtEntry, createdAt: Date.now() })
 									}
 								}
 							} catch {
@@ -952,12 +966,12 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const content = msg.content as any[]
 				for (const block of content) {
 					if (block.type === "reasoning" && block.text) {
-						thoughts.push(block.text.slice(0, 200))
+						thoughts.push(block.text)
 					}
 				}
 				// Also check for reasoning_content at the message level (OpenAI/DeepSeek)
 				if ((msg as any).reasoning_content) {
-					thoughts.push((msg as any).reasoning_content.slice(0, 200))
+					thoughts.push((msg as any).reasoning_content)
 				}
 			}
 		} catch {

@@ -73,6 +73,10 @@ describe("attemptCompletionTool", () => {
 
 		mockTask = {
 			consecutiveMistakeCount: 0,
+			cwd: "/test",
+			parentTaskId: undefined,
+			clineMessages: [],
+			experiments: {},
 			recordToolError: vi.fn(),
 			todoList: undefined,
 			say: vi.fn().mockResolvedValue(undefined),

@@ -130,10 +130,16 @@ export class CodebaseMappingManager {
     });
     disposables.push(folderWatcher);
 
-    // Register file save handler for incremental updates
+    // Register file save handler for incremental updates (Fix 5: debounced)
+    let saveTimer: ReturnType<typeof setTimeout> | undefined = undefined
+    const DEBOUNCE_MS = 2000 // 2-second debounce window
     const saveWatcher = vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.uri.fsPath.startsWith(workspacePath)) {
-        service.scanWorkspace().catch(() => {});
+        if (saveTimer) clearTimeout(saveTimer)
+        saveTimer = setTimeout(() => {
+          service.scanWorkspace().catch(() => {});
+          saveTimer = undefined
+        }, DEBOUNCE_MS)
       }
     });
     disposables.push(saveWatcher);
