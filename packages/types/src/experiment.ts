@@ -101,6 +101,8 @@ export const experimentsSchema = z.object({
 	toolErrorHealer: z.boolean().optional(),
 	verificationEngine: z.boolean().optional(),
 	requirementsVerification: z.boolean().optional(),
+	/** If true, disables ALL verification gates. Default: false (verification ON). */
+	disableVerification: z.boolean().optional(),
 	recoveryContext: z.boolean().optional(),
 	selfImprovingSpecializedSkills: z.boolean().optional(),
 	taskPatternLearning: z.boolean().optional(),

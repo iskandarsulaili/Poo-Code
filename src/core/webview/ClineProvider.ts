@@ -278,8 +278,9 @@ export class ClineProvider
 		)
 
 		// Wire RequirementsVerifier and VerificationEngine into AttemptCompletionTool
+		// Verification is ON by default; disable with experiments.disableVerification = true
 		const experiments = this.getGlobalStateSafe("experiments")
-		if (experiments?.requirementsVerification) {
+		if (!experiments?.disableVerification) {
 			const apiConfiguration = this.contextProxy.getProviderSettings()
 			const conflictResolver = apiConfiguration?.apiProvider
 				? new LLMConflictResolver(apiConfiguration)
@@ -294,19 +295,21 @@ export class ClineProvider
 				{
 					// cwd is set dynamically in AttemptCompletionTool.execute() from task.cwd
 					// Commands are auto-detected per-task — no global command overrides
-					checkBuild: experiments.verificationCheckBuild ?? true,
-					checkLint: experiments.verificationCheckLint ?? true,
-					checkTypes: experiments.verificationCheckTypes ?? true,
-					checkTests: experiments.verificationCheckTests ?? true,
+					checkBuild: experiments?.verificationCheckBuild ?? true,
+					checkLint: experiments?.verificationCheckLint ?? true,
+					checkTypes: experiments?.verificationCheckTypes ?? true,
+					checkTests: experiments?.verificationCheckTests ?? true,
+					checkFileChanges: true,
+					checkBuildConfigIntegrity: true,
 					mandatory: true,
-					gateTimeoutMs: experiments.verificationTimeoutMs ?? 120_000,
+					gateTimeoutMs: experiments?.verificationTimeoutMs ?? 120_000,
 				},
 				true,
 				apiConfiguration ?? undefined,
 			)
 			// Auto-detection and cwd are applied lazily in AttemptCompletionTool.execute()
 			attemptCompletionTool.setVerifiers(requirementsVerifier, verificationEngine)
-			this.log("[ClineProvider] Requirements verification wired into AttemptCompletionTool")
+			this.log("[ClineProvider] Verification engines wired into AttemptCompletionTool")
 		}
 
 		this.marketplaceManager = new MarketplaceManager(this.context, this.customModesManager)

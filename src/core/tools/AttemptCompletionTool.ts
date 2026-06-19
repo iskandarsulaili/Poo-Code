@@ -54,6 +54,65 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	/** Tracks consecutive verification failures for lenient mode retry logic */
 	private consecutiveVerificationFailures = 0
 
+	// ========================================================================
+	// Fix 4: Cross-call verification failure tracking & escalation
+	// ========================================================================
+	private static readonly MAX_CONSECUTIVE_FAILURES = 5
+	private static verificationFailures = new Map<
+		string,
+		{ count: number; lastFailAt: number; blockedGates: string[] }
+	>()
+
+	/** Record a verification failure for a specific task and gate. */
+	private static recordGateFailure(taskId: string, gateName: string): void {
+		const existing = AttemptCompletionTool.verificationFailures.get(taskId) ?? {
+			count: 0,
+			lastFailAt: 0,
+			blockedGates: [],
+		}
+		existing.count++
+		existing.lastFailAt = Date.now()
+		if (!existing.blockedGates.includes(gateName)) {
+			existing.blockedGates.push(gateName)
+		}
+		AttemptCompletionTool.verificationFailures.set(taskId, existing)
+	}
+
+	/** Clear verification failure tracking for a task. */
+	private static clearVerificationFailures(taskId: string): void {
+		AttemptCompletionTool.verificationFailures.delete(taskId)
+	}
+
+	/**
+	 * Check if verification escalation is needed for this task.
+	 * After MAX_CONSECUTIVE_FAILURES consecutive failures, prompt the user.
+	 */
+	private async checkEscalation(
+		task: Task,
+		pushToolResult: (result: string) => void,
+	): Promise<boolean> {
+		const record = AttemptCompletionTool.verificationFailures.get(task.taskId)
+		if (!record || record.count < AttemptCompletionTool.MAX_CONSECUTIVE_FAILURES) {
+			return false // No escalation needed
+		}
+
+		// Escalation threshold reached — ask the user
+		const { response } = await task.ask(
+			"verification_bypass_prompt",
+			`Verification has failed ${record.count} times. Recurring failures: ${record.blockedGates.join(", ")}.\n\nBypass verification and proceed, retry, or cancel?`,
+		)
+
+		if (response === "yesButtonClicked") {
+			// User approved bypass — clear failures and continue
+			AttemptCompletionTool.clearVerificationFailures(task.taskId)
+			return false // Don't block
+		}
+
+		// User wants to retry — push a retry tool result
+		pushToolResult("Retrying task after verification failure. Please address the verification issues.")
+		return true // Signal that we've handled it (caller should return)
+	}
+
 	/**
 	 * Set the verifiers used to guard completion.
 	 */
@@ -134,6 +193,21 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const lenientModes = task.experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)
 
+			// Snapshot build config at task start for integrity checking (Fix 1)
+			if (this.verificationEngine && !isLenientMode) {
+				try {
+					await this.verificationEngine.snapshotBuildConfig(task.cwd)
+				} catch {
+					// Non-blocking — snapshot is optional
+				}
+			}
+
+			// Fix 4: Check escalation before running gates
+			if (!isLenientMode) {
+				const shouldExit = await this.checkEscalation(task, pushToolResult)
+				if (shouldExit) return
+			}
+
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier && !isLenientMode) {
 				const experiments = task.experiments
@@ -154,6 +228,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
 						// Don't increment consecutiveMistakeCount — verification has its own counter
+						AttemptCompletionTool.recordGateFailure(task.taskId, "requirements")
 						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
@@ -317,7 +392,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
 					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
-					// Don't increment consecutiveMistakeCount — verification has its own counter
+					AttemptCompletionTool.recordGateFailure(task.taskId, "code-quality")
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
 					return
@@ -383,6 +458,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
+				AttemptCompletionTool.clearVerificationFailures(task.taskId)
 				this.emitTaskCompleted(task, result)
 				return
 			}

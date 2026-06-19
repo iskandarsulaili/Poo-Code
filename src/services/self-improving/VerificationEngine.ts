@@ -67,6 +67,12 @@ export interface VerificationConfig {
 	checkFileChanges: boolean
 	/** Whether to scan modified files for stub/TODO patterns. Default: true */
 	enableStubDetection: boolean
+	/** Whether to verify build config integrity (package.json hasn't been tampered with). Default: true */
+	checkBuildConfigIntegrity: boolean
+	/** Test coverage command (e.g., "npm test -- --coverage"). Default: undefined */
+	coverageCommand?: string
+	/** Minimum test coverage percentage (0-100). Default: 0 = no check */
+	minCoverage: number
 	/** Build command (e.g., "npm run build") */
 	buildCommand?: string
 	/** Lint command (e.g., "npm run lint") */
@@ -103,6 +109,8 @@ const DEFAULT_CONFIG: VerificationConfig = {
 	checkTests: false,
 	checkFileChanges: true,
 	enableStubDetection: true,
+	checkBuildConfigIntegrity: true,
+	minCoverage: 0,
 	gateTimeoutMs: 60_000,
 	mandatory: true,
 	strictness: "moderate",
@@ -452,6 +460,12 @@ export class VerificationEngine {
 	private lastResult?: VerificationResult
 	private enabled: boolean
 	private autoProfiled: ProjectProfile | null = null
+	/**
+	 * Snapshot of build config file hashes at task start.
+	 * Used by checkBuildConfigIntegrity to detect config tampering.
+	 * Maps relative file path → SHA256 hex digest.
+	 */
+	private buildConfigSnapshot: Map<string, string> | null = null
 
 	/**
 	 * In-memory cache for isProjectWithTooling results per directory.
@@ -868,6 +882,81 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 	}
 
+	/**
+	 * Snapshot build config files at task start for integrity checking (Fix 1).
+	 *
+	 * Hashes known build config files (package.json, Cargo.toml, pyproject.toml, etc.)
+	 * so that verify() can detect if the agent tampered with build scripts.
+	 * Call this at task start (before the agent makes any changes).
+	 */
+	async snapshotBuildConfig(cwd: string): Promise<void> {
+		const BUILD_CONFIG_FILES = [
+			"package.json",
+			"package-lock.json",
+			"Cargo.toml",
+			"pyproject.toml",
+			"setup.py",
+			"go.mod",
+			"Gemfile",
+			"build.gradle",
+			"build.gradle.kts",
+			"pom.xml",
+			"Makefile",
+			"CMakeLists.txt",
+			"build.zig",
+			"Deno.json",
+			"Deno.jsonc",
+		]
+
+		const crypto = await import("crypto")
+		const snapshots = new Map<string, string>()
+
+		for (const configFile of BUILD_CONFIG_FILES) {
+			const fullPath = path.resolve(cwd, configFile)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const hash = crypto.createHash("sha256").update(content).digest("hex")
+				snapshots.set(configFile, hash)
+			} catch {
+				// File doesn't exist — not an error
+			}
+		}
+
+		this.buildConfigSnapshot = snapshots
+		this.logger?.appendLine(
+			`[VerificationEngine] Build config snapshot: ${snapshots.size} file(s) hashed`,
+		)
+	}
+
+	/**
+	 * Check if build config files have changed since snapshot (Fix 1).
+	 * Returns list of config files that changed.
+	 */
+	private async checkBuildConfigIntegrity(cwd: string): Promise<string[]> {
+		if (!this.buildConfigSnapshot || this.buildConfigSnapshot.size === 0) {
+			return [] // No snapshot — cannot check
+		}
+
+		const crypto = await import("crypto")
+		const changed: string[] = []
+
+		for (const [configFile, originalHash] of this.buildConfigSnapshot.entries()) {
+			const fullPath = path.resolve(cwd, configFile)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const currentHash = crypto.createHash("sha256").update(content).digest("hex")
+				if (currentHash !== originalHash) {
+					changed.push(configFile)
+				}
+			} catch {
+				// File deleted since snapshot — flag as changed
+				changed.push(configFile)
+			}
+		}
+
+		return changed
+	}
+
 	setEnabled(enabled: boolean): void {
 		this.enabled = enabled
 		this.logger?.appendLine(`[VerificationEngine] ${enabled ? "Enabled" : "Disabled"}`)
@@ -981,6 +1070,45 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				const cmd = stripCd(this.config.testCommand)
 				if (cmd) gates.push(await this.runGate("tests", cmd, strictness))
 			}
+		}
+
+		// Build config integrity gate (Fix 1) — checks if build config files changed since snapshot
+		if (this.config.checkBuildConfigIntegrity && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+			const changedConfigs = await this.checkBuildConfigIntegrity(cwd)
+			if (changedConfigs.length > 0) {
+				const start = Date.now()
+				const durationMs = Date.now() - start
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "build-config-integrity" FAILED [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed`,
+				)
+				gates.push({
+					name: "build-config-integrity",
+					passed: false,
+					error: `${changedConfigs.length} build config file(s) changed since task start: ${changedConfigs.join(", ")}. The agent may have modified build scripts.`,
+					output: `Changed configs: ${changedConfigs.join(", ")}`,
+					durationMs,
+					warnings: 0,
+					errors: 1,
+					stderrSummary: `ERR: ${changedConfigs.length} config(s) changed`,
+					strictness,
+				})
+			} else {
+				const start = Date.now()
+				const durationMs = Date.now() - start
+				gates.push({
+					name: "build-config-integrity",
+					passed: true,
+					durationMs,
+					warnings: 0,
+					errors: 0,
+					strictness,
+				})
+			}
+		}
+
+		// Test coverage gate (Fix 2) — runs coverage command if configured
+		if (this.config.minCoverage > 0 && this.config.coverageCommand) {
+			gates.push(await this.runGate("coverage", this.config.coverageCommand, strictness))
 		}
 
 		const passed = gates.every((g) => g.passed || g.skipped)
