@@ -138,6 +138,15 @@ export class CodebaseMappingManager {
     });
     disposables.push(saveWatcher);
 
+    // Fix 5: Register file delete handler to clean up stale graph entries
+    const deleteWatcher = vscode.workspace.onDidDeleteFiles((event) => {
+      const needsRescan = event.files.some((uri) => uri.fsPath.startsWith(workspacePath));
+      if (needsRescan) {
+        service.scanWorkspace().catch(() => {});
+      }
+    });
+    disposables.push(deleteWatcher);
+
     const instance: MappingManagerInstance = {
       service,
       workspacePath,

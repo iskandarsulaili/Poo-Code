@@ -97,7 +97,8 @@ export class ASTParser {
         let endLine = lineIdx;
 
         for (let lookIdx = lineIdx + 1; lookIdx < lines.length; lookIdx++) {
-          const lookLine = lines[lookIdx];
+          const lookLine: string = lines[lookIdx] || "";
+          if (!lookLine) continue;
           endLine = lookIdx;
           accText += "\n" + lookLine;
 
@@ -119,7 +120,7 @@ export class ASTParser {
           // Reached a from/require without bracket close — treat as import
           if ((/from\s+["']/.test(lookLine) || /require\(["']/.test(lookLine)) && !/from\s+["'][^"']+["']/.test(accText)) {
             const multiMatch = accText.match(/from\s+["']([^"']+)["']/);
-            if (multiMatch) accName = multiMatch[1];
+            if (multiMatch && multiMatch[1]) accName = String(multiMatch[1]);
             break;
           }
         }
@@ -128,7 +129,7 @@ export class ASTParser {
           const range = createSourceRange(
             lineIdx + 1, 1,
             endLine + 1, 80,
-            content.indexOf(line), content.indexOf(lines[endLine]) + lines[endLine].length
+            content.indexOf(line), content.indexOf(lines[endLine] || "") + ((lines[endLine] || "").length)
           );
           const id = `${filePath}::${accName}::${nodeId++}`;
           children.push(createSyntaxNode(id, accKind, `import ${accName}`, range, language));

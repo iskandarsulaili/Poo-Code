@@ -8,6 +8,7 @@ import { Serializer } from "./serializer.js";
 import { SymbolExtractor } from "./symbol-extractor.js";
 import { TokenCompressor } from "./token-compressor.js";
 import { DocGenerator } from "./doc-generator.js";
+import { DeadCodeReason, DependencyGraph, DocUpdateType } from "./types.js";
 import type {
   CodebaseMappingAPI,
   CodebaseMappingConfig,
@@ -16,15 +17,17 @@ import type {
   ConfigLink,
   DeadSymbol,
   DeltaChange,
-  DependencyGraph,
   DocUpdate,
   ExtractedSymbol,
+  FileNode,
   GitMetadata,
   ImplicitFlow,
   LevelOfDetail,
   MappingEvent,
   SerializationFormat,
+  SerializationData,
 } from "./types.js";
+import { createDependencyEdge, createFileNode, detectLanguage } from "./models.js";
 
 export class CodebaseMappingService implements CodebaseMappingAPI {
   private config: CodebaseMappingConfig;
@@ -42,6 +45,16 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   cacheManager: CacheManager;
   docGenerator: DocGenerator;
 
+  private allParseResults: Map<string, import("./types.js").ParseResult>;
+  private allSymbols: Map<string, ExtractedSymbol[]>;
+  private currentGraph: DependencyGraph | null;
+  private deadCodeResults: DeadSymbol[];
+  private compressedResults: CompressedRepresentation[];
+  /** Fix 3: Current scan status — "idle", "scanning", "completed" */
+  public _scanStatus: "idle" | "scanning" | "completed" = "idle";
+  /** Fix 6: Parse error count from last scan */
+  public _lastScanErrors: number = 0;
+
   constructor(options?: CodebaseMappingOptions) {
     this.config = { ...DEFAULT_CONFIG, ...options };
     this.logger = createLogger(this.config.logLevel);
@@ -57,6 +70,12 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.securityLayer = new SecurityLayer(this.config);
     this.cacheManager = new CacheManager(this.config);
     this.docGenerator = new DocGenerator(this.config);
+
+    this.allParseResults = new Map();
+    this.allSymbols = new Map();
+    this.currentGraph = null;
+    this.deadCodeResults = [];
+    this.compressedResults = [];
   }
 
   async initialize(options?: CodebaseMappingOptions): Promise<void> {
@@ -73,51 +92,115 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.ensureInitialized();
     this.logger.info("Scanning workspace");
     this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
+    this._scanStatus = "scanning";
+    this._lastScanErrors = 0;
+
+    this.allParseResults.clear();
+    this.allSymbols.clear();
+    this.currentGraph = null;
+    this.deadCodeResults = [];
+    this.compressedResults = [];
+
+    const allFileNodes: FileNode[] = [];
+    const allEdges: import("./types.js").DependencyEdge[] = [];
 
     for (const rootPath of this.config.workspaceRoots) {
+      this.logger.info(`Scanning root: ${rootPath}`);
       const files = await this.fileDiscovery.discoverFiles(rootPath);
+      this.logger.info(`Found ${files.length} files in ${rootPath}`);
+
       for (const filePath of files) {
         try {
-          const { content } = await this.fileDiscovery.readFile(filePath);
+          const { content, hash, size } = await this.fileDiscovery.readFile(filePath);
           const { masked } = this.securityLayer.maskSecrets(content, filePath);
-          const fileNode = await this.fileDiscovery.buildFileNode(filePath, rootPath);
-          const parseResult = await this.astParser.parse(filePath, masked, fileNode.language);
+          const language = detectLanguage(filePath);
+
+          const fileNode = createFileNode(filePath, language, size, hash, Date.now());
+          const parseResult = await this.astParser.parse(filePath, masked, language);
+
+          this.allParseResults.set(filePath, parseResult);
           this.cacheManager.setAST(rootPath, filePath, parseResult);
+
           const symbols = this.symbolExtractor.extractSymbols(parseResult);
+          this.allSymbols.set(filePath, symbols);
           this.cacheManager.setSymbols(rootPath, filePath, symbols);
+
+          for (const sym of symbols) {
+            const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
+            if (metaKind === "import_statement") {
+              fileNode.imports.push(sym.name);
+              allEdges.push(createDependencyEdge(filePath, sym.name, "import", false, false));
+            }
+            if (metaKind === "export_statement") {
+              fileNode.exports.push(sym.name);
+            }
+          }
+
+          allFileNodes.push(fileNode);
+
+          this.emitEvent({
+            type: "file_added",
+            timestamp: Date.now(),
+            data: { filePath, symbolsFound: symbols.length },
+          });
         } catch (err) {
           this.logger.error(`Error processing ${filePath}:`, err);
+          this._lastScanErrors++;
         }
       }
     }
 
+    this.logger.info(`Building graph: ${allFileNodes.length} files, ${allEdges.length} edges`);
+    this.currentGraph = this.graphBuilder.buildGraph(allFileNodes, allEdges);
+    this.deadCodeResults = this.detectDeadCodeInternal();
+    this.compressedResults = await this.compressInternal();
+
+    this._scanStatus = "completed";
     this.emitEvent({ type: "scan_completed", timestamp: Date.now(), data: {} });
+    this.logger.info(
+      `Scan complete: ${allFileNodes.length} files, ${allEdges.length} edges, ${this.deadCodeResults.length} dead symbols`,
+    );
   }
 
   async getSymbol(name: string, filePath?: string): Promise<ExtractedSymbol | null> {
     this.ensureInitialized();
-    // Symbol lookup will be implemented here
+    for (const [fp, symbols] of this.allSymbols) {
+      if (filePath && fp !== filePath) continue;
+      const found = symbols.find((s) => s.name === name);
+      if (found) return found;
+    }
     return null;
   }
 
-  async getSymbols(_kind?: import("./types.js").SymbolKind): Promise<ExtractedSymbol[]> {
+  async getSymbols(kind?: import("./types.js").SymbolKind): Promise<ExtractedSymbol[]> {
     this.ensureInitialized();
-    return [];
+    const all: ExtractedSymbol[] = [];
+    for (const symbols of this.allSymbols.values()) {
+      if (kind) {
+        all.push(...symbols.filter((s) => s.kind === kind));
+      } else {
+        all.push(...symbols);
+      }
+    }
+    return all;
   }
 
   async getDependencyGraph(): Promise<DependencyGraph> {
     this.ensureInitialized();
-    return { files: new Map(), edges: [], rootPaths: [], buildTimeMs: 0 };
+    if (this.currentGraph) return this.currentGraph;
+    return { files: new Map(), edges: [], rootPaths: this.config.workspaceRoots, buildTimeMs: 0 };
   }
 
   async getDeadCode(): Promise<DeadSymbol[]> {
     this.ensureInitialized();
-    return [];
+    return this.deadCodeResults;
   }
 
-  async getCompressedContext(_lod?: LevelOfDetail): Promise<CompressedRepresentation[]> {
+  async getCompressedContext(lod?: LevelOfDetail): Promise<CompressedRepresentation[]> {
     this.ensureInitialized();
-    return [];
+    if (this.compressedResults.length === 0) return [];
+    if (lod === undefined) return this.compressedResults;
+    return this.compressedResults.filter((c) => c.lod === lod);
   }
 
   async getDelta(_fromHash: string, _toHash: string): Promise<DeltaChange[]> {
@@ -125,9 +208,60 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     return [];
   }
 
-  async serialize(_format: SerializationFormat): Promise<string> {
+  async serialize(format: SerializationFormat): Promise<string> {
     this.ensureInitialized();
-    return "";
+    if (!this.currentGraph) return "";
+
+    const allSymbols: ExtractedSymbol[] = [];
+    for (const symbols of this.allSymbols.values()) {
+      allSymbols.push(...symbols);
+    }
+
+    const data: SerializationData = {
+      metadata: {
+        workspaceRoots: this.config.workspaceRoots,
+        totalFiles: this.currentGraph.files.size,
+        totalSymbols: allSymbols.length,
+        totalEdges: this.currentGraph.edges.length,
+        generatedAt: Date.now(),
+        format,
+      },
+      files: Array.from(this.currentGraph.files.values()).map((f) => ({
+        path: f.filePath,
+        language: f.language,
+        size: f.size,
+        symbolCount: f.symbols.length,
+        importCount: f.imports.length,
+        exportCount: f.exports.length,
+        pageRank: f.pageRank,
+      })),
+      symbols: allSymbols.map((s) => ({
+        id: s.id,
+        name: s.name,
+        kind: s.kind,
+        filePath: s.filePath,
+        range: s.range,
+        parentId: s.parentId,
+        typeAnnotation: s.typeAnnotation,
+        isExported: s.isExported,
+        visibility: s.visibility,
+        documentation: s.documentation,
+        referenceCount: s.references.length,
+        pageRank: 0,
+      })),
+      edges: this.currentGraph.edges.map((e) => ({
+        from: e.from,
+        to: e.to,
+        kind: e.kind,
+        isDynamic: e.isDynamic,
+      })),
+      deadCode: this.deadCodeResults,
+      flows: [],
+      configLinks: [],
+      gitMetadata: null,
+    };
+
+    return this.serializer.serialize(data, format);
   }
 
   async getConfigLinks(): Promise<ConfigLink[]> {
@@ -152,7 +286,24 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
   async getDocUpdates(): Promise<DocUpdate[]> {
     this.ensureInitialized();
-    return [];
+    const updates: DocUpdate[] = [];
+    for (const [filePath, symbols] of this.allSymbols) {
+      for (const sym of symbols) {
+        const doc = await this.docGenerator.generateDoc(sym.filePath, sym.name, sym.documentation ?? "");
+        if (doc) {
+          updates.push({
+            filePath,
+            symbolId: sym.id,
+            symbolName: sym.name,
+            oldDoc: sym.documentation,
+            newDoc: doc.newDoc,
+            updateType: DocUpdateType.JSDocRegenerated,
+            generatedAt: Date.now(),
+          });
+        }
+      }
+    }
+    return updates;
   }
 
   onEvent(handler: (event: MappingEvent) => void): void {
@@ -163,6 +314,11 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.logger.info("Disposing CodebaseMappingService");
     this.eventHandlers = [];
     this.cacheManager.clear();
+    this.allParseResults.clear();
+    this.allSymbols.clear();
+    this.currentGraph = null;
+    this.deadCodeResults = [];
+    this.compressedResults = [];
     this.initialized = false;
   }
 
@@ -180,5 +336,53 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
         this.logger.error("Event handler error:", err);
       }
     }
+  }
+
+  private detectDeadCodeInternal(): DeadSymbol[] {
+    const dead: DeadSymbol[] = [];
+    const allRefs = new Map<string, number>();
+
+    for (const symbols of this.allSymbols.values()) {
+      for (const sym of symbols) {
+        allRefs.set(sym.id, (allRefs.get(sym.id) ?? 0) + sym.references.length);
+      }
+    }
+
+    for (const symbols of this.allSymbols.values()) {
+      for (const sym of symbols) {
+        const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
+        if ((allRefs.get(sym.id) ?? 0) === 0 && !sym.isExported && metaKind !== "import_statement" && metaKind !== "export_statement") {
+          dead.push({
+            symbolId: sym.id,
+            name: sym.name,
+            kind: sym.kind,
+            filePath: sym.filePath,
+            reason: DeadCodeReason.UnusedExport,
+            confidence: 0.8,
+            evidence: `Symbol ${sym.name} has no references`,
+          });
+        }
+      }
+    }
+
+    return dead;
+  }
+
+  private async compressInternal(): Promise<CompressedRepresentation[]> {
+    if (!this.currentGraph) return [];
+
+    const results: CompressedRepresentation[] = [];
+    for (const [filePath, parseResult] of this.allParseResults) {
+      const symbols = this.allSymbols.get(filePath) ?? [];
+      const content = parseResult.ast?.text ?? "";
+      const compressed = this.tokenCompressor.compress(
+        filePath,
+        content,
+        symbols,
+      );
+      results.push(compressed);
+    }
+
+    return results;
   }
 }

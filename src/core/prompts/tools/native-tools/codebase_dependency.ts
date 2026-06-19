@@ -68,7 +68,7 @@ export default {
 					description: "Maximum results to return (default: 30, null for unlimited)",
 				},
 			},
-			required: ["action", "target", "module"],
+			required: ["action"],
 			additionalProperties: false,
 		},
 	},

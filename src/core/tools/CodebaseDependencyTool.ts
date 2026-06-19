@@ -45,6 +45,12 @@ export class CodebaseDependencyTool extends BaseTool<"codebase_dependency"> {
 				return
 			}
 			const graph = await service.getDependencyGraph()
+			// Fix 3: Check if scan is still in progress
+			const scanStatus = (service as any)._scanStatus || "unknown"
+			if (scanStatus === "scanning") {
+				pushToolResult("Codebase mapping is still scanning. The dependency graph may be incomplete. Please wait for the scan to complete.\n\nMeanwhile, you can use codebase_search (semantic search) for code exploration.")
+				return
+			}
 			const allSymbols = await service.getSymbols()
 			const deadCode = await service.getDeadCode()
 			const maxResults = limit ?? 30  // Fix 3: Default limit = 30
@@ -54,7 +60,13 @@ export class CodebaseDependencyTool extends BaseTool<"codebase_dependency"> {
 				case "forward_deps": result = await this.queryForwardDeps(graph, target, maxResults); break
 				case "file_info": result = await this.queryFileInfo(graph, allSymbols, target); break
 				case "dead_symbols": result = this.queryDeadSymbols(deadCode, maxResults); break
-				case "module_map": result = this.queryModuleMap(graph, modulePath, maxResults); break
+				case "module_map":
+				if (!modulePath && modulePath !== null) {
+					result = "Error: 'module' parameter is required for module_map action. Example: codebase_dependency(action=\"module_map\", module=\"src/feature\")"
+				} else {
+					result = this.queryModuleMap(graph, modulePath, maxResults)
+				}
+				break
 				case "cycles": result = this.queryCycles(graph); break
 				default: result = "Unknown action: " + action
 			}
@@ -99,7 +111,7 @@ export class CodebaseDependencyTool extends BaseTool<"codebase_dependency"> {
 		}
 		const unique = new Map<string, string>()
 		for (const e of rev) unique.set(e.from, e.kind)
-		const all = [...unique.entries()]
+		const all = [...unique.entries()].sort((a, b) => a[0].localeCompare(b[0]))
 		const truncated = all.length > maxResults ? all.slice(0, maxResults) : all
 		if (unique.size === 0) return "## Reverse Dependencies for \"" + target + "\"\n\nNo files depend on this target. It may be dead code."
 		const lines = ["## Reverse Dependencies for \"" + target + "\"", "", "Found " + unique.size + " file(s):" + (all.length > truncated.length ? " (showing " + truncated.length + ")" : ""), ""]
@@ -128,7 +140,8 @@ export class CodebaseDependencyTool extends BaseTool<"codebase_dependency"> {
 		}
 		if (imps.length > 0) {
 			lines.push("**Imports (" + imps.length + "):**")
-			for (const imp of imps.slice(0, maxResults)) lines.push("- `" + imp + "`")
+			const uniqueImps = [...new Set(imps)]  // Fix 7: deduplicate
+			for (const imp of uniqueImps.slice(0, maxResults)) lines.push("- `" + imp + "`")
 			if (imps.length > maxResults) lines.push("... and " + (imps.length - maxResults) + " more")
 			lines.push("")
 		}

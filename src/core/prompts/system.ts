@@ -45,6 +45,15 @@ async function getCodebaseMappingSection(cwd: string, extContext: vscode.Extensi
 		const totalFiles = graph.files.size
 		const totalEdges = graph.edges.length
 		
+		// Fix 3 + 6: Check scan status and error count
+		const scanStatus = (service as any)._scanStatus || "unknown"
+		const errorCount = (service as any)._lastScanErrors || 0
+		const statusNote = scanStatus === "scanning"
+			? "\n⚠ Codebase mapping scan is still in progress. Results may be incomplete."
+			: errorCount > 0
+				? `\n⚠ ${errorCount} file(s) had parse errors during the last scan. The dependency graph may be incomplete.`
+				: ""
+		
 		// Fix 4: Lightweight — just one line pointing to the tool, no full duplication
 		// The codebase_dependency tool provides the full query interface
 		return `
@@ -52,7 +61,7 @@ async function getCodebaseMappingSection(cwd: string, extContext: vscode.Extensi
 
 CODEBASE ARCHITECTURE
 
-This project has ${totalFiles} files with ${totalEdges} dependency edges.
+This project has ${totalFiles} files with ${totalEdges} dependency edges.${statusNote}
 Use the \`codebase_dependency\` tool to query the dependency graph before refactoring:
 - \`codebase_dependency(action="reverse_deps", target="src/file.ts")\` — find what depends on a file
 - \`codebase_dependency(action="forward_deps", target="src/file.ts")\` — find what a file imports
