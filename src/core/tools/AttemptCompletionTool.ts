@@ -66,21 +66,24 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		const allFiles = new Set(ownFiles)
 		// Only include children whose DIRECT parent is this task (parentTaskId)
 		// This prevents sibling A's files from leaking into sibling B's aggregate.
-		const children = AttemptCompletionTool.childTaskFiles.get(task.taskId)
-		if (children) {
-			for (const [childId, childFiles] of children.entries()) {
-				if (childId === '__thoughts__') continue // Fix 3: Skip thought entries
+		// Fix 1: Snapshot copy for thread safety under concurrent parallel subtasks
+		const childrenMap = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+		if (childrenMap) {
+			const snapshot = new Map(childrenMap)
+			for (const [childId, childFiles] of snapshot.entries()) {
+				if (childId === '__thoughts__') continue // Skip thought entries
 				for (const f of childFiles) allFiles.add(f)
 			}
 		}
 		return [...allFiles]
 	}
 
-	/** Fix 1: Prune a child task's files from its parent's map. */
+	/** Fix 1: Prune a child task's files from its parent's map (thread-safe). */
 	private static pruneChildFiles(taskId: string): void {
-		// Scan all parent maps for entries containing this child
-		for (const [parentKey, childrenMap] of AttemptCompletionTool.childTaskFiles) {
-			if (childrenMap.has(taskId)) {
+		// Fix 1: Snapshot parent keys for thread safety
+		for (const parentKey of [...AttemptCompletionTool.childTaskFiles.keys()]) {
+			const childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+			if (childrenMap && childrenMap.has(taskId)) {
 				childrenMap.delete(taskId)
 				if (childrenMap.size === 0) {
 					AttemptCompletionTool.childTaskFiles.delete(parentKey)
@@ -775,11 +778,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 									// Fix 3: Extract thought tokens from child's API history
 									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
 									if (childThoughts.length > 0) {
-										// Fix 4: Forward to webview IMMEDIATELY for real-time display
+										// Fix 2: Forward reasoning thoughts tagged as 'reasoning' type
 										for (const thought of childThoughts) {
 											task.providerRef.deref()?.postMessageToWebview?.({
 												type: "parallelSubtaskThought",
-												payload: { subtaskId: task.taskId, token: thought },
+												payload: { subtaskId: task.taskId, token: thought, sourceType: "reasoning" },
 											})
 										}
 										// Also store for parent aggregation (post-hoc forwarding)
@@ -849,6 +852,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const feedbackText = `<user_message>\n${text}\n</user_message>`
 			pushToolResult(formatResponse.toolResult(feedbackText, images))
 		} catch (error) {
+			// Fix 3: Clean up child files on abort to prevent memory leak
+			AttemptCompletionTool.pruneChildFiles(task.taskId)
 			await handleError("inspecting site", error as Error)
 		}
 	}
@@ -903,10 +908,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 	}
 
+	/** Fix 4: Cache for extractChildThoughts to avoid O(n) re-scan on retries */
+	private static thoughtCache = new WeakMap<Task, string[]>()
+
 	/**
 	 * Extract reasoning/thought tokens from child task's API conversation history (Fix 3).
+	 * Caches results per Task instance so retries don't re-scan full history (Fix 4).
 	 */
 	private static extractChildThoughts(task: Task): string[] {
+		// Fix 4: Return cached result if available
+		const cached = AttemptCompletionTool.thoughtCache.get(task)
+		if (cached) return cached
 		const thoughts: string[] = []
 		try {
 			for (const msg of task.apiConversationHistory) {
@@ -927,6 +939,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		} catch {
 			// Non-blocking
 		}
+		// Fix 4: Cache result so retries don't re-scan full history
+		AttemptCompletionTool.thoughtCache.set(task, thoughts)
 		return thoughts
 	}
 

@@ -26,6 +26,7 @@ interface LogEntry {
 interface ThoughtEntry {
 	subtaskId: string
 	token: string
+	sourceType?: "reasoning" | "metadata"
 }
 
 interface SavedDAG {

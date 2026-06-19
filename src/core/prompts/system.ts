@@ -34,7 +34,10 @@ import {
  * Injected into the system prompt so the agent understands the project structure
  * before making any file changes.
  */
-async function getCodebaseMappingSection(cwd: string, extContext: vscode.ExtensionContext): Promise<string> {
+async function getCodebaseMappingSection(cwd: string, extContext: vscode.ExtensionContext, experiments?: Partial<Experiments>): Promise<string> {
+	// Fix 5: Return empty if user explicitly disabled codebase dependency
+	if (experiments?.disableCodebaseDependency) return ""
+
 	try {
 		const service = CodebaseMappingManager.getInstance(extContext, cwd)
 		if (!service) return ""
@@ -192,7 +195,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
-${await getCodebaseMappingSection(cwd, context)}
+${await getCodebaseMappingSection(cwd, context, experiments)}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}
