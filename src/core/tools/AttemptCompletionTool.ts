@@ -180,17 +180,65 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
-			// Cross-reference: auto-verify requirements against tool call history
+			// ========================================================================
+			// Fix G: Tool error rate check
+			// ========================================================================
+			if (!isLenientMode) {
+				const toolErrors = task.clineMessages.filter(
+					(msg) => msg.type === "say" && msg.say === "error" && msg.text?.includes("tool"),
+				).length
+				if (toolErrors > 5) {
+					console.log(
+						`[AttemptCompletionTool] ⚠ ${toolErrors} tool error(s) during task — high error rate detected`,
+					)
+				} else if (toolErrors > 0) {
+					console.log(
+						`[AttemptCompletionTool] ${toolErrors} tool error(s) during task`,
+					)
+				}
+			}
+
+			// ========================================================================
+			// Cross-reference: auto-verify requirements against API conversation history (Fix A)
 			// This checks whether files were actually modified in ways that match
 			// the extracted requirements, providing concrete evidence.
+			// ========================================================================
 			if (this.requirementsVerifier && !isLenientMode) {
 				try {
-					this.requirementsVerifier.autoVerifyFromToolHistory(task.clineMessages, task.cwd)
+					// CRITICAL: Pass apiConversationHistory, NOT clineMessages.
+					// tool_use blocks with actual file paths live in API history,
+					// not in clineMessages (which only contain display text).
+					this.requirementsVerifier.autoVerifyFromToolHistory(task.apiConversationHistory, task.cwd)
 				} catch (error) {
 					// Non-blocking — auto-verification is advisory
 					console.error(
 						`[AttemptCompletionTool] Error during requirements auto-verification: ${(error as Error)?.message ?? String(error)}`,
 					)
+				}
+			}
+
+			// Extract tool call file paths for VerificatonEngine scoping (Fix H)
+			const toolCallFilePaths = this.extractToolCallFiles(task.apiConversationHistory)
+
+			// ========================================================================
+			// Fix F: Cross-reference completion claim against actual file changes
+			// Check if the result text mentions files that weren't actually modified
+			// ========================================================================
+			if (!isLenientMode && result) {
+				const filePattern = /(?:\b|\/)([\w_.-]+\.\w{1,5})\b/g
+				const mentionedFiles = [...result.matchAll(filePattern)].map((m) => m[1].toLowerCase())
+				if (mentionedFiles.length > 0) {
+					const actuallyChanged = new Set([
+						...toolCallFilePaths.map((f) => f.toLowerCase()),
+					])
+					const unverifiedClaims = mentionedFiles.filter(
+						(f) => !actuallyChanged.has(f) && !actuallyChanged.has(`/${f}`),
+					)
+					if (unverifiedClaims.length > 0) {
+						console.log(
+							`[AttemptCompletionTool] ⚠ Completion result mentions ${unverifiedClaims.length} file(s) not verified as changed: ${unverifiedClaims.join(", ")}`,
+						)
+					}
 				}
 			}
 
@@ -202,7 +250,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
-				const verResult = await this.verificationEngine.verify()
+				// Pass tool call file paths for file-changes gate scoping
+				const verResult = await this.verificationEngine.verify(toolCallFilePaths)
 				const strictness = this.verificationEngine.getConfig().strictness || "moderate"
 
 				// Build detailed gate results for display
@@ -359,6 +408,33 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		} else {
 			await task.say("completion_result", result ?? "", undefined, block.partial)
 		}
+	}
+
+	/**
+	 * Extract file paths from the agent's tool call history for file-changes gate scoping (Fix H).
+	 */
+	private extractToolCallFiles(
+		apiMessages: Array<{ role: string; content: string | any[] }>,
+	): string[] {
+		const files = new Set<string>()
+		const FILE_WRITE_TOOLS = new Set([
+			"write_to_file", "apply_diff", "edit", "search_replace", "edit_file", "patch",
+		])
+
+		for (const msg of apiMessages) {
+			if (msg.role !== "assistant") continue
+			if (!msg.content || typeof msg.content === "string") continue
+			for (const block of msg.content) {
+				if (block?.type !== "tool_use") continue
+				const toolName = (block.name || "").toLowerCase()
+				if (!FILE_WRITE_TOOLS.has(toolName)) continue
+				const input = block?.input || {}
+				if (typeof input.path === "string") files.add(input.path)
+				if (typeof input.file_path === "string") files.add(input.file_path)
+			}
+		}
+
+		return [...files]
 	}
 
 	/**

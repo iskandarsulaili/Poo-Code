@@ -894,7 +894,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 	}
 
-	async verify(): Promise<VerificationResult> {
+	async verify(toolCallFiles?: string[]): Promise<VerificationResult> {
 		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
 		const gates: GateResult[] = []
 		let strictness = this.config.strictness
@@ -902,7 +902,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		// Check if the working directory has actual project tooling.
 		// Only consider the result authoritative when we can read the directory.
 		// null = unknown (dir unreadable) — proceed with gates
-		// false = definitively no tooling — skip gates
+		// false = definitively no tooling — skip build/lint/types/tests gates
 		// true = has tooling — run gates normally
 		let hasTooling: boolean | null = null
 		if (this.config.cwd) {
@@ -920,42 +920,36 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			)
 		}
 
-		// Only skip gates when we're CERTAIN there's no tooling (hasTooling === false).
-		// When hasTooling is null (unknown/unreadable dir) or true, run gates normally.
-		// This prevents false-positive skips when the check can't determine tooling.
+		// ====================================================================
+		// Fix B + H: File-changes gate runs FIRST, before any tooling check
+		// This gate is independent of project tooling — it works on any
+		// git repo or tool call history.
+		// ====================================================================
+		if (this.config.checkFileChanges) {
+			gates.push(await this.runFileChangesGate(strictness, toolCallFiles))
+		}
+
+		// ====================================================================
+		// Only skip build/lint/types/tests gates when we're CERTAIN there's
+		// no project tooling. The file-changes gate above already ran.
+		// ====================================================================
 		if (hasTooling === false) {
 			const reason = isMarkdown
 				? "markdown-only directory — no project tooling detected"
 				: "no project tooling detected"
-			this.logger?.appendLine(`[VerificationEngine] ${reason}. All gates skipped.`)
+			this.logger?.appendLine(`[VerificationEngine] ${reason}. Build/lint/types/test gates skipped.`)
 
-			const skippedGates: GateResult[] = []
-
-			if (this.config.checkBuild) {
-				skippedGates.push(this.makeSkippedGate("build", reason, strictness))
+			for (const gateName of ["build", "lint", "type-check", "tests"]) {
+				if (gateName === "build" && this.config.checkBuild) {
+					gates.push(this.makeSkippedGate("build", reason, strictness))
+				} else if (gateName === "lint" && this.config.checkLint) {
+					gates.push(this.makeSkippedGate("lint", reason, strictness))
+				} else if (gateName === "type-check" && this.config.checkTypes) {
+					gates.push(this.makeSkippedGate("type-check", reason, strictness))
+				} else if (gateName === "tests" && this.config.checkTests) {
+					gates.push(this.makeSkippedGate("tests", reason, strictness))
+				}
 			}
-			if (this.config.checkLint) {
-				skippedGates.push(this.makeSkippedGate("lint", reason, strictness))
-			}
-			if (this.config.checkTypes) {
-				skippedGates.push(this.makeSkippedGate("type-check", reason, strictness))
-			}
-			if (this.config.checkTests) {
-				skippedGates.push(this.makeSkippedGate("tests", reason, strictness))
-			}
-
-			const allSkipped = true
-			const summary = `All verification gates skipped [${strictness}]: ${reason}`
-			this.logger?.appendLine(`[VerificationEngine] ${summary}`)
-			this.lastVerifyAt = Date.now()
-			this.lastResult = { passed: true, gates: skippedGates, summary, strictness, allSkipped }
-			return { passed: true, gates: skippedGates, summary, strictness, allSkipped }
-		}
-
-		// File-change verification gate — always runs if git is available
-		// Detects whether any files were actually modified during the task.
-		if (this.config.checkFileChanges && cwd) {
-			gates.push(await this.runFileChangesGate(strictness))
 		}
 
 		// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
@@ -1050,6 +1044,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	 */
 	private async runFileChangesGate(
 		strictness: GateResult["strictness"],
+		toolCallFiles?: string[],
 	): Promise<GateResult> {
 		const start = Date.now()
 		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
@@ -1057,8 +1052,13 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		try {
 			const { execSync } = await import("child_process")
 
-			// Get list of changed files (staged + unstaged)
-			let changedFiles: string[] = []
+			// ====================================================================
+			// Fix H: Use tool call files as PRIMARY source, git diff as secondary
+			// ====================================================================
+			const changedFromToolCalls = new Set(toolCallFiles || [])
+			let changedFromGit: string[] = []
+
+			// Get list of changed files from git (staged + unstaged)
 			try {
 				const output = execSync(
 					"git diff --name-only --diff-filter=ACMRT && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRT",
@@ -1075,16 +1075,16 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				const workingDir = (parts[0] || "").trim()
 				const staged = (parts[1] || "").trim()
 
-				const allFiles = new Set<string>()
+				const allGitFiles = new Set<string>()
 				for (const f of workingDir.split("\n").concat(staged.split("\n"))) {
 					const clean = f.trim()
 					if (clean && !clean.startsWith("---STAGED---")) {
-						allFiles.add(clean)
+						allGitFiles.add(clean)
 					}
 				}
 
 				// Filter out irrelevant files
-				changedFiles = [...allFiles].filter(
+				changedFromGit = [...allGitFiles].filter(
 					(f) =>
 						!f.startsWith("node_modules/") &&
 						!f.startsWith(".git/") &&
@@ -1094,33 +1094,48 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 						!f.endsWith(".lock"),
 				)
 			} catch {
-				// Not a git repo or error — skip this gate
-				const durationMs = Date.now() - start
-				this.logger?.appendLine(
-					`[VerificationEngine] Gate "file-changes" skipped: not a git repo or git unavailable`,
-				)
-				return {
-					name: "file-changes",
-					passed: true,
-					durationMs,
-					warnings: 0,
-					errors: 0,
-					strictness,
-					skipped: true,
-					skipReason: "not a git repo or git unavailable",
+				// Not a git repo — just use tool call files
+			}
+
+			// Combine: tool call files take priority over git changes
+			const allChangedFiles = new Set([...changedFromToolCalls, ...changedFromGit])
+
+			// ====================================================================
+			// Fix C: Content volume check — verify meaningful changes via git diff --stat
+			// ====================================================================
+			let totalLinesChanged = 0
+			if (changedFromGit.length > 0) {
+				try {
+					const statOutput = execSync("git diff --stat --diff-filter=ACMRT", {
+						cwd,
+						encoding: "utf-8",
+						timeout: 5000,
+						stdio: ["pipe", "pipe", "pipe"],
+					}) as string
+					// Parse total insertions/deletions from last line: "X files changed, Y insertions(+), Z deletions(-)"
+					const lastLine = statOutput.trim().split("\n").pop() || ""
+					const insertMatch = lastLine.match(/(\d+) insertion/)
+					const deleteMatch = lastLine.match(/(\d+) deletion/)
+					totalLinesChanged = (insertMatch ? parseInt(insertMatch[1], 10) : 0) +
+						(deleteMatch ? parseInt(deleteMatch[1], 10) : 0)
+				} catch {
+					// stat failed — ignore
 				}
+			} else if (changedFromToolCalls.size > 0) {
+				// No git diff available but tool calls indicate work — count as meaningful
+				totalLinesChanged = 1
 			}
 
 			// Scan for stub/TODO patterns if enabled
 			let stubWarnings: string[] = []
-			if (this.config.enableStubDetection && changedFiles.length > 0) {
-				stubWarnings = await this.scanForStubs(changedFiles, cwd)
+			if (this.config.enableStubDetection && allChangedFiles.size > 0) {
+				stubWarnings = await this.scanForStubs([...allChangedFiles], cwd)
 			}
 
 			const durationMs = Date.now() - start
 
 			// Determine pass/fail based on whether files changed
-			if (changedFiles.length === 0) {
+			if (allChangedFiles.size === 0) {
 				this.logger?.appendLine(
 					`[VerificationEngine] Gate "file-changes" FAILED [${strictness}] (${durationMs}ms): zero files changed`,
 				)
@@ -1137,8 +1152,15 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				}
 			}
 
+			// Content volume warning (Fix C)
+			const volumeWarning = totalLinesChanged === 0 && changedFromToolCalls.size === 0
+				? "⚠ Unable to verify content volume (no git diff available)."
+				: totalLinesChanged > 0 && totalLinesChanged < 5
+					? `⚠ Low content volume: only ${totalLinesChanged} line(s) changed across all files`
+					: ""
+
 			// Pass with info about what changed
-			const fileList = changedFiles.join(", ")
+			const fileList = [...allChangedFiles].join(", ")
 			const stubNote = stubWarnings.length > 0
 				? `\n⚠ Stub patterns detected in ${stubWarnings.length} file(s): ${stubWarnings.join(", ")}`
 				: ""
@@ -1147,13 +1169,13 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 				: ""
 
 			this.logger?.appendLine(
-				`[VerificationEngine] Gate "file-changes" PASSED [${strictness}] (${durationMs}ms): ${changedFiles.length} file(s) changed${stubWarnings.length > 0 ? `, ${stubWarnings.length} stub(s) detected` : ""}`,
+				`[VerificationEngine] Gate "file-changes" PASSED [${strictness}] (${durationMs}ms): ${allChangedFiles.size} file(s) changed${stubWarnings.length > 0 ? `, ${stubWarnings.length} stub(s) detected` : ""}`,
 			)
 
 			return {
 				name: "file-changes",
 				passed: true,
-				output: `Changed files (${changedFiles.length}): ${fileList.slice(0, 1000)}${stubNote}`,
+				output: `Changed files (${allChangedFiles.size}): ${fileList.slice(0, 1000)}${stubNote}${volumeWarning ? `\n${volumeWarning}` : ""}`,
 				durationMs,
 				warnings: stubWarnings.length,
 				errors: 0,

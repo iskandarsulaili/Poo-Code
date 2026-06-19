@@ -1,5 +1,4 @@
 import crypto from "crypto"
-import * as fs from "fs"
 import type { Logger, Requirement, RequirementsVerificationResult, ConflictResolver } from "./types"
 import { KeywordConflictResolver } from "./KeywordConflictResolver"
 
@@ -29,21 +28,37 @@ const DEFAULT_CONFIG: RequirementsVerifierConfig = {
 	verificationLevel: "strict",
 }
 
-/** File-writing tool names whose params contain a file path */
-const FILE_WRITE_TOOLS = new Set([
+/** File-writing tool names whose params contain a file path (lowercase) */
+const FILE_WRITE_TOOL_NAMES = new Set([
 	"write_to_file",
 	"apply_diff",
 	"edit",
 	"search_replace",
 	"edit_file",
-	"ApplyDiff",
-	"Edit",
-	"SearchReplace",
-	"Write",
-	"write",
-	"edit",
 	"patch",
 ])
+
+/**
+ * Minimal interface for Anthropic tool_use blocks in API conversation history.
+ * The full type is Anthropic.ToolUseBlock, but we define only what we need.
+ */
+interface ApiToolUseBlock {
+	type: "tool_use"
+	id?: string
+	name: string
+	input: Record<string, unknown>
+}
+
+/**
+ * Minimal interface for API conversation history messages.
+ * Compatible with Anthropic.MessageParam used in apiConversationHistory.
+ */
+interface ApiMessage {
+	role: "user" | "assistant"
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	content: string | any[]
+	ts?: number
+}
 
 export class RequirementsVerifier {
 	private config: RequirementsVerifierConfig
@@ -147,36 +162,23 @@ export class RequirementsVerifier {
 	}
 
 	// ========================================================================
-	// Fix 1: Auto-verify requirements by checking actual tool call history
+	// Auto-verify requirements using API conversation history (Anthropic tool_use blocks)
 	// ========================================================================
 
 	/**
-	 * File-writing tool names used by the zoo-code agent.
-	 * These tools modify files and their params contain file paths.
-	 */
-	private static readonly FILE_WRITE_TOOL_NAMES = [
-		"write_to_file",
-		"apply_diff",
-		"edit",
-		"search_replace",
-		"edit_file",
-		"patch",
-	]
-
-	/**
-	 * Auto-verify requirements against the actual tool call history.
+	 * Auto-verify requirements against the actual tool call history from the API conversation.
 	 *
 	 * For each active requirement:
 	 * 1. Extract keywords from the requirement text
-	 * 2. Scan all file-writing tool calls in the message history
+	 * 2. Scan all file-writing tool_use blocks in the API conversation history
 	 * 3. If a tool call's file path matches requirement keywords → mark verified
-	 * 4. If NO tool call matches → mark failed
+	 * 4. If NO tool call matches → mark failed (when other requirements matched)
 	 *
-	 * @param clineMessages - The conversation message history (ClineMessage[] with .say === "tool")
+	 * @param apiMessages - The API conversation history (ApiMessage[] from task.apiConversationHistory)
 	 * @param cwd - The working directory for resolving relative paths
 	 */
 	autoVerifyFromToolHistory(
-		clineMessages: Array<{ type: "ask" | "say"; say?: string; text?: string }>,
+		apiMessages: ApiMessage[],
 		cwd: string,
 	): void {
 		const active = this.getActiveRequirements()
@@ -185,8 +187,8 @@ export class RequirementsVerifier {
 			return
 		}
 
-		// Extract file paths touched by file-writing tool calls
-		const touchedFiles = this.extractTouchedFiles(clineMessages)
+		// Extract file paths touched by file-writing tool_use blocks
+		const touchedFiles = this.extractTouchedFilesFromApiMessages(apiMessages)
 		const filePaths = [...touchedFiles]
 
 		this.logger?.appendLine(
@@ -194,25 +196,33 @@ export class RequirementsVerifier {
 		)
 
 		if (filePaths.length > 0) {
-			this.logger?.appendLine(`[RequirementsVerifier] Files modified: ${filePaths.join(", ")}`)
+			this.logger?.appendLine(`[RequirementsVerifier] Files modified: ${filePaths.slice(0, 10).join(", ")}${filePaths.length > 10 ? `... (+${filePaths.length - 10} more)` : ""}`)
 		}
 
 		// Read the git diff if available for more precise change detection
 		let gitDiffFiles: string[] = []
 		try {
 			const { execSync } = require("child_process")
-			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRT", {
+			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRT && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRT", {
 				cwd,
 				encoding: "utf-8",
 				timeout: 5000,
 				stdio: ["pipe", "pipe", "pipe"],
 			}) as string
-			gitDiffFiles = diffOutput.split("\n").map((l: string) => l.trim()).filter(Boolean)
+			const parts = diffOutput.split("---STAGED---")
+			const allGitFiles = new Set<string>()
+			for (const f of (parts[0] || "").trim().split("\n").concat((parts[1] || "").trim().split("\n"))) {
+				const clean = f.trim()
+				if (clean && !clean.startsWith("---STAGED---")) allGitFiles.add(clean)
+			}
+			gitDiffFiles = [...allGitFiles]
 		} catch {
 			// Not a git repo or git not available — use tool-call file paths only
 		}
 
+		// Combine: tool calls are primary, git diff is secondary
 		const allChangedFiles = new Set([...filePaths, ...gitDiffFiles])
+		const hasAnyChanges = allChangedFiles.size > 0
 
 		// Track which requirements matched
 		let verifiedCount = 0
@@ -241,10 +251,9 @@ export class RequirementsVerifier {
 					`[RequirementsVerifier] ✅ Auto-verified requirement: "${req.text.slice(0, 80)}..." → matched files: ${matchingFiles.join(", ")}`,
 				)
 			} else {
-				// For requirements originating from the task description, this is expected
-				// to have some unmatched. Only mark as failed if the task had significant
-				// file changes but this particular requirement wasn't addressed.
-				if (allChangedFiles.size > 0) {
+				// Only mark as failed if the task had significant file changes
+				// but this particular requirement wasn't addressed.
+				if (hasAnyChanges) {
 					req.status = "failed"
 					req.evidence = `No file changes matched keywords: "${keywords.join(", ")}". Changed files: ${[...allChangedFiles].join(", ")}`
 					failedCount++
@@ -265,57 +274,30 @@ export class RequirementsVerifier {
 	}
 
 	/**
-	 * Extract file paths from tool call messages.
-	 * Each tool message has a "say: tool" type and text containing the tool name and params.
+	 * Extract file paths from API conversation history messages.
+	 * Parses Anthropic tool_use blocks (content[].type === "tool_use") and
+	 * extracts path/file_path from their input objects.
 	 */
-	private extractTouchedFiles(
-		messages: Array<{ type: "ask" | "say"; say?: string; text?: string }>,
-	): Set<string> {
+	private extractTouchedFilesFromApiMessages(messages: ApiMessage[]): Set<string> {
 		const files = new Set<string>()
 
 		for (const msg of messages) {
-			if (msg.type !== "say" || msg.say !== "tool") continue
-			if (!msg.text) continue
+			if (msg.role !== "assistant") continue
+			if (!msg.content || typeof msg.content === "string") continue
 
-			const text = msg.text
+			const blocks = msg.content as Array<{ type: string; name?: string; input?: Record<string, unknown> }>
+			for (const block of blocks) {
+				if (block.type !== "tool_use") continue
+				const toolName = (block.name || "").toLowerCase()
+				if (!FILE_WRITE_TOOL_NAMES.has(toolName)) continue
 
-			// Try to parse as JSON (tool call params)
-			try {
-				const parsed = JSON.parse(text)
-				// Format: { tool: "...", path: "...", ... } or similar
-				const toolName =
-					(parsed.tool as string)?.toLowerCase() ||
-					(parsed.name as string)?.toLowerCase() ||
-					""
-				if (RequirementsVerifier.FILE_WRITE_TOOL_NAMES.includes(toolName)) {
-					if (parsed.path) files.add(parsed.path)
-					if (parsed.file_path) files.add(parsed.file_path)
-					if (parsed.diff && parsed.path) files.add(parsed.path)
-				}
-			} catch {
-				// Not JSON — try regex extraction from the raw text
-				this.extractFilePathsFromText(text, files)
+				const input = block.input || {}
+				if (typeof input.path === "string") files.add(input.path)
+				if (typeof input.file_path === "string") files.add(input.file_path)
 			}
 		}
 
 		return files
-	}
-
-	/**
-	 * Fallback: extract file paths from raw tool call text using regex.
-	 */
-	private extractFilePathsFromText(text: string, files: Set<string>): void {
-		// Match common patterns like path: "/some/file", path: 'file.ts', "path": "file"
-		const pathMatches = text.matchAll(/["']?path["']?\s*[:=]\s*["']([^"']+)["']/gi)
-		for (const m of pathMatches) {
-			files.add(m[1])
-		}
-
-		// Match file_path patterns
-		const filePathMatches = text.matchAll(/["']?file_path["']?\s*[:=]\s*["']([^"']+)["']/gi)
-		for (const m of filePathMatches) {
-			files.add(m[1])
-		}
 	}
 
 	/**
@@ -451,11 +433,14 @@ export class RequirementsVerifier {
 
 	/**
 	 * Extract requirements from a single user message.
+	 * Handles both structured (bullet points, numbered lists) and unstructured
+	 * narrative prompts by splitting on action verbs.
 	 */
 	extractFromPrompt(prompt: string, messageIndex: number = 0): Requirement[] {
 		const extracted: Requirement[] = []
 		const lines = prompt.split("\n")
 		let currentCategory: Requirement["category"] = "functional"
+		let hasStructuredItems = false
 
 		for (const line of lines) {
 			const trimmed = line.trim()
@@ -479,6 +464,7 @@ export class RequirementsVerifier {
 			const reqText = itemMatch?.[1] || numMatch?.[1]
 
 			if (reqText) {
+				hasStructuredItems = true
 				extracted.push(this.createRequirement(reqText, currentCategory, messageIndex))
 				continue
 			}
@@ -488,16 +474,76 @@ export class RequirementsVerifier {
 				/(?:must|should|need|require|shall|will|ensure|verify|check|validate|support|implement|add|create|build|fix|refactor)\s.+[.!]/i,
 			)
 			if (keywordMatch && trimmed.length > 10 && trimmed.length < 500) {
+				hasStructuredItems = true
 				extracted.push(this.createRequirement(trimmed, currentCategory, messageIndex))
 			}
 		}
 
-		// If no structured requirements found, treat the whole prompt as one requirement
+		// If no structured requirements found, attempt narrative extraction
 		if (extracted.length === 0 && prompt.trim().length > 0) {
+			const narrativeRequirements = this.extractNarrativeRequirements(prompt, messageIndex)
+			if (narrativeRequirements.length > 0) {
+				return narrativeRequirements
+			}
+			// Last resort: treat the whole prompt as one requirement
 			extracted.push(this.createRequirement(prompt.trim(), "goal", messageIndex))
 		}
 
 		return extracted
+	}
+
+	/**
+	 * Extract multiple requirements from unstructured narrative text by
+	 * splitting on action verbs and independent clauses.
+	 *
+	 * Example: "Create a login page with email/password authentication and
+	 * session management. The UI should be responsive."
+	 * → "Create a login page with email/password authentication"
+	 * → "session management"
+	 * → "The UI should be responsive"
+	 */
+	private extractNarrativeRequirements(text: string, messageIndex: number): Requirement[] {
+		const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
+		const requirements: Requirement[] = []
+
+		// Action verbs that signal a new requirement
+		const actionVerbs = /^(create|implement|build|add|make|write|develop|design|set. up|configure|install|deploy|integrate|migrate|convert|refactor|rewrite|restructure|optimize|improve|fix|resolve|address|handle|manage|process|generate|produce|render|display|show|list|filter|search|sort|paginate|authenticate|authorize|validate|sanitize|encrypt|decrypt|notify|send|receive|fetch|load|save|store|cache|sync|backup|restore|monitor|log|test|cover|ensure|verify|check|support|allow|prevent|block|restrict|limit|extend|modify|update|change|replace|remove|delete|clean|clear|reset|reinitialize)/i
+
+		for (const sentence of sentences) {
+			const trimmed = sentence.trim()
+			if (!trimmed || trimmed.length < 10) continue
+
+			// Check if this sentence starts with an action verb (indicating a requirement)
+			if (actionVerbs.test(trimmed) || /\b(should|must|will|shall|need to|has to|have to)\b/i.test(trimmed)) {
+				requirements.push(this.createRequirement(trimmed, "functional", messageIndex))
+			} else if (trimmed.length > 30 && requirements.length === 0) {
+				// First substantive sentence that's not an action verb — treat as goal
+				requirements.push(this.createRequirement(trimmed, "goal", messageIndex))
+			}
+		}
+
+		// If we only got one requirement from the first sentence and there are
+		// longer clauses with "and", split on "and" at the sentence level
+		if (requirements.length === 1 && text.length > 100) {
+			const andParts = text.split(/\band\b/i)
+			if (andParts.length > 2) {
+				// The "and" splitting created meaningful sub-requirements
+				for (let i = 0; i < andParts.length; i++) {
+					const part = andParts[i].trim().replace(/[.!]+$/, "")
+					if (part.length > 15) {
+						requirements.push(
+							this.createRequirement(
+								i === 0 ? part : `${actionVerbs.test(part) ? "" : "Implement "}${part}`,
+								"functional",
+								messageIndex,
+							),
+						)
+					}
+				}
+			}
+		}
+
+		return requirements
 	}
 
 	/**
