@@ -436,9 +436,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// Guard 6: Code quality verification (VerificationEngine)
-			// Skip verification for lenient modes and bypass mode
+			// Skip verification for lenient modes, bypass mode, and child tasks (parent re-verifies — Fix 1)
 			// Default lenient modes: ["research"]
-			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass") {
+			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass" && !task.parentTaskId) {
 				// Set cwd from task context — the directory the agent is working in
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
@@ -524,7 +524,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 									// Fix 3: Extract thought tokens from child's API history
 									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
 									if (childThoughts.length > 0) {
-										// Store thoughts as special entry with key '__thoughts__'
+										// Fix 4: Forward to webview IMMEDIATELY for real-time display
+										for (const thought of childThoughts) {
+											task.providerRef.deref()?.postMessageToWebview?.({
+												type: "parallelSubtaskThought",
+												payload: { subtaskId: task.taskId, token: thought },
+											})
+										}
+										// Also store for parent aggregation (post-hoc forwarding)
 										const thoughtEntry = childrenMap.get('__thoughts__') ?? []
 										thoughtEntry.push(...childThoughts)
 										childrenMap.set('__thoughts__', thoughtEntry)
@@ -532,8 +539,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								}
 							} catch {
 								// Non-blocking
-							}
-							const delegation = await this.delegateToParent(
+							}							const delegation = await this.delegateToParent(
 								task,
 								result,
 								provider,

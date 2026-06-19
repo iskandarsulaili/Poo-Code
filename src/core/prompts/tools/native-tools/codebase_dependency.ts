@@ -23,17 +23,17 @@ Use this tool when:
 - limit: (optional) Maximum number of results to return. Default: 30. Set to null for unlimited.
 
 Examples:
-{ "action": "reverse_deps", "target": "src/services/auth.service.ts" }
-  → Files that import auth.service.ts
+{ "action": "reverse_deps", "target": "src/services/auth.service.ts", "limit": 20 }
+  → First 20 files that import auth.service.ts
   
-{ "action": "forward_deps", "target": "src/utils/date.ts" }
-  → What date.ts imports
+{ "action": "forward_deps", "target": "src/utils/date.ts", "limit": 10 }
+  → First 10 imports of date.ts
   
 { "action": "file_info", "target": "src/models/user.ts" }
   → Symbols, exports, imports for user.ts
   
-{ "action": "dead_symbols" }
-  → All symbols that nothing references
+{ "action": "dead_symbols", "limit": 50 }
+  → First 50 unreferenced symbols
   
 { "action": "module_map", "module": "src/services" }
   → Every file in services/ with dependency counts
