@@ -890,6 +890,14 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	 * Call this at task start (before the agent makes any changes).
 	 */
 	async snapshotBuildConfig(cwd: string): Promise<void> {
+		// Fix A: Skip if snapshot already taken for this cwd (prevents child task overwrite)
+		if (this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+			this.logger?.appendLine(
+				`[VerificationEngine] Build config snapshot already exists (${this.buildConfigSnapshot.size} files). Skipping re-snapshot.`,
+			)
+			return
+		}
+
 		const BUILD_CONFIG_FILES = [
 			"package.json",
 			"package-lock.json",
@@ -1106,9 +1114,22 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			}
 		}
 
-		// Test coverage gate (Fix 2) — runs coverage command if configured
+		// Test coverage gate (Fix 2) — runs coverage command and parses output
 		if (this.config.minCoverage > 0 && this.config.coverageCommand) {
-			gates.push(await this.runGate("coverage", this.config.coverageCommand, strictness))
+			const coverageGate = await this.runGate("coverage", this.config.coverageCommand, strictness)
+			// Parse coverage percentage from stdout
+			if (coverageGate.passed && coverageGate.output) {
+				const coverageMatch = coverageGate.output.match(/(\d+(?:\.\d+)?)%/)
+				if (coverageMatch) {
+					const pct = parseFloat(coverageMatch[1])
+					if (pct < this.config.minCoverage) {
+						coverageGate.passed = false
+						coverageGate.error = `Coverage ${pct}% is below minimum ${this.config.minCoverage}%`
+						coverageGate.errors = 1
+					}
+				}
+			}
+			gates.push(coverageGate)
 		}
 
 		const passed = gates.every((g) => g.passed || g.skipped)

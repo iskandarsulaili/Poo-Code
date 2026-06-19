@@ -57,18 +57,20 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	// ========================================================================
 	// Fix 2+3: Child task file tracking — files modified by delegated children
 	// are stored here so the parent's verification can include them.
-	// Key: childTaskId → file paths modified by that child
+	// Key: parentTaskId → childTaskId → file paths modified by that child
 	// ========================================================================
-	private static childTaskFiles = new Map<string, string[]>()
-	/** Aggregate file paths from this task and all its completed child tasks. */
+	private static childTaskFiles = new Map<string, Map<string, string[]>>()
+	/** Aggregate file paths from this task and all its verified child tasks (scoped to parent). */
 	private aggregateTaskFiles(task: Task): string[] {
 		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
 		const allFiles = new Set(ownFiles)
-		for (const [childId, childFiles] of AttemptCompletionTool.childTaskFiles) {
-			// Include any child that belongs to this parent.
-			// Since we can't directly look up parent-child from here,
-			// we include all registered child files.
-			for (const f of childFiles) allFiles.add(f)
+		// Only include children whose parent is this task (using parentTaskId as key)
+		const parentKey = task.rootTaskId ?? task.taskId
+		const children = AttemptCompletionTool.childTaskFiles.get(parentKey)
+		if (children) {
+			for (const childFiles of children.values()) {
+				for (const f of childFiles) allFiles.add(f)
+			}
 		}
 		return [...allFiles]
 	}
@@ -309,7 +311,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// This checks whether files were actually modified in ways that match
 			// the extracted requirements, providing concrete evidence.
 			// ========================================================================
-			if (this.requirementsVerifier && !isLenientMode) {
+			// Skip when verification level is bypass (Fix D)
+			const vLevel = task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
+			if (this.requirementsVerifier && !isLenientMode && vLevel !== "bypass") {
 				try {
 					// CRITICAL: Pass apiConversationHistory, NOT clineMessages.
 					// tool_use blocks with actual file paths live in API history,
@@ -455,10 +459,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						} else if (status === "active") {
 							// Normal subtask completion - do delegation
 							// Store child tool call files for parent aggregation (Bug 2)
+							// Keyed by rootTask/parentTaskId so sibling tasks don't pollute
 							try {
 								const childFiles = this.extractToolCallFiles(task.apiConversationHistory)
 								if (childFiles.length > 0) {
-									AttemptCompletionTool.childTaskFiles.set(task.taskId, childFiles)
+									const parentKey = task.rootTaskId ?? task.parentTaskId ?? task.taskId
+									let childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+									if (!childrenMap) {
+										childrenMap = new Map()
+										AttemptCompletionTool.childTaskFiles.set(parentKey, childrenMap)
+									}
+									childrenMap.set(task.taskId, childFiles)
 								}
 							} catch {
 								// Non-blocking
@@ -622,6 +633,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
+		// Clean up child task file tracking to prevent memory leak (Fix B)
+		AttemptCompletionTool.childTaskFiles.delete(task.rootTaskId ?? task.taskId)
+
 		// Store the result text to guard against duplicate completions
 		AttemptCompletionTool.lastResults.set(task.taskId, result)
 
