@@ -68,11 +68,26 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		// This prevents sibling A's files from leaking into sibling B's aggregate.
 		const children = AttemptCompletionTool.childTaskFiles.get(task.taskId)
 		if (children) {
-			for (const childFiles of children.values()) {
+			for (const [childId, childFiles] of children.entries()) {
+				if (childId === '__thoughts__') continue // Fix 3: Skip thought entries
 				for (const f of childFiles) allFiles.add(f)
 			}
 		}
 		return [...allFiles]
+	}
+
+	/** Fix 1: Prune a child task's files from its parent's map. */
+	private static pruneChildFiles(taskId: string): void {
+		// Scan all parent maps for entries containing this child
+		for (const [parentKey, childrenMap] of AttemptCompletionTool.childTaskFiles) {
+			if (childrenMap.has(taskId)) {
+				childrenMap.delete(taskId)
+				if (childrenMap.size === 0) {
+					AttemptCompletionTool.childTaskFiles.delete(parentKey)
+				}
+				break
+			}
+		}
 	}
 
 	// ========================================================================
@@ -99,9 +114,20 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		AttemptCompletionTool.verificationFailures.set(taskId, existing)
 	}
 
-	/** Clear verification failure tracking for a task. */
+	/** Clear verification failure tracking for a task + prune stale entries. */
 	private static clearVerificationFailures(taskId: string): void {
 		AttemptCompletionTool.verificationFailures.delete(taskId)
+		// Fix 2: Also prune all entries older than 1 hour on any clear operation
+		try {
+			const ONE_HOUR_MS = 3600_000
+			for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+				if (Date.now() - rec.lastFailAt > ONE_HOUR_MS) {
+					AttemptCompletionTool.verificationFailures.delete(tid)
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
 	}
 
 	/**
@@ -128,6 +154,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		task: Task,
 		pushToolResult: (result: string) => void,
 	): Promise<boolean> {
+		// Fix 2: Auto-expire entries older than 1 hour
+		const ONE_HOUR_MS = 3600_000
+		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+			if (Date.now() - rec.lastFailAt > ONE_HOUR_MS) {
+				AttemptCompletionTool.verificationFailures.delete(tid)
+			}
+		}
 		const record = AttemptCompletionTool.verificationFailures.get(task.taskId)
 		if (!record || record.count < AttemptCompletionTool.MAX_CONSECUTIVE_FAILURES) {
 			return false // No escalation needed
@@ -451,6 +484,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 						if (status === "completed") {
 							// Subtask already completed - skip delegation flow entirely
+							// Clean up child files (Fix 1)
+							AttemptCompletionTool.pruneChildFiles(task.taskId)
 							// Fall through to normal completion ask flow below (outside this if block)
 							// This shows the user the completion result and waits for acceptance
 							// without injecting another tool_result to the parent
@@ -468,6 +503,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 										AttemptCompletionTool.childTaskFiles.set(parentKey, childrenMap)
 									}
 									childrenMap.set(task.taskId, childFiles)
+									// Fix 3: Extract thought tokens from child's API history
+									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
+									if (childThoughts.length > 0) {
+										// Store thoughts as special entry with key '__thoughts__'
+										const thoughtEntry = childrenMap.get('__thoughts__') ?? []
+										thoughtEntry.push(...childThoughts)
+										childrenMap.set('__thoughts__', thoughtEntry)
+									}
 								}
 							} catch {
 								// Non-blocking
@@ -481,6 +524,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							)
 							if (delegation === "delegated") {
 								this.emitTaskCompleted(task, result)
+							} else {
+								// Fix 1: Child didn't complete normally — clean up its files
+								AttemptCompletionTool.pruneChildFiles(task.taskId)
 							}
 							if (delegation !== "continue") return
 						} else {
@@ -494,6 +540,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							// Fall through to normal completion ask flow
 						}
 					} catch (err) {
+						// Clean up child files even on error (Fix 1)
+						AttemptCompletionTool.pruneChildFiles(task.taskId)
 						// If we can't get the history, log error and skip delegation
 						console.error(
 							`[AttemptCompletionTool] Failed to get history for task ${task.taskId}: ${(err as Error)?.message ?? String(err)}. ` +
@@ -578,6 +626,33 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		} else {
 			await task.say("completion_result", result ?? "", undefined, block.partial)
 		}
+	}
+
+	/**
+	 * Extract reasoning/thought tokens from child task's API conversation history (Fix 3).
+	 */
+	private static extractChildThoughts(task: Task): string[] {
+		const thoughts: string[] = []
+		try {
+			for (const msg of task.apiConversationHistory) {
+				if (msg.role !== "assistant") continue
+				if (!msg.content || typeof msg.content === "string") continue
+				// Extract reasoning_content (DeepSeek) or type=reasoning blocks
+				const content = msg.content as any[]
+				for (const block of content) {
+					if (block.type === "reasoning" && block.text) {
+						thoughts.push(block.text.slice(0, 200))
+					}
+				}
+				// Also check for reasoning_content at the message level (OpenAI/DeepSeek)
+				if ((msg as any).reasoning_content) {
+					thoughts.push((msg as any).reasoning_content.slice(0, 200))
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
+		return thoughts
 	}
 
 	/**

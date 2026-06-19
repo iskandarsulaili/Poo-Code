@@ -145,3 +145,42 @@ describe("RequirementsVerifier", () => {
 		})
 	})
 })
+
+describe("bypass mode", () => {
+	let verifier: RequirementsVerifier
+
+	beforeEach(() => {
+		verifier = new RequirementsVerifier(undefined, { 
+			mandatory: true, 
+			autoExtract: true, 
+			requireAllVerified: true,
+			verificationLevel: "bypass",
+		}, undefined, true)
+	})
+
+	it("should return passed=true when verificationLevel is bypass", async () => {
+		const result = await verifier.verify()
+		expect(result.passed).toBe(true)
+		expect(result.summary).toContain("BYPASS")
+	})
+
+	it("should skip verification on bypass", async () => {
+		await verifier.processUserMessages(["Implement login", "Add auth", "Fix bugs"])
+		const result = await verifier.verify()
+		expect(result.passed).toBe(true)
+		// In bypass mode, all requirements remain unverified but it doesn't block
+		expect(result.verified.length).toBe(0)
+	})
+
+	it("should allow changing verificationLevel to strict", () => {
+		verifier.updateConfig({ verificationLevel: "strict" })
+		const config = verifier.getConfig()
+		expect(config.verificationLevel).toBe("strict")
+	})
+
+	it("should process messages even in bypass mode", async () => {
+		await verifier.processUserMessages(["Add a login page"])
+		const all = verifier.getAllRequirements()
+		expect(all.length).toBeGreaterThanOrEqual(1)
+	})
+})

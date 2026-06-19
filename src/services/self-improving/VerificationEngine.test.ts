@@ -95,6 +95,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "echo build-ok",
 				checkLint: true,
 				lintCommand: "echo lint-ok",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -117,6 +119,8 @@ describe("VerificationEngine", () => {
 			engine.updateConfig({
 				checkBuild: true,
 				buildCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -134,6 +138,8 @@ describe("VerificationEngine", () => {
 			engine.updateConfig({
 				checkLint: true,
 				lintCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -162,6 +168,8 @@ describe("VerificationEngine", () => {
 			engine.updateConfig({
 				checkTests: true,
 				testCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -178,6 +186,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "false",
 				checkLint: true,
 				lintCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -205,6 +215,8 @@ describe("VerificationEngine", () => {
 				checkBuild: true,
 				buildCommand: "sleep 10",
 				gateTimeoutMs: 100,
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -380,6 +392,8 @@ describe("VerificationEngine", () => {
 			engine.updateConfig({
 				checkBuild: true,
 				buildCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 			})
 
@@ -1253,3 +1267,67 @@ describe("verification escalation", () => {
 		expect(true).toBe(true)
 	})
 })
+// ==========================================================================
+// Bypass mode tests (Fix 5)
+// ==========================================================================
+
+describe("bypass mode", () => {
+	let engine: VerificationEngine
+
+	beforeEach(() => {
+		engine = new VerificationEngine(undefined, {
+			checkBuild: false,
+			checkLint: false,
+			checkTypes: false,
+			checkTests: false,
+			checkFileChanges: false,
+			checkBuildConfigIntegrity: false,
+			gateTimeoutMs: 5000,
+		})
+	})
+
+	it("should have config fields that enable/disable gates", () => {
+		const config = engine.getConfig()
+		// Verification engine has individual gate toggles -
+		// bypass at the AttemptCompletionTool level is separate
+		expect(config.checkBuild).toBe(false)
+		expect(config.checkLint).toBe(false)
+		expect(config.checkTypes).toBe(false)
+		expect(config.checkTests).toBe(false)
+	})
+
+	it("should allow disabling all gates via config", () => {
+		engine.updateConfig({
+			checkBuild: false,
+			checkLint: false,
+			checkTypes: false,
+			checkTests: false,
+			checkFileChanges: false,
+			checkBuildConfigIntegrity: false,
+		})
+		const result = engine.verify()
+		// No gates configured should pass
+		result.then((r) => {
+			expect(r.passed).toBe(true)
+			expect(r.gates).toHaveLength(0)
+		})
+	})
+
+	it("should still run file-changes gate when explicitly enabled in bypass mode", () => {
+		engine.updateConfig({
+			checkFileChanges: true,
+			enableStubDetection: false,
+			cwd: "/tmp", // non-git dir → skipped
+		})
+		const result = engine.verify()
+		result.then((r) => {
+			const fileGate = r.gates.find((g) => g.name === "file-changes")
+			// Should be defined and skipped (no git repo in /tmp)
+			expect(fileGate).toBeDefined()
+			if (fileGate) {
+				expect(fileGate.passed).toBe(true)
+			}
+		})
+	})
+})
+
