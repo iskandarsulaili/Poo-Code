@@ -94,7 +94,7 @@ import { getWorkspacePath } from "../../utils/path"
 import { OrganizationAllowListViolationError } from "../../utils/errors"
 
 import { setPanel } from "../../activate/registerCommands"
-import { attemptCompletionTool } from "../tools/AttemptCompletionTool"
+import { attemptCompletionTool, AttemptCompletionTool } from "../tools/AttemptCompletionTool"
 
 import { t } from "../../i18n"
 
@@ -318,6 +318,11 @@ export class ClineProvider
 		// We do something fairly similar for the IPC-based API.
 		this.taskCreationCallback = (instance: Task) => {
 			this.emit(RooCodeEventName.TaskCreated, instance)
+
+			// Snapshot build config at task start (Bug 1) — before agent makes changes
+			AttemptCompletionTool.snapshotConfigAtTaskStart(instance).catch((error) => {
+				this.log(`[VerificationEngine] Snapshot error: ${(error as Error)?.message ?? String(error)}`)
+			})
 
 			const recordTaskCompletionForLearning = (success: boolean) => {
 				void instance

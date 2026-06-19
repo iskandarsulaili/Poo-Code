@@ -55,6 +55,25 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	private consecutiveVerificationFailures = 0
 
 	// ========================================================================
+	// Fix 2+3: Child task file tracking — files modified by delegated children
+	// are stored here so the parent's verification can include them.
+	// Key: childTaskId → file paths modified by that child
+	// ========================================================================
+	private static childTaskFiles = new Map<string, string[]>()
+	/** Aggregate file paths from this task and all its completed child tasks. */
+	private aggregateTaskFiles(task: Task): string[] {
+		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
+		const allFiles = new Set(ownFiles)
+		for (const [childId, childFiles] of AttemptCompletionTool.childTaskFiles) {
+			// Include any child that belongs to this parent.
+			// Since we can't directly look up parent-child from here,
+			// we include all registered child files.
+			for (const f of childFiles) allFiles.add(f)
+		}
+		return [...allFiles]
+	}
+
+	// ========================================================================
 	// Fix 4: Cross-call verification failure tracking & escalation
 	// ========================================================================
 	private static readonly MAX_CONSECUTIVE_FAILURES = 5
@@ -81,6 +100,22 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	/** Clear verification failure tracking for a task. */
 	private static clearVerificationFailures(taskId: string): void {
 		AttemptCompletionTool.verificationFailures.delete(taskId)
+	}
+
+	/**
+	 * Snapshot build config at task start (Bug 1 fix).
+	 * Called from ClineProvider at task creation time, before the agent works.
+	 */
+	static async snapshotConfigAtTaskStart(task: Task): Promise<void> {
+		const tool = attemptCompletionTool
+		const engine = tool.getVerificationEngine()
+		if (engine && task.cwd) {
+			try {
+				await engine.snapshotBuildConfig(task.cwd)
+			} catch {
+				// Non-blocking — snapshot is optional
+			}
+		}
 	}
 
 	/**
@@ -119,6 +154,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	setVerifiers(requirementsVerifier?: RequirementsVerifier, verificationEngine?: VerificationEngine): void {
 		this.requirementsVerifier = requirementsVerifier
 		this.verificationEngine = verificationEngine
+	}
+
+	/** Public accessor for build config snapshot (Bug 1). */
+	getVerificationEngine(): VerificationEngine | undefined {
+		return this.verificationEngine
 	}
 
 	/**
@@ -192,15 +232,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Compute lenient mode for both Guard 5 and Guard 6
 			const lenientModes = task.experiments?.lenientModes ?? ["research"]
 			const isLenientMode = lenientModes.includes(currentMode)
-
-			// Snapshot build config at task start for integrity checking (Fix 1)
-			if (this.verificationEngine && !isLenientMode) {
-				try {
-					await this.verificationEngine.snapshotBuildConfig(task.cwd)
-				} catch {
-					// Non-blocking — snapshot is optional
-				}
-			}
 
 			// Fix 4: Check escalation before running gates
 			if (!isLenientMode) {
@@ -292,8 +323,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
-			// Extract tool call file paths for VerificatonEngine scoping (Fix H)
-			const toolCallFilePaths = this.extractToolCallFiles(task.apiConversationHistory)
+			// Extract tool call file paths for VerificationEngine scoping (Fix H + Bug 2)
+			const toolCallFilePaths = this.aggregateTaskFiles(task)
 
 			// ========================================================================
 			// Fix F: Cross-reference completion claim against actual file changes
@@ -423,6 +454,15 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							// without injecting another tool_result to the parent
 						} else if (status === "active") {
 							// Normal subtask completion - do delegation
+							// Store child tool call files for parent aggregation (Bug 2)
+							try {
+								const childFiles = this.extractToolCallFiles(task.apiConversationHistory)
+								if (childFiles.length > 0) {
+									AttemptCompletionTool.childTaskFiles.set(task.taskId, childFiles)
+								}
+							} catch {
+								// Non-blocking
+							}
 							const delegation = await this.delegateToParent(
 								task,
 								result,
