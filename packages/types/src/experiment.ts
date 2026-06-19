@@ -111,6 +111,7 @@ export const experimentsSchema = z.object({
 	dependencyGraph: z.boolean().optional(),
 	multiRootWorkspace: z.boolean().optional(),
 	parallelSubtask: z.boolean().optional(),
+	disableCodebaseDependency: z.boolean().optional(),
 
 	/**
 	 * Parallel subtask execution configuration.

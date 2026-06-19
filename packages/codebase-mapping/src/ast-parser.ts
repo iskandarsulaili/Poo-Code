@@ -96,7 +96,10 @@ export class ASTParser {
         let accText = line;
         let endLine = lineIdx;
 
-        for (let lookIdx = lineIdx + 1; lookIdx < lines.length; lookIdx++) {
+        // Fix 2: Max 15-line look-ahead to avoid O(n²) on long destructuring
+        const MAX_LOOKAHEAD = 15;
+        const lookEnd = Math.min(lineIdx + MAX_LOOKAHEAD, lines.length);
+        for (let lookIdx = lineIdx + 1; lookIdx < lookEnd; lookIdx++) {
           const lookLine: string = lines[lookIdx] || "";
           if (!lookLine) continue;
           endLine = lookIdx;

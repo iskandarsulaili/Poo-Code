@@ -329,6 +329,24 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// ========================================================================
+			// Fix 5: Forward child reasoning thoughts to webview
+			// ========================================================================
+			if (!isLenientMode) {
+				const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+				if (ownChildren) {
+					const childThoughts = ownChildren.get('__thoughts__') || []
+					for (const thought of childThoughts) {
+						task.providerRef.deref()?.postMessageToWebview?.({
+							type: "parallelSubtaskThought",
+							payload: { subtaskId: task.parentTaskId || task.taskId, token: thought },
+						})
+					}
+					// Clear after forwarding so duplicates aren't sent
+					ownChildren.delete('__thoughts__')
+				}
+			}
+
+			// ========================================================================
 			// Cross-reference: auto-verify requirements against API conversation history (Fix A)
 			// This checks whether files were actually modified in ways that match
 			// the extracted requirements, providing concrete evidence.

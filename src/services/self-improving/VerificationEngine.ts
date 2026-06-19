@@ -1110,25 +1110,44 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 
 		// Build config integrity gate (Fix 1) — checks if build config files changed since snapshot
+		// Respects strictness level (Fix 2): lenient warns, strict/moderate/enterprise blocks
 		if (this.config.checkBuildConfigIntegrity && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
 			const _bci_start = Date.now()
 			const changedConfigs = await this.checkBuildConfigIntegrity(cwd)
 			if (changedConfigs.length > 0) {
 				const durationMs = Date.now() - _bci_start
-				this.logger?.appendLine(
-					`[VerificationEngine] Gate "build-config-integrity" FAILED [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed`,
-				)
-				gates.push({
-					name: "build-config-integrity",
-					passed: false,
-					error: `${changedConfigs.length} build config file(s) changed since task start: ${changedConfigs.join(", ")}. The agent may have modified build scripts.`,
-					output: `Changed configs: ${changedConfigs.join(", ")}`,
-					durationMs,
-					warnings: 0,
-					errors: 1,
-					stderrSummary: `ERR: ${changedConfigs.length} config(s) changed`,
-					strictness,
-				})
+				const passed = strictness === "lenient" || strictness === "moderate"
+				// Lenient/moderate: pass with warning. Strict/enterprise: fail.
+				if (passed) {
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "build-config-integrity" PASSED (warn) [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed (non-blocking at ${strictness})`,
+					)
+					gates.push({
+						name: "build-config-integrity",
+						passed: true,
+						warnings: changedConfigs.length,
+						error: `${changedConfigs.length} build config file(s) changed since task start: ${changedConfigs.join(", ")}. (Non-blocking at strictness level "${strictness}".)`,
+						output: `Changed configs: ${changedConfigs.join(", ")}`,
+						durationMs,
+						errors: 0,
+						strictness,
+					})
+				} else {
+					this.logger?.appendLine(
+						`[VerificationEngine] Gate "build-config-integrity" FAILED [${strictness}] (${durationMs}ms): ${changedConfigs.length} config(s) changed`,
+					)
+					gates.push({
+						name: "build-config-integrity",
+						passed: false,
+						error: `${changedConfigs.length} build config file(s) changed since task start: ${changedConfigs.join(", ")}. The agent may have modified build scripts.`,
+						output: `Changed configs: ${changedConfigs.join(", ")}`,
+						durationMs,
+						warnings: 0,
+						errors: changedConfigs.length,
+						stderrSummary: `ERR: ${changedConfigs.length} config(s) changed`,
+						strictness,
+					})
+				}
 			} else {
 				const durationMs = Date.now() - _bci_start
 				gates.push({

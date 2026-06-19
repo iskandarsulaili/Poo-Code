@@ -40,7 +40,24 @@ async function getCodebaseMappingSection(cwd: string, extContext: vscode.Extensi
 		if (!service) return ""
 		
 		const graph = await service.getDependencyGraph()
-		if (!graph || graph.files.size === 0) return ""
+		if (!graph || graph.files.size === 0) {
+			// Fix 4: Suggest how to enable the dependency graph
+			return `
+====
+
+CODEBASE ARCHITECTURE — NOT AVAILABLE
+
+The codebase dependency graph is empty. To enable it:
+1. Run the VS Code command "Zoo-Code: Refresh Codebase Map"
+   (or \`zoo-code.refreshCodebaseMap\`)
+2. Or complete a code indexing run (the mapping scan triggers automatically after indexing)
+
+Once the graph is populated, the \`codebase_dependency\` tool will be available for:
+- Finding what depends on a file before refactoring
+- Detecting circular dependencies
+- Identifying dead/unreferenced code
+- Module-level architecture analysis`
+		}
 		
 		const totalFiles = graph.files.size
 		const totalEdges = graph.edges.length
