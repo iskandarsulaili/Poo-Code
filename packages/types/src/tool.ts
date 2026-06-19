@@ -53,6 +53,7 @@ export const toolNames = [
 	"web_extract",
 	"execute_parallel_subtask",
 	"execute_parallel_child_task",
+	"codebase_dependency",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

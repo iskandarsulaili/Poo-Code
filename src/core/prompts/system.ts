@@ -12,6 +12,7 @@ import { McpHub } from "../../services/mcp/McpHub"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { SelfImprovingManager, type PromptContext } from "../../services/self-improving"
+import { CodebaseMappingManager } from "../../services/codebase-mapping"
 
 import type { SystemPromptSettings } from "./types"
 import {
@@ -26,6 +27,77 @@ import {
 	markdownFormattingSection,
 	getSkillsSection,
 } from "./sections"
+
+
+/**
+ * Build a compact project architecture summary from codebase mapping data.
+ * Injected into the system prompt so the agent understands the project structure
+ * before making any file changes.
+ */
+async function getCodebaseMappingSection(cwd: string, extContext: vscode.ExtensionContext): Promise<string> {
+	try {
+		const service = CodebaseMappingManager.getInstance(extContext, cwd)
+		if (!service) return ""
+		
+		const graph = await service.getDependencyGraph()
+		if (!graph || graph.files.size === 0) return ""
+		
+		const allSymbols = await service.getSymbols()
+		const deadCode = await service.getDeadCode()
+		
+		const totalFiles = graph.files.size
+		const totalEdges = graph.edges.length
+		const totalSymbols = allSymbols.length
+		const deadSymbolCount = deadCode.length
+		
+		// Find top hub files (most connected)
+		const hubs: Array<{ path: string; score: number }> = []
+		for (const [, fn] of graph.files) {
+			const fp = (fn as any).filePath || (fn as any).path || ""
+			const imports = (fn as any).imports || []
+			const exports = (fn as any).exports || []
+			const score = imports.length + exports.length
+			if (score > 2 && fp) {
+				hubs.push({ path: fp, score })
+			}
+		}
+		hubs.sort((a, b) => b.score - a.score)
+		const topHubs = hubs.slice(0, 10).map(h => h.path).join(", ")
+		
+		// Detect layer violations
+		let violationCount = 0
+		for (const [, fn] of graph.files) {
+			const fp = ((fn as any).filePath || (fn as any).path || "").toLowerCase()
+			for (const imp of (fn as any).imports || []) {
+				const impLower = imp.toLowerCase()
+				if (fp.includes("/infrastructure/") && (impLower.includes("/domain/") || impLower.includes("/core/"))) {
+					violationCount++
+				} else if (fp.includes("/application/") && (impLower.includes("/infrastructure/") || impLower.includes("/data/"))) {
+					violationCount++
+				}
+			}
+		}
+		
+		return `
+====
+
+CODEBASE ARCHITECTURE
+
+This project has ${totalFiles} files, ${totalSymbols} symbols, and ${totalEdges} dependency edges.
+${deadSymbolCount > 0 ? `⚠ ${deadSymbolCount} potentially dead symbol(s) detected.` : "No dead symbols detected."}
+${violationCount > 0 ? `⚠ ${violationCount} layered architecture violation(s) detected.` : "No layered architecture violations detected."}
+${topHubs ? `Hub files (most connected): ${topHubs}` : ""}
+
+Use the \`codebase_dependency\` tool to query the dependency graph before refactoring.`
+	} catch {
+		return ""
+	}
+}
+
+interface HubEntry {
+	path: string
+	score: number
+}
 
 // Helper function to get prompt component, filtering out empty objects
 export function getPromptComponent(
@@ -128,6 +200,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
+${await getCodebaseMappingSection(cwd, context)}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}

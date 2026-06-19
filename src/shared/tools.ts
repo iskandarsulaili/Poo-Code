@@ -200,6 +200,7 @@ export type NativeToolArgs = {
 		}>
 		maxParallel?: number
 	}
+	codebase_dependency: { action: string; target: string | null; module: string | null }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -392,6 +393,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	ask_followup_question: "ask questions",
 	attempt_completion: "complete tasks",
 	switch_mode: "switch modes",
+	codebase_dependency: "query the project dependency graph",
 	new_task: "create new task",
 	codebase_search: "codebase search",
 	update_todo_list: "update todo list",
@@ -442,6 +444,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"run_slash_command",
 	"skill",
 	"skill_manage",
+	"codebase_dependency",
 	"execute_parallel_subtask",
 	"execute_parallel_child_task",
 	"list_files",

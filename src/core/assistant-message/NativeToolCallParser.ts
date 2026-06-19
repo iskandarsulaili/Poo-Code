@@ -556,6 +556,16 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "codebase_dependency":
+				if (partialArgs.action !== undefined) {
+					nativeArgs = {
+						action: partialArgs.action,
+						target: partialArgs.target,
+						module: partialArgs.module,
+					}
+				}
+				break
+
 			case "switch_mode":
 				if (partialArgs.mode_slug !== undefined || partialArgs.reason !== undefined) {
 					nativeArgs = {
@@ -581,6 +591,8 @@ export class NativeToolCallParser {
 						arguments: partialArgs.arguments,
 					}
 				}
+				break
+
 				break
 
 			case "apply_patch":
