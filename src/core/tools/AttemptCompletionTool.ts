@@ -207,7 +207,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
 		// Reset cross-task counter bleed on singleton tool
 		this.consecutiveVerificationFailures = 0
-		const { result } = params
+		const { result: initialResult } = params
+		let result: string = initialResult
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
 		// Guard: block only duplicate result text, not ALL future completions
@@ -539,6 +540,193 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 			// ========================================================================
+
+			// ========================================================================
+			// Orchestrator Deep Code Audit — comprehensive missing-code/flaw/blind-spot check
+			// Non-blocking: findings appended to completion result for user review.
+			// Only runs after wiring verification passes in orchestrator modes.
+			// ========================================================================
+			if (ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId) {
+				const auditSections: string[] = []
+				auditSections.push("# Deep Code Audit Report")
+				auditSections.push("")
+				auditSections.push("Generated at completion to surface potential issues for your review.")
+				auditSections.push("")
+
+				// 1. Requirements coverage
+				if (this.requirementsVerifier) {
+					const allReqs = this.requirementsVerifier.getAllRequirements()
+					const active = allReqs.filter((r) => r.status !== "superseded")
+					const verified = active.filter((r) => r.status === "verified")
+					const failed = active.filter((r) => r.status === "failed")
+					const pending = active.filter((r) => r.status === "pending")
+					auditSections.push("## Requirements Coverage")
+					if (allReqs.length === 0) {
+						auditSections.push("No requirements were extracted from the task prompt.")
+					} else {
+						auditSections.push(`**${active.length} active requirements** (${allReqs.length - active.length} superseded)`)
+						auditSections.push(`- ✅ Verified: ${verified.length}`)
+						auditSections.push(`- ❌ Failed: ${failed.length}`)
+						auditSections.push(`- ⏳ Pending: ${pending.length}`)
+						if (failed.length > 0) {
+							auditSections.push("")
+							auditSections.push("**Failed requirements:**")
+							for (const r of failed.slice(0, 5)) {
+								auditSections.push(`- ❌ \`${r.text.slice(0, 100)}\``)
+							}
+						}
+						if (pending.length > 0) {
+							auditSections.push("")
+							auditSections.push("**Pending/untested requirements:**")
+							for (const r of pending.slice(0, 5)) {
+								auditSections.push(`- ⏳ \`${r.text.slice(0, 100)}\``)
+							}
+						}
+					}
+					auditSections.push("")
+				}
+
+				// 2. File change summary
+				const modifiedFiles = this.aggregateTaskFiles(task)
+				auditSections.push("## Files Modified")
+				if (modifiedFiles.length === 0) {
+					auditSections.push("No files were modified during this task (read-only or discovery only).")
+				} else {
+					auditSections.push(`**${modifiedFiles.length} file(s) changed or created.**`)
+					for (const f of modifiedFiles.slice(0, 30)) {
+						auditSections.push(`- \`${f}\``)
+					}
+					if (modifiedFiles.length > 30) {
+						auditSections.push(`... and ${modifiedFiles.length - 30} more`)
+					}
+				}
+				auditSections.push("")
+
+				// 3. Stub/TODO scan on modified files
+				if (modifiedFiles.length > 0 && task.cwd) {
+					const stubPatterns = [
+						/\/\/\s+TODO/i,
+						/\/\/\s+FIXME/i,
+						/\/\/\s+HACK/i,
+						/\/\/\s+XXX\b/,
+						/throw\s+new\s+Error\(['"]not\s+implemented/i,
+						/throw\s+new\s+Error\(['"]unimplemented/i,
+						/implement\s+later/i,
+					]
+					let stubCount = 0
+					let stubFiles = new Set<string>()
+					try {
+						const fs = await import("fs/promises")
+						const path = await import("path")
+						for (const f of modifiedFiles) {
+							const fullPath = path.resolve(task.cwd, f)
+							try {
+								const content = await fs.readFile(fullPath, "utf-8")
+								for (const pat of stubPatterns) {
+									if (pat.test(content)) {
+										stubCount++
+										stubFiles.add(f)
+										break
+									}
+								}
+							} catch {
+								// file deleted or unreadable
+							}
+						}
+					} catch {
+						// fs not available
+					}
+					auditSections.push("## Stub / TODO Detection")
+					if (stubCount === 0) {
+						auditSections.push("No TODO, FIXME, or stub patterns detected in modified files.")
+					} else {
+						auditSections.push(`**${stubCount} file(s)** contain TODO/FIXME/stub patterns:`)
+						for (const f of stubFiles) {
+							auditSections.push(`- ⚠️ \`${f}\``)
+						}
+						auditSections.push("")
+						auditSections.push("*These are flagged for review — they may indicate unfinished work.*")
+					}
+					auditSections.push("")
+				}
+
+				// 4. Codebase mapping summary (architecture + dead code)
+				try {
+					const { CodebaseMappingManager } = await import("../../services/codebase-mapping")
+					const context = task.providerRef.deref()?.context
+					if (context) {
+						const service = CodebaseMappingManager.getInstance(context, task.cwd)
+						if (service) {
+							const graph = await service.getDependencyGraph()
+							if (graph && graph.files.size > 0) {
+								const totalFiles = graph.files.size
+								const totalEdges = graph.edges.length
+								auditSections.push("## Architecture Summary (Codebase Mapping)")
+								auditSections.push(`- **${totalFiles} files** in the dependency graph`)
+								auditSections.push(`- **${totalEdges} dependency edges**`)
+
+								// Dead code
+								const deadCode = await service.getDeadCode()
+								if (deadCode && deadCode.length > 0) {
+									auditSections.push(`- ⚠️ **${deadCode.length} potentially dead symbol(s)** detected (zero references)`)
+									const byFile = new Map<string, number>()
+									for (const d of deadCode) {
+										const fp = d.filePath || "unknown"
+										byFile.set(fp, (byFile.get(fp) || 0) + 1)
+									}
+									for (const [fp, count] of [...byFile.entries()].slice(0, 5)) {
+										auditSections.push(`  - \`${fp}\`: ${count} symbol(s)`)
+									}
+								} else {
+									auditSections.push("- ✅ No dead symbols detected")
+								}
+
+								// Top hubs
+								const tops: Array<{ name: string; score: number }> = []
+								for (const [, fn] of graph.files) {
+									const fp = (fn as any).filePath || (fn as any).path || ""
+									const score = ((fn as any).imports || []).length + ((fn as any).exports || []).length
+									if (score > 2) tops.push({ name: fp, score })
+								}
+								tops.sort((a, b) => b.score - a.score)
+								if (tops.length > 0) {
+									auditSections.push("")
+									auditSections.push("**Top hub files (most connected):**")
+									for (const h of tops.slice(0, 5)) {
+										auditSections.push(`- \`${h.name}\` (${h.score} connections)`)
+									}
+								}
+								auditSections.push("")
+							}
+						}
+					}
+				} catch {
+					// codebase mapping not available
+				}
+
+				// 5. Verification gates summary
+				if (this.verificationEngine) {
+					const verStatus = this.verificationEngine.getStatus()
+					if (verStatus.lastResult) {
+						const lastResult = verStatus.lastResult as any
+						auditSections.push("## Verification Gates")
+						auditSections.push(`- **Overall:** ${lastResult.passed ? "✅ PASSED" : "❌ FAILED"}`)
+						auditSections.push(`- **Gates:** ${lastResult.gates?.length || 0} total`)
+						const passed = (lastResult.gates || []).filter((g: any) => g.passed || g.skipped).length
+						const total = (lastResult.gates || []).length
+						auditSections.push(`- **Passed/Skipped:** ${passed}/${total}`)
+						auditSections.push(`- **Strictness:** ${lastResult.strictness || "moderate"}`)
+						auditSections.push("")
+					}
+				}
+
+				// Append audit report to completion result
+				const auditReport = auditSections.join("\n")
+				if (auditReport.length > 100) {
+					result += "\n\n---\n" + auditReport
+					console.log("[Orchestrator] Deep code audit appended to completion result (" + auditSections.length + " sections)")
+				}
+			}
 
 			// ========================================================================
 			// Bug 1: Escalation check — after ALL gates have run
