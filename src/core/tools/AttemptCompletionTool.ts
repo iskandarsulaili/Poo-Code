@@ -60,13 +60,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	// Key: parentTaskId → childTaskId → file paths modified by that child
 	// ========================================================================
 	private static childTaskFiles = new Map<string, Map<string, string[]>>()
-	/** Aggregate file paths from this task and all its verified child tasks (scoped to parent). */
+	/** Aggregate file paths from this task and its own child tasks only (no sibling pollution). */
 	private aggregateTaskFiles(task: Task): string[] {
 		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
 		const allFiles = new Set(ownFiles)
-		// Only include children whose parent is this task (using parentTaskId as key)
-		const parentKey = task.rootTaskId ?? task.taskId
-		const children = AttemptCompletionTool.childTaskFiles.get(parentKey)
+		// Only include children whose DIRECT parent is this task (parentTaskId)
+		// This prevents sibling A's files from leaking into sibling B's aggregate.
+		const children = AttemptCompletionTool.childTaskFiles.get(task.taskId)
 		if (children) {
 			for (const childFiles of children.values()) {
 				for (const f of childFiles) allFiles.add(f)
@@ -327,8 +327,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
-			// Extract tool call file paths for VerificationEngine scoping (Fix H + Bug 2)
-			const toolCallFilePaths = this.aggregateTaskFiles(task)
 
 			// ========================================================================
 			// Fix F: Cross-reference completion claim against actual file changes
@@ -339,22 +337,22 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const filePattern = /(?:^|[\/\s])([\w_.-]+\.\w{1,5})\b/g
 				const mentionedFiles = [...result.matchAll(filePattern)].map((m) => m[1].toLowerCase())
 				if (mentionedFiles.length > 0) {
-					const actuallyChanged = new Set([
-						...toolCallFilePaths.map((f) => {
+					const changedForClaim = new Set([
+						...this.aggregateTaskFiles(task).map((f) => {
 							// Strip leading ./ and directory prefix for matching
 							const clean = f.replace(/^\.\//, "").toLowerCase()
 							return clean
 						}),
 					])
 					const verified = mentionedFiles.filter(
-						(f) => actuallyChanged.has(f) || actuallyChanged.has(`/${f}`) || [...actuallyChanged].some((a) => a.endsWith(`/${f}`) || a === f),
+						(f) => changedForClaim.has(f) || changedForClaim.has(`/${f}`) || [...changedForClaim].some((a) => a.endsWith(`/${f}`) || a === f),
 					)
 					const unverified = mentionedFiles.filter((f) => !verified.includes(f))
 
 					if (unverified.length > mentionedFiles.length * 0.5) {
 						const errorMsg = `Completion result claims changes to ${mentionedFiles.length} file(s), but ${unverified.length}/${mentionedFiles.length} cannot be verified from tool call history:\n` +
 							unverified.map((f) => `  ❌ ${f}`).join("\n") +
-							`\n\nActually modified files: ${[...actuallyChanged].join(", ") || "(none)"}` +
+							`\n\nActually modified files: ${[...changedForClaim].join(", ") || "(none)"}` +
 							`\n\nPlease verify these files exist and were correctly modified before completing.`
 						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
@@ -363,12 +361,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 					if (unverified.length > 0) {
 						console.log(
-							`[AttemptCompletionTool] ⚠ ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
+							`[AttemptCompletionTool] \u26a0 ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
 						)
 					}
 				}
 			}
 
+			// ========================================================================
+			// Result substance check
 			// ========================================================================
 			// Result substance check — reject empty or trivial result text
 			// ========================================================================
@@ -405,6 +405,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
+				// Extract tool call file paths (scoped inside verification block, not before)
+				const toolCallFilePaths = this.aggregateTaskFiles(task)
 				// Pass tool call file paths for file-changes gate scoping
 				const verResult = await this.verificationEngine.verify(toolCallFilePaths)
 				const strictness = this.verificationEngine.getConfig().strictness || "moderate"
@@ -463,7 +465,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							try {
 								const childFiles = this.extractToolCallFiles(task.apiConversationHistory)
 								if (childFiles.length > 0) {
-									const parentKey = task.rootTaskId ?? task.parentTaskId ?? task.taskId
+									const parentKey = task.parentTaskId ?? task.rootTaskId ?? task.taskId
 									let childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
 									if (!childrenMap) {
 										childrenMap = new Map()
@@ -634,7 +636,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 	private emitTaskCompleted(task: Task, result: string): void {
 		// Clean up child task file tracking to prevent memory leak (Fix B)
-		AttemptCompletionTool.childTaskFiles.delete(task.rootTaskId ?? task.taskId)
+		AttemptCompletionTool.childTaskFiles.delete(task.taskId)
 
 		// Store the result text to guard against duplicate completions
 		AttemptCompletionTool.lastResults.set(task.taskId, result)

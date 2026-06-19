@@ -59,6 +59,12 @@ export type SubtaskExecutor = (params: {
  */
 export type StatusCallback = (dag: import("@roo-code/types").SubtaskDAG) => void
 
+/**
+ * Callback for forwarding per-thought-token updates to the webview.
+ * Called with subtask ID and the thought token string.
+ */
+export type ThoughtCallback = (subtaskId: string, token: string) => void
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -106,6 +112,11 @@ export class ParallelSubtaskOrchestrator {
 	 * Called after each subtask status change.
 	 */
 	private statusCallback: StatusCallback | null = null
+	/**
+	 * Optional callback for forwarding thought tokens to the webview.
+	 * Called during subtask execution with each thought token.
+	 */
+	private thoughtCallback: ThoughtCallback | null = null
 
 	/**
 	 * @param lockManager - LockManager instance
@@ -143,6 +154,10 @@ export class ParallelSubtaskOrchestrator {
 	 */
 	setStatusCallback(callback: StatusCallback): void {
 		this.statusCallback = callback
+	}
+
+	setThoughtCallback(callback: ThoughtCallback): void {
+		this.thoughtCallback = callback
 	}
 
 	/**

@@ -464,8 +464,11 @@ export class VerificationEngine {
 	 * Snapshot of build config file hashes at task start.
 	 * Used by checkBuildConfigIntegrity to detect config tampering.
 	 * Maps relative file path → SHA256 hex digest.
+	 * Keyed by cwd so each workspace directory gets its own snapshot.
 	 */
 	private buildConfigSnapshot: Map<string, string> | null = null
+	/** The cwd this snapshot was taken in. Prevents re-snapshot for same dir. */
+	private snapshotCwd: string | null = null
 
 	/**
 	 * In-memory cache for isProjectWithTooling results per directory.
@@ -837,6 +840,31 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			this.config.testCommand = profile.testCommand
 			this.config.checkTests = true
 		}
+		// Auto-detect coverage command (Blindspot 5)
+		// Common patterns: pytest --cov, vitest run --coverage, go test -cover, cargo tarpaulin
+		if (!this.config.coverageCommand) {
+			const lang = profile.language?.toLowerCase() || ""
+			if (lang.includes("python")) {
+				this.config.coverageCommand = "pytest --cov --cov-report=term"
+			} else if (lang.includes("rust")) {
+				this.config.coverageCommand = "cargo tarpaulin --out Xml"
+			} else if (lang.includes("go")) {
+				this.config.coverageCommand = "go test -cover -coverprofile=coverage.out ./..."
+			} else if (lang.includes("typescript") || lang.includes("javascript") || lang.includes("node") || lang.includes("js")) {
+				const hasVitest = this.config.testCommand?.includes("vitest")
+				this.config.coverageCommand = hasVitest ? "vitest run --coverage" : "npx jest --coverage"
+			} else if (lang.includes("java") || lang.includes("kotlin")) {
+				this.config.coverageCommand = "./gradlew testCoverage"
+			} else if (lang.includes("zig")) {
+				this.config.coverageCommand = "zig build test --summary all"
+			}
+			if (this.config.coverageCommand) {
+				this.config.minCoverage = this.config.minCoverage || 0
+				this.logger?.appendLine(
+					`[VerificationEngine] Auto-detected coverage command: ${this.config.coverageCommand}`,
+				)
+			}
+		}
 
 		this.logger?.appendLine(
 			`[VerificationEngine] Auto-config applied: build=${
@@ -890,8 +918,8 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 	 * Call this at task start (before the agent makes any changes).
 	 */
 	async snapshotBuildConfig(cwd: string): Promise<void> {
-		// Fix A: Skip if snapshot already taken for this cwd (prevents child task overwrite)
-		if (this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
+		// Skip if snapshot already taken for this exact cwd (prevents child task overwrite)
+		if (this.snapshotCwd === path.resolve(cwd) && this.buildConfigSnapshot && this.buildConfigSnapshot.size > 0) {
 			this.logger?.appendLine(
 				`[VerificationEngine] Build config snapshot already exists (${this.buildConfigSnapshot.size} files). Skipping re-snapshot.`,
 			)
@@ -931,6 +959,7 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		}
 
 		this.buildConfigSnapshot = snapshots
+		this.snapshotCwd = path.resolve(cwd)
 		this.logger?.appendLine(
 			`[VerificationEngine] Build config snapshot: ${snapshots.size} file(s) hashed`,
 		)
@@ -1117,9 +1146,10 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 		// Test coverage gate (Fix 2) — runs coverage command and parses output
 		if (this.config.minCoverage > 0 && this.config.coverageCommand) {
 			const coverageGate = await this.runGate("coverage", this.config.coverageCommand, strictness)
-			// Parse coverage percentage from stdout
+			// Parse coverage percentage from stdout — match LAST occurrence (e.g. "Total: 64.7%")
 			if (coverageGate.passed && coverageGate.output) {
-				const coverageMatch = coverageGate.output.match(/(\d+(?:\.\d+)?)%/)
+				const allMatches = [...coverageGate.output.matchAll(/(\d+(?:\.\d+)?)%/g)]
+				const coverageMatch = allMatches.length > 0 ? allMatches[allMatches.length - 1] : null
 				if (coverageMatch) {
 					const pct = parseFloat(coverageMatch[1])
 					if (pct < this.config.minCoverage) {
