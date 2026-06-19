@@ -20,6 +20,7 @@ describe("VerificationEngine", () => {
 			checkLint: false,
 			checkTypes: false,
 			checkTests: false,
+			checkFileChanges: false,
 			gateTimeoutMs: 5000,
 			mandatory: true,
 			strictness: "moderate",
@@ -34,6 +35,8 @@ describe("VerificationEngine", () => {
 			expect(config.checkLint).toBe(true) // Changed from false
 			expect(config.checkTypes).toBe(true) // Changed from false
 			expect(config.checkTests).toBe(false)
+			expect(config.checkFileChanges).toBe(true)
+			expect(config.enableStubDetection).toBe(true)
 			expect(config.gateTimeoutMs).toBe(60000)
 			expect(config.mandatory).toBe(true)
 			expect(config.strictness).toBe("moderate")
@@ -491,6 +494,7 @@ describe("VerificationEngine", () => {
 				checkLint: false,
 				checkTypes: false,
 				checkTests: false,
+				checkFileChanges: false,
 				gateTimeoutMs: 5000,
 				mandatory: true,
 				strictness: "moderate",

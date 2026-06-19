@@ -180,6 +180,20 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
+			// Cross-reference: auto-verify requirements against tool call history
+			// This checks whether files were actually modified in ways that match
+			// the extracted requirements, providing concrete evidence.
+			if (this.requirementsVerifier && !isLenientMode) {
+				try {
+					this.requirementsVerifier.autoVerifyFromToolHistory(task.clineMessages, task.cwd)
+				} catch (error) {
+					// Non-blocking — auto-verification is advisory
+					console.error(
+						`[AttemptCompletionTool] Error during requirements auto-verification: ${(error as Error)?.message ?? String(error)}`,
+					)
+				}
+			}
+
 			// Guard 6: Code quality verification (VerificationEngine)
 			// Skip verification for lenient modes — research tasks and other user-configured modes
 			// don't need build/lint/types/tests. Default: ["research"]

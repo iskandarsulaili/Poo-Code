@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import * as fs from "fs"
 import type { Logger, Requirement, RequirementsVerificationResult, ConflictResolver } from "./types"
 import { KeywordConflictResolver } from "./KeywordConflictResolver"
 
@@ -27,6 +28,22 @@ const DEFAULT_CONFIG: RequirementsVerifierConfig = {
 	requireAllVerified: true,
 	verificationLevel: "strict",
 }
+
+/** File-writing tool names whose params contain a file path */
+const FILE_WRITE_TOOLS = new Set([
+	"write_to_file",
+	"apply_diff",
+	"edit",
+	"search_replace",
+	"edit_file",
+	"ApplyDiff",
+	"Edit",
+	"SearchReplace",
+	"Write",
+	"write",
+	"edit",
+	"patch",
+])
 
 export class RequirementsVerifier {
 	private config: RequirementsVerifierConfig
@@ -128,6 +145,280 @@ export class RequirementsVerifier {
 
 		return all
 	}
+
+	// ========================================================================
+	// Fix 1: Auto-verify requirements by checking actual tool call history
+	// ========================================================================
+
+	/**
+	 * File-writing tool names used by the zoo-code agent.
+	 * These tools modify files and their params contain file paths.
+	 */
+	private static readonly FILE_WRITE_TOOL_NAMES = [
+		"write_to_file",
+		"apply_diff",
+		"edit",
+		"search_replace",
+		"edit_file",
+		"patch",
+	]
+
+	/**
+	 * Auto-verify requirements against the actual tool call history.
+	 *
+	 * For each active requirement:
+	 * 1. Extract keywords from the requirement text
+	 * 2. Scan all file-writing tool calls in the message history
+	 * 3. If a tool call's file path matches requirement keywords → mark verified
+	 * 4. If NO tool call matches → mark failed
+	 *
+	 * @param clineMessages - The conversation message history (ClineMessage[] with .say === "tool")
+	 * @param cwd - The working directory for resolving relative paths
+	 */
+	autoVerifyFromToolHistory(
+		clineMessages: Array<{ type: "ask" | "say"; say?: string; text?: string }>,
+		cwd: string,
+	): void {
+		const active = this.getActiveRequirements()
+		if (active.length === 0) {
+			this.logger?.appendLine("[RequirementsVerifier] No active requirements to auto-verify against tool history.")
+			return
+		}
+
+		// Extract file paths touched by file-writing tool calls
+		const touchedFiles = this.extractTouchedFiles(clineMessages)
+		const filePaths = [...touchedFiles]
+
+		this.logger?.appendLine(
+			`[RequirementsVerifier] Auto-verifying ${active.length} requirement(s) against ${filePaths.length} file(s) touched by tool calls`,
+		)
+
+		if (filePaths.length > 0) {
+			this.logger?.appendLine(`[RequirementsVerifier] Files modified: ${filePaths.join(", ")}`)
+		}
+
+		// Read the git diff if available for more precise change detection
+		let gitDiffFiles: string[] = []
+		try {
+			const { execSync } = require("child_process")
+			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRT", {
+				cwd,
+				encoding: "utf-8",
+				timeout: 5000,
+				stdio: ["pipe", "pipe", "pipe"],
+			}) as string
+			gitDiffFiles = diffOutput.split("\n").map((l: string) => l.trim()).filter(Boolean)
+		} catch {
+			// Not a git repo or git not available — use tool-call file paths only
+		}
+
+		const allChangedFiles = new Set([...filePaths, ...gitDiffFiles])
+
+		// Track which requirements matched
+		let verifiedCount = 0
+		let failedCount = 0
+		let unmatchedCount = 0
+
+		for (const req of active) {
+			if (req.status === "verified" || req.status === "failed") continue
+
+			// Extract significant keywords from the requirement text
+			const keywords = this.extractKeywords(req.text)
+
+			// Check if any changed file path matches requirement keywords
+			const matchingFiles = [...allChangedFiles].filter((fp) =>
+				keywords.some((kw) => fp.toLowerCase().includes(kw.toLowerCase())),
+			)
+
+			if (matchingFiles.length > 0) {
+				// Found matching file changes — mark as verified
+				req.status = "verified"
+				req.verifiedBy = "code-review"
+				req.evidence = `File changes detected: ${matchingFiles.join(", ")}`
+				req.verifiedAt = Date.now()
+				verifiedCount++
+				this.logger?.appendLine(
+					`[RequirementsVerifier] ✅ Auto-verified requirement: "${req.text.slice(0, 80)}..." → matched files: ${matchingFiles.join(", ")}`,
+				)
+			} else {
+				// For requirements originating from the task description, this is expected
+				// to have some unmatched. Only mark as failed if the task had significant
+				// file changes but this particular requirement wasn't addressed.
+				if (allChangedFiles.size > 0) {
+					req.status = "failed"
+					req.evidence = `No file changes matched keywords: "${keywords.join(", ")}". Changed files: ${[...allChangedFiles].join(", ")}`
+					failedCount++
+					this.logger?.appendLine(
+						`[RequirementsVerifier] ❌ Failed requirement: "${req.text.slice(0, 80)}..." — no matching file changes`,
+					)
+				} else {
+					unmatchedCount++
+				}
+			}
+		}
+
+		if (verifiedCount > 0 || failedCount > 0 || unmatchedCount > 0) {
+			this.logger?.appendLine(
+				`[RequirementsVerifier] Auto-verification result: ${verifiedCount} verified, ${failedCount} failed, ${unmatchedCount} unmatched (no file changes at all)`,
+			)
+		}
+	}
+
+	/**
+	 * Extract file paths from tool call messages.
+	 * Each tool message has a "say: tool" type and text containing the tool name and params.
+	 */
+	private extractTouchedFiles(
+		messages: Array<{ type: "ask" | "say"; say?: string; text?: string }>,
+	): Set<string> {
+		const files = new Set<string>()
+
+		for (const msg of messages) {
+			if (msg.type !== "say" || msg.say !== "tool") continue
+			if (!msg.text) continue
+
+			const text = msg.text
+
+			// Try to parse as JSON (tool call params)
+			try {
+				const parsed = JSON.parse(text)
+				// Format: { tool: "...", path: "...", ... } or similar
+				const toolName =
+					(parsed.tool as string)?.toLowerCase() ||
+					(parsed.name as string)?.toLowerCase() ||
+					""
+				if (RequirementsVerifier.FILE_WRITE_TOOL_NAMES.includes(toolName)) {
+					if (parsed.path) files.add(parsed.path)
+					if (parsed.file_path) files.add(parsed.file_path)
+					if (parsed.diff && parsed.path) files.add(parsed.path)
+				}
+			} catch {
+				// Not JSON — try regex extraction from the raw text
+				this.extractFilePathsFromText(text, files)
+			}
+		}
+
+		return files
+	}
+
+	/**
+	 * Fallback: extract file paths from raw tool call text using regex.
+	 */
+	private extractFilePathsFromText(text: string, files: Set<string>): void {
+		// Match common patterns like path: "/some/file", path: 'file.ts', "path": "file"
+		const pathMatches = text.matchAll(/["']?path["']?\s*[:=]\s*["']([^"']+)["']/gi)
+		for (const m of pathMatches) {
+			files.add(m[1])
+		}
+
+		// Match file_path patterns
+		const filePathMatches = text.matchAll(/["']?file_path["']?\s*[:=]\s*["']([^"']+)["']/gi)
+		for (const m of filePathMatches) {
+			files.add(m[1])
+		}
+	}
+
+	/**
+	 * Extract significant keywords from requirement text for file path matching.
+	 * Strips stop words and common boilerplate.
+	 */
+	private extractKeywords(text: string): string[] {
+		const stopWords = new Set([
+			"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+			"of", "with", "by", "from", "as", "is", "was", "be", "been", "are",
+			"were", "has", "have", "had", "do", "does", "did", "will", "would",
+			"should", "could", "can", "may", "might", "shall", "need", "must",
+			"this", "that", "these", "those", "it", "its", "all", "each", "every",
+			"some", "any", "no", "not", "only", "just", "also", "very", "too",
+			"make", "made", "use", "used", "using", "add", "added", "adding",
+			"new", "create", "created", "creating", "implement", "implemented",
+			"implementing", "implementation", "update", "updated", "updating",
+			"change", "changed", "changing", "remove", "removed", "removing",
+			"fix", "fixed", "fixing", "ensure", "ensures", "ensuring",
+			"support", "supports", "supported", "supporting", "function",
+			"functionality", "feature", "file", "files", "code", "way", "work",
+		])
+
+		const words = text
+			.toLowerCase()
+			.replace(/[^a-z0-9\s.-]/g, " ")
+			.split(/\s+/)
+			.filter(Boolean)
+
+		const keywords: string[] = []
+		for (const word of words) {
+			if (word.length < 3) continue
+			if (stopWords.has(word)) continue
+			if (/^\d+$/.test(word)) continue
+			keywords.push(word)
+		}
+
+		// Also extract file-like patterns (e.g., "login.ts", "auth.service")
+		const fileLikes = text.matchAll(/\b[\w_-]+\.\w{1,4}\b/g)
+		for (const m of fileLikes) {
+			keywords.push(m[0])
+		}
+
+		// Deduplicate
+		return [...new Set(keywords)]
+	}
+
+	// ========================================================================
+	// Fix 3: Tighten read-only detection
+	// ========================================================================
+
+	/**
+	 * Detect if this is genuinely a read-only/audit task.
+	 *
+	 * Only triggers when:
+	 * 1. The task description explicitly states it's read-only (multiple signals)
+	 * 2. The task is about reviewing existing code, not creating/modifying
+	 * 3. Single keywords like "check" or "report" alone don't trigger bypass
+	 */
+	private detectReadOnlyTask(): boolean {
+		const taskText = this.taskDescription?.toLowerCase() ?? ""
+		if (!taskText) return false
+
+		// Strong signals — explicit read-only statements
+		const strongReadOnly = [
+			"do not modify", "don't modify", "do not change", "don't change",
+			"do not create", "don't create", "do not write", "don't write",
+			"read-only", "read only", "readonly", "without making changes",
+			"without modifying", "review only", "audit only",
+		]
+		for (const phrase of strongReadOnly) {
+			if (taskText.includes(phrase)) return true
+		}
+
+		// Count weak signals — need at least 2 to trigger
+		const weakAuditSignals = [
+			"audit", "review", "inspect", "analyze",
+		]
+		const readOnlySignalCount = weakAuditSignals.filter((kw) => taskText.includes(kw)).length
+
+		// If the task explicitly talks about "verify" or "check" in a read-only context
+		// (paired with existing code language like "verify that", "check if")
+		const hasVerificationContext = /\b(verify|check)\s+(that|if|whether|the|your)\b/i.test(taskText)
+		const isExploratory = /\b(what|how|why|where|when|which)\b/i.test(taskText) &&
+			/\b(does|is|are|was|were|has|have)\b/i.test(taskText)
+
+		// Count write/modify keywords — if these appear, it's NOT read-only
+		const writeSignals = [
+			"create", "implement", "build", "write", "modify", "add",
+			"fix", "refactor", "update", "change", "make", "produce",
+		]
+		const writeSignalCount = writeSignals.filter((kw) => taskText.includes(kw)).length
+
+		// Decision: at least 2 audit signals AND zero write signals
+		if (readOnlySignalCount >= 2 && writeSignalCount === 0) return true
+		if (readOnlySignalCount >= 1 && writeSignalCount === 0 && (hasVerificationContext || isExploratory)) return true
+
+		return false
+	}
+
+	// ========================================================================
+	// Existing methods from here down
+	// ========================================================================
 
 	/**
 	 * Resolve conflicts between newly extracted requirements and existing ones.
@@ -334,18 +625,29 @@ export class RequirementsVerifier {
 		}
 
 		// Strict mode (default)
-		// NEW: Detect read-only/audit tasks — always pass verification
 		const isReadOnlyTask = this.detectReadOnlyTask()
 
-		// NEW: If no requirements have been explicitly tracked (all pending),
-		// treat as passed — prevents auto-extracted requirements from blocking
+		// NEW: Count requirements that were auto-verified or have actual evidence
 		const hasExplicitTracking = verified.length > 0 || failed.length > 0
 
 		let passed: boolean
 		if (isReadOnlyTask) {
 			passed = true
 		} else if (!hasExplicitTracking) {
-			passed = true
+			// No requirements were explicitly verified or failed — all pending.
+			// This means either auto-verification didn't run or there were no file changes.
+			// In this case, check if there are any pending requirements at all.
+			// If all are pending and zero evidence exists, something is wrong.
+			if (pending.length > 0 && all.length > 0) {
+				// If the task had file changes but requirements aren't tracked, be lenient
+				// but don't fail — the requirements system may not have captured anything actionable.
+				passed = true
+				this.logger?.appendLine(
+					`[RequirementsVerifier] [STRICT] ${pending.length} pending requirements with no tracking — passing (requirements may be informational)`,
+				)
+			} else {
+				passed = true
+			}
 		} else {
 			passed = failed.length === 0 && (pending.length === 0 || !this.config.requireAllVerified)
 		}
@@ -365,16 +667,6 @@ export class RequirementsVerifier {
 		this.lastVerifyResult = { passed, total: all.length, verified, failed, pending, summary }
 
 		return { passed, total: all.length, verified, failed, pending, summary }
-	}
-
-	/**
-	 * Detect if this is a read-only/audit task based on the task description.
-	 * Read-only tasks always pass verification since they don't produce code changes.
-	 */
-	private detectReadOnlyTask(): boolean {
-		const readOnlyKeywords = ["audit", "verify", "check", "report", "read-only", "read only", "review", "inspect"]
-		const taskText = this.taskDescription?.toLowerCase() ?? ""
-		return readOnlyKeywords.some((kw) => taskText.includes(kw))
 	}
 
 	/**

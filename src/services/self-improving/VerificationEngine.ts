@@ -63,6 +63,10 @@ export interface VerificationConfig {
 	checkTypes: boolean
 	/** Whether to run tests */
 	checkTests: boolean
+	/** Whether to check for actual file changes (git diff). Default: true */
+	checkFileChanges: boolean
+	/** Whether to scan modified files for stub/TODO patterns. Default: true */
+	enableStubDetection: boolean
 	/** Build command (e.g., "npm run build") */
 	buildCommand?: string
 	/** Lint command (e.g., "npm run lint") */
@@ -97,6 +101,8 @@ const DEFAULT_CONFIG: VerificationConfig = {
 	checkLint: true,
 	checkTypes: true,
 	checkTests: false,
+	checkFileChanges: true,
+	enableStubDetection: true,
 	gateTimeoutMs: 60_000,
 	mandatory: true,
 	strictness: "moderate",
@@ -946,6 +952,12 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			return { passed: true, gates: skippedGates, summary, strictness, allSkipped }
 		}
 
+		// File-change verification gate — always runs if git is available
+		// Detects whether any files were actually modified during the task.
+		if (this.config.checkFileChanges && cwd) {
+			gates.push(await this.runFileChangesGate(strictness))
+		}
+
 		// Strip bare "cd" commands — spawnSync/execSync can't execute shell built-ins
 		const stripCd = (cmd: string | undefined): string | undefined => {
 			if (!cmd) return cmd
@@ -1023,6 +1035,201 @@ Respond ONLY with a valid JSON object (no markdown, no code fences):
 			skipped: true,
 			skipReason: reason,
 		}
+	}
+
+	/**
+	 * Run the file-changes verification gate.
+	 *
+	 * Checks whether files were actually modified during the task by:
+	 * 1. Running `git diff --name-only` to list changed, added, copied, renamed, or modified files
+	 * 2. Counting total modified files (excluding lock files, node_modules, .git)
+	 * 3. Optionally scanning modified files for stub/TODO patterns
+	 *
+	 * This gate passes if at least one non-trivial file was changed.
+	 * It fails with a warning if zero files changed (suggests the agent didn't implement anything).
+	 */
+	private async runFileChangesGate(
+		strictness: GateResult["strictness"],
+	): Promise<GateResult> {
+		const start = Date.now()
+		const cwd = this.config.cwd || (await this.findProjectRoot()) || process.cwd()
+
+		try {
+			const { execSync } = await import("child_process")
+
+			// Get list of changed files (staged + unstaged)
+			let changedFiles: string[] = []
+			try {
+				const output = execSync(
+					"git diff --name-only --diff-filter=ACMRT && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRT",
+					{
+						cwd,
+						encoding: "utf-8",
+						timeout: 10000,
+						stdio: ["pipe", "pipe", "pipe"],
+					},
+				) as string
+
+				// Parse the output — combine staged and unstaged
+				const parts = output.split("---STAGED---")
+				const workingDir = (parts[0] || "").trim()
+				const staged = (parts[1] || "").trim()
+
+				const allFiles = new Set<string>()
+				for (const f of workingDir.split("\n").concat(staged.split("\n"))) {
+					const clean = f.trim()
+					if (clean && !clean.startsWith("---STAGED---")) {
+						allFiles.add(clean)
+					}
+				}
+
+				// Filter out irrelevant files
+				changedFiles = [...allFiles].filter(
+					(f) =>
+						!f.startsWith("node_modules/") &&
+						!f.startsWith(".git/") &&
+						!f.includes("package-lock.json") &&
+						!f.includes("yarn.lock") &&
+						!f.includes("pnpm-lock.yaml") &&
+						!f.endsWith(".lock"),
+				)
+			} catch {
+				// Not a git repo or error — skip this gate
+				const durationMs = Date.now() - start
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "file-changes" skipped: not a git repo or git unavailable`,
+				)
+				return {
+					name: "file-changes",
+					passed: true,
+					durationMs,
+					warnings: 0,
+					errors: 0,
+					strictness,
+					skipped: true,
+					skipReason: "not a git repo or git unavailable",
+				}
+			}
+
+			// Scan for stub/TODO patterns if enabled
+			let stubWarnings: string[] = []
+			if (this.config.enableStubDetection && changedFiles.length > 0) {
+				stubWarnings = await this.scanForStubs(changedFiles, cwd)
+			}
+
+			const durationMs = Date.now() - start
+
+			// Determine pass/fail based on whether files changed
+			if (changedFiles.length === 0) {
+				this.logger?.appendLine(
+					`[VerificationEngine] Gate "file-changes" FAILED [${strictness}] (${durationMs}ms): zero files changed`,
+				)
+				return {
+					name: "file-changes",
+					passed: false,
+					error: "No files were modified during this task. The agent may not have implemented the requested changes.",
+					output: "Changed files: (none)\nStubs detected: (n/a)",
+					durationMs,
+					warnings: 0,
+					errors: 1,
+					stderrSummary: "ERR: zero files changed",
+					strictness,
+				}
+			}
+
+			// Pass with info about what changed
+			const fileList = changedFiles.join(", ")
+			const stubNote = stubWarnings.length > 0
+				? `\n⚠ Stub patterns detected in ${stubWarnings.length} file(s): ${stubWarnings.join(", ")}`
+				: ""
+			const stderrContent = stubWarnings.length > 0
+				? `WRN: ${stubWarnings.length} file(s) with stub patterns`
+				: ""
+
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "file-changes" PASSED [${strictness}] (${durationMs}ms): ${changedFiles.length} file(s) changed${stubWarnings.length > 0 ? `, ${stubWarnings.length} stub(s) detected` : ""}`,
+			)
+
+			return {
+				name: "file-changes",
+				passed: true,
+				output: `Changed files (${changedFiles.length}): ${fileList.slice(0, 1000)}${stubNote}`,
+				durationMs,
+				warnings: stubWarnings.length,
+				errors: 0,
+				stderrSummary: stderrContent,
+				strictness,
+			}
+		} catch (error: any) {
+			const durationMs = Date.now() - start
+			this.logger?.appendLine(
+				`[VerificationEngine] Gate "file-changes" FAILED [${strictness}] (${durationMs}ms): ${(error as Error).message.slice(0, 200)}`,
+			)
+			return {
+				name: "file-changes",
+				passed: false,
+				error: (error as Error).message.slice(0, 1000),
+				durationMs,
+				warnings: 0,
+				errors: 1,
+				strictness,
+			}
+		}
+	}
+
+	/**
+	 * Scan modified files for common stub/TODO patterns.
+	 * Returns a list of file paths that contain suspicious patterns.
+	 */
+	private async scanForStubs(changedFiles: string[], cwd: string): Promise<string[]> {
+		const stubPatterns = [
+			/\bTODO\b/i,
+			/\bFIXME\b/i,
+			/\bHACK\b/i,
+			/\bXXX\b/,
+			/implement\s+later/i,
+			/stub\b/i,
+			/throw\s+new\s+Error\(['"]not\s+implemented/i,
+			/throw\s+new\s+Error\(['"]unimplemented/i,
+			/\/\/\s+@ts-ignore/,
+			/\/\/\s+@ts-expect-error/,
+			/\/\/\s+@ts-nocheck/,
+			/\/\/\s+eslint-disable-next-line/,
+			/fn\s*[\(]\s*[\)]\s*{/,
+			/function\s+\w+\s*[\(]\s*[\)]\s*{\s*}/,
+			/async\s+function\s+\w+\s*[\(]/,
+			/const\s+\w+\s*=\s*async\s*[\(]/,
+			/\.\.\./,
+		]
+
+		const stubbedFiles: string[] = []
+
+		for (const filePath of changedFiles) {
+			const fullPath = path.resolve(cwd, filePath)
+			try {
+				const content = await fs.readFile(fullPath, "utf-8")
+				const lines = content.split("\n")
+				let suspiciousLineCount = 0
+
+				for (const line of lines) {
+					for (const pattern of stubPatterns) {
+						if (pattern.test(line)) {
+							suspiciousLineCount++
+							break
+						}
+					}
+				}
+
+				// If more than 10% of lines match stub patterns, flag it
+				if (lines.length > 0 && suspiciousLineCount / lines.length > 0.1) {
+					stubbedFiles.push(filePath)
+				}
+			} catch {
+				// File deleted or unreadable — skip
+			}
+		}
+
+		return stubbedFiles
 	}
 
 	/**
