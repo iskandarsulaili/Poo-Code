@@ -110,8 +110,15 @@ export class CodebaseMappingManager {
       }
     });
 
-    // Initialize asynchronously
-    service.initialize(config).catch((err: unknown) => {
+    // Initialize and scan asynchronously (independent of code indexing — Fix 1)
+    service.initialize(config).then(() => {
+      // Trigger workspace scan immediately after initialization
+      // This runs independently of code indexing, so the dependency graph
+      // is available even when vector search is not configured.
+      service.scanWorkspace().catch((scanErr: unknown) => {
+        console.error(`[codebase-mapping:${workspacePath}] Scan failed`, scanErr);
+      });
+    }).catch((err: unknown) => {
       console.error(`[codebase-mapping:${workspacePath}] Initialization failed`, err);
     });
 
@@ -123,13 +130,28 @@ export class CodebaseMappingManager {
     });
     disposables.push(folderWatcher);
 
-    // Register file save handler for incremental updates
+    // Register file save handler for incremental updates (Fix 5: debounced)
+    let saveTimer: ReturnType<typeof setTimeout> | undefined = undefined
+    const DEBOUNCE_MS = 2000 // 2-second debounce window
     const saveWatcher = vscode.workspace.onDidSaveTextDocument((doc) => {
       if (doc.uri.fsPath.startsWith(workspacePath)) {
-        service.scanWorkspace().catch(() => {});
+        if (saveTimer) clearTimeout(saveTimer)
+        saveTimer = setTimeout(() => {
+          service.scanWorkspace().catch(() => {});
+          saveTimer = undefined
+        }, DEBOUNCE_MS)
       }
     });
     disposables.push(saveWatcher);
+
+    // Fix 5: Register file delete handler to clean up stale graph entries
+    const deleteWatcher = vscode.workspace.onDidDeleteFiles((event) => {
+      const needsRescan = event.files.some((uri) => uri.fsPath.startsWith(workspacePath));
+      if (needsRescan) {
+        service.scanWorkspace().catch(() => {});
+      }
+    });
+    disposables.push(deleteWatcher);
 
     const instance: MappingManagerInstance = {
       service,

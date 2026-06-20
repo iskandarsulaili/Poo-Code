@@ -203,6 +203,7 @@ export class ExecuteParallelSubtaskTool extends BaseTool<"execute_parallel_subta
 				id: t.id,
 				name: t.name,
 				mode: t.mode,
+				source: "execute_parallel_subtask",
 				prompt: t.prompt,
 				inputFiles: t.inputFiles ?? [],
 				outputFiles: t.outputFiles ?? [],

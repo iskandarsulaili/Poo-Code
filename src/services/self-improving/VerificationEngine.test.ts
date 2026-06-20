@@ -852,6 +852,8 @@ describe("VerificationEngine", () => {
 				typeCheckCommand: "npm run typecheck",
 				checkTests: true,
 				testCommand: "npm test",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: dir,
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -865,11 +867,10 @@ describe("VerificationEngine", () => {
 			expect(result.gates).toHaveLength(4)
 			for (const gate of result.gates) {
 				expect(gate.skipped).toBe(true)
-				expect(gate.skipReason).toContain("markdown-only")
-				expect(gate.strictness).toBe("lenient") // auto-downgraded
+				expect(gate.skipReason).toContain("tooling")
+				expect(gate.strictness).toBe("lenient") // auto-downgraded to lenient since hasTooling=false
 			}
 			expect(result.summary).toContain("skipped")
-			expect(result.summary).toContain("markdown-only")
 		})
 
 		it("should skip all gates for directory with locales/ subdirectory only", async () => {
@@ -884,6 +885,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "npm run build",
 				checkLint: true,
 				lintCommand: "npm run lint",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: dir,
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -945,6 +948,8 @@ describe("VerificationEngine", () => {
 			const e = new VerificationEngine(logger, {
 				checkBuild: true,
 				buildCommand: "nonexistent-binary-that-does-not-exist",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: dir,
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -974,6 +979,8 @@ describe("VerificationEngine", () => {
 			const e = new VerificationEngine(logger, {
 				checkBuild: true,
 				buildCommand: "sh -c 'exit 127'",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: dir,
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -997,6 +1004,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "echo build-ok",
 				checkLint: true,
 				lintCommand: "echo lint-ok",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -1018,6 +1027,8 @@ describe("VerificationEngine", () => {
 			const e = new VerificationEngine(logger, {
 				checkBuild: true,
 				buildCommand: "false",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp",
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -1046,6 +1057,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "echo build-ok",
 				checkLint: true,
 				lintCommand: "echo lint-ok",
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: "/tmp", // real cwd with tooling, not the markdown-only dir
 				gateTimeoutMs: 5000,
 				mandatory: true,
@@ -1078,6 +1091,8 @@ describe("VerificationEngine", () => {
 				buildCommand: "echo build-ok", // will be skipped — dir has no tooling
 				checkLint: true,
 				lintCommand: "echo lint-ok", // will be skipped — dir has no tooling
+				checkFileChanges: false,
+				checkBuildConfigIntegrity: false,
 				cwd: dir,
 				gateTimeoutMs: 5000,
 				mandatory: true,

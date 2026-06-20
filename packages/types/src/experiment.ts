@@ -36,6 +36,8 @@ export const experimentIds = [
 	"dependencyGraph",
 	"multiRootWorkspace",
 	"parallelSubtask",
+	"disableCodebaseDependency",
+	"disableOrchestratorWiring",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -111,6 +113,8 @@ export const experimentsSchema = z.object({
 	dependencyGraph: z.boolean().optional(),
 	multiRootWorkspace: z.boolean().optional(),
 	parallelSubtask: z.boolean().optional(),
+	disableCodebaseDependency: z.boolean().optional(),
+	disableOrchestratorWiring: z.boolean().optional(),
 
 	/**
 	 * Parallel subtask execution configuration.

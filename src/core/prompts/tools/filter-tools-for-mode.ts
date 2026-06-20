@@ -292,6 +292,11 @@ export function filterNativeToolsForMode(
 		allowedToolNames.delete("run_slash_command")
 	}
 
+	// Fix 3: Conditionally exclude codebase_dependency if experiment disables it
+	if (experiments?.disableCodebaseDependency) {
+		allowedToolNames.delete("codebase_dependency")
+	}
+
 	// Remove tools that are explicitly disabled via the disabledTools setting
 	if (settings?.disabledTools?.length) {
 		for (const toolName of settings.disabledTools) {

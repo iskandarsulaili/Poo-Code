@@ -39,6 +39,14 @@ interface DelegationProvider {
 export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	readonly name = "attempt_completion" as const
 
+	/** Fix 1: Orchestrator mode slugs — used by wiring verification and deep audit. */
+	private static readonly ORCHESTRATOR_SLUGS = [
+		"orchestrator",
+		"one-shot-orchestrator",
+		"kaizen-orchestrator",
+		"vigorous-stlc-orchestrator",
+	]
+
 	/**
 	 * Tracks the last result text per task to guard against duplicate completions.
 	 * Unlike a permanent boolean flag, this allows new attempt_completion calls
@@ -59,28 +67,59 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	// are stored here so the parent's verification can include them.
 	// Key: parentTaskId → childTaskId → file paths modified by that child
 	// ========================================================================
-	private static childTaskFiles = new Map<string, Map<string, string[]>>()
+	private static childTaskFiles = new Map<string, Map<string, { files: string[]; createdAt: number }>>()
 	/** Aggregate file paths from this task and its own child tasks only (no sibling pollution). */
 	private aggregateTaskFiles(task: Task): string[] {
 		const ownFiles = this.extractToolCallFiles(task.apiConversationHistory)
 		const allFiles = new Set(ownFiles)
 		// Only include children whose DIRECT parent is this task (parentTaskId)
 		// This prevents sibling A's files from leaking into sibling B's aggregate.
-		const children = AttemptCompletionTool.childTaskFiles.get(task.taskId)
-		if (children) {
-			for (const [childId, childFiles] of children.entries()) {
-				if (childId === '__thoughts__') continue // Fix 3: Skip thought entries
-				for (const f of childFiles) allFiles.add(f)
+		// Fix 1: Snapshot copy for thread safety under concurrent parallel subtasks
+		const childrenMap = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+		if (childrenMap) {
+			const snapshot = new Map(childrenMap)
+			for (const [childId, childFiles] of snapshot.entries()) {
+				if (childId === '__thoughts__') continue // Skip thought entries
+				for (const f of childFiles.files) allFiles.add(f)
 			}
 		}
 		return [...allFiles]
 	}
 
-	/** Fix 1: Prune a child task's files from its parent's map. */
+	/** Fix 2+3+5: Expire child task file entries older than 1 hour to prevent leaks. */
+	private static expireChildTaskFiles(): void {
+		const ONE_HOUR_MS = 3600_000
+		const now = Date.now()
+		// Fix 3: Real time-based sweep — each child entry now has a createdAt timestamp
+		for (const parentKey of [...AttemptCompletionTool.childTaskFiles.keys()]) {
+			const childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+			if (!childrenMap) continue
+			// Sweep children older than 1 hour (Fix 3 — real expiry using timestamps)
+			for (const [childId, entry] of [...childrenMap.entries()]) {
+				if (childId === '__thoughts__') continue // Fix 5: transient, don't sweep
+				if (now - entry.createdAt > ONE_HOUR_MS) {
+					childrenMap.delete(childId)
+				}
+			}
+			// Remove empty parent entries
+			if (childrenMap.size === 0) {
+				AttemptCompletionTool.childTaskFiles.delete(parentKey)
+			}
+		}
+		// Also sweep verificationFailures
+		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
+			if (now - rec.lastFailAt > ONE_HOUR_MS) {
+				AttemptCompletionTool.verificationFailures.delete(tid)
+			}
+		}
+	}
+
+	/** Fix 1: Prune a child task's files from its parent's map (thread-safe). */
 	private static pruneChildFiles(taskId: string): void {
-		// Scan all parent maps for entries containing this child
-		for (const [parentKey, childrenMap] of AttemptCompletionTool.childTaskFiles) {
-			if (childrenMap.has(taskId)) {
+		// Fix 1: Snapshot parent keys for thread safety
+		for (const parentKey of [...AttemptCompletionTool.childTaskFiles.keys()]) {
+			const childrenMap = AttemptCompletionTool.childTaskFiles.get(parentKey)
+			if (childrenMap && childrenMap.has(taskId)) {
 				childrenMap.delete(taskId)
 				if (childrenMap.size === 0) {
 					AttemptCompletionTool.childTaskFiles.delete(parentKey)
@@ -161,7 +200,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				AttemptCompletionTool.verificationFailures.delete(tid)
 			}
 		}
-		const record = AttemptCompletionTool.verificationFailures.get(task.taskId)
+		const record = AttemptCompletionTool.verificationFailures.get(task.rootTaskId ?? task.taskId)
 		if (!record || record.count < AttemptCompletionTool.MAX_CONSECUTIVE_FAILURES) {
 			return false // No escalation needed
 		}
@@ -174,7 +213,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 		if (response === "yesButtonClicked") {
 			// User approved bypass — clear failures and continue
-			AttemptCompletionTool.clearVerificationFailures(task.taskId)
+			AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
 			return false // Don't block
 		}
 
@@ -207,7 +246,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	async execute(params: AttemptCompletionParams, task: Task, callbacks: AttemptCompletionCallbacks): Promise<void> {
 		// Reset cross-task counter bleed on singleton tool
 		this.consecutiveVerificationFailures = 0
-		const { result } = params
+		const { result: initialResult } = params
+		let result: string = initialResult
 		const { handleError, pushToolResult, askFinishSubTaskApproval } = callbacks
 
 		// Guard: block only duplicate result text, not ALL future completions
@@ -283,7 +323,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					if (!reqResult.passed && isBlocking) {
 						const errorMsg = `Requirements verification failed:\n${reqResult.summary}\n\nFailed requirements:\n${reqResult.failed.map((r) => `  ❌ ${r.text}`).join("\n")}\n\nPending requirements:\n${reqResult.pending.map((r) => `  ⏳ ${r.text}`).join("\n")}\n\nPlease address these requirements before completing the task.`
 						// Don't increment consecutiveMistakeCount — verification has its own counter
-						AttemptCompletionTool.recordGateFailure(task.taskId, "requirements")
+						AttemptCompletionTool.recordGateFailure(task.rootTaskId ?? task.taskId, "requirements")
 						task.recordToolError("attempt_completion")
 						pushToolResult(formatResponse.toolError(errorMsg))
 						return
@@ -325,6 +365,24 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					console.log(
 						`[AttemptCompletionTool] ${toolErrors} tool error(s) during task`,
 					)
+				}
+			}
+
+			// ========================================================================
+			// Fix 5: Forward child reasoning thoughts to webview
+			// ========================================================================
+			if (!isLenientMode) {
+				const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
+				if (ownChildren) {
+					const childThoughts = ((ownChildren.get('__thoughts__') as any)?.files) || []
+					for (const thought of childThoughts) {
+						task.providerRef.deref()?.postMessageToWebview?.({
+							type: "parallelSubtaskThought",
+							payload: { subtaskId: task.parentTaskId || task.taskId, token: thought },
+						})
+					}
+					// Clear after forwarding so duplicates aren't sent
+					ownChildren.delete('__thoughts__')
 				}
 			}
 
@@ -418,9 +476,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 
 			// Guard 6: Code quality verification (VerificationEngine)
-			// Skip verification for lenient modes and bypass mode
+			// Skip verification for lenient modes, bypass mode, and child tasks (parent re-verifies — Fix 1)
 			// Default lenient modes: ["research"]
-			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass") {
+			if (this.verificationEngine && !isLenientMode && vLevel !== "bypass" && !task.parentTaskId) {
 				// Set cwd from task context — the directory the agent is working in
 				// This replaces the flawed workspace-folder heuristic (detectUserProjectCwd)
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
@@ -449,7 +507,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				if (!verResult.passed && this.verificationEngine.getConfig().mandatory && !verResult.allSkipped) {
 					const errorMsg = `Code quality verification failed [${strictness}]:\n${verResult.summary}\n\n${gateDetails}\n\nPlease fix these issues before completing the task.`
-					AttemptCompletionTool.recordGateFailure(task.taskId, "code-quality")
+					AttemptCompletionTool.recordGateFailure(task.rootTaskId ?? task.taskId, "code-quality")
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
 					return
@@ -457,6 +515,259 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Even on pass, show warning counts if any
 				// (VerificationEngine already logs details via its own logger)
+				// Fix 2: Track that Guard 6 ran with build/lint/types gate results
+				const guard6PassedCodeGates = verResult.gates.filter((g: any) =>
+					["build", "lint", "type-check", "tests"].includes(g.name) && g.passed
+				).length
+				// Store on tool instance so orchestrator block can check
+				;(this as any)._guard6CodeGatesPassed = guard6PassedCodeGates
+				;(this as any)._guard6HasCodeGates = ["build", "lint", "type-check", "tests"].some(
+					(g) => verResult.gates.some((vg: any) => vg.name === g && !vg.skipped)
+				)
+			}
+
+			// ========================================================================
+			// Orchestrator Code Wiring Verification — build/lint/test/typecheck
+			// Only runs in orchestrator modes when Guard 6 did NOT already verify
+			// build/lint/types/tests (Fix 2 — skip double-run).
+			// ========================================================================
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine && !task.experiments?.disableOrchestratorWiring
+				// Fix 2: Skip if Guard 6 already verified build/lint/types/test gates
+				&& (this as any)._guard6HasCodeGates === undefined) {
+				// Clone config with build/lint/types/tests forced on
+				this.verificationEngine.updateConfig({ cwd: task.cwd })
+				await this.verificationEngine.applyAutoProfile(task.cwd)
+				// Force enable all code quality checks
+				const currentConfig = this.verificationEngine.getConfig()
+				this.verificationEngine.updateConfig({
+					checkBuild: currentConfig.buildCommand ? true : false,
+					checkLint: currentConfig.lintCommand ? true : false,
+					checkTypes: currentConfig.typeCheckCommand ? true : false,
+					checkTests: currentConfig.testCommand ? true : false,
+					checkFileChanges: false,
+					checkBuildConfigIntegrity: false,
+				})
+				const codeResult = await this.verificationEngine.verify(this.aggregateTaskFiles(task))
+				const codeGates = codeResult.gates.filter((g) =>
+					["build", "lint", "type-check", "tests"].includes(g.name),
+				)
+				const codeFailed = codeGates.filter((g) => !g.passed && !g.skipped)
+				if (codeFailed.length > 0) {
+					const gateDetails = codeGates
+						.map((g) => {
+							const icon = g.passed ? "✅" : g.skipped ? "⏭️" : "❌"
+							const note = g.passed
+								? `PASS (${g.durationMs}ms)`
+								: g.skipped
+									? `SKIP (${g.skipReason || "not available"})`
+									: `FAIL (${g.durationMs}ms)${g.error ? `: ${g.error.slice(0, 200)}` : ""}`
+							return `  ${icon} ${g.name}: ${note}`
+						})
+						.join("\n")
+					const errorMsg =
+						`[Orchestrator Code Wiring Verification] ${codeFailed.length}/${codeGates.length} gate(s) FAILED.\n\n` +
+						`Orchestrator mode requires passing code quality gates before completing.\n\n${gateDetails}` +
+						`\n\nPlease fix these issues and retry with attempt_completion.`
+					task.recordToolError("attempt_completion")
+					pushToolResult(formatResponse.toolError(errorMsg))
+					return
+				}
+				// Log passing gates for transparency
+				const passCount = codeGates.filter((g) => g.passed).length
+				const skipCount = codeGates.filter((g) => g.skipped).length
+				if (passCount > 0 || skipCount > 0) {
+					console.log(
+						`[Orchestrator] Code wiring verification: ${passCount} passed, ${skipCount} skipped`,
+					)
+				}
+			}
+			// ========================================================================
+
+			// ========================================================================
+			// Orchestrator Deep Code Audit — comprehensive missing-code/flaw/blind-spot check
+			// Non-blocking: findings appended to completion result for user review.
+			// Only runs after wiring verification passes in orchestrator modes.
+			// ========================================================================
+			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && !task.experiments?.disableOrchestratorWiring) {
+				const auditSections: string[] = []
+				auditSections.push("# Deep Code Audit Report")
+				auditSections.push("")
+				auditSections.push("Generated at completion to surface potential issues for your review.")
+				auditSections.push("")
+
+				// 1. Requirements coverage
+				if (this.requirementsVerifier) {
+					const allReqs = this.requirementsVerifier.getAllRequirements()
+					const active = allReqs.filter((r) => r.status !== "superseded")
+					const verified = active.filter((r) => r.status === "verified")
+					const failed = active.filter((r) => r.status === "failed")
+					const pending = active.filter((r) => r.status === "pending")
+					auditSections.push("## Requirements Coverage")
+					if (allReqs.length === 0) {
+						auditSections.push("No requirements were extracted from the task prompt.")
+					} else {
+						auditSections.push(`**${active.length} active requirements** (${allReqs.length - active.length} superseded)`)
+						auditSections.push(`- ✅ Verified: ${verified.length}`)
+						auditSections.push(`- ❌ Failed: ${failed.length}`)
+						auditSections.push(`- ⏳ Pending: ${pending.length}`)
+						if (failed.length > 0) {
+							auditSections.push("")
+							auditSections.push("**Failed requirements:**")
+							for (const r of failed.slice(0, 5)) {
+								auditSections.push(`- ❌ \`${r.text.slice(0, 100)}\``)
+							}
+						}
+						if (pending.length > 0) {
+							auditSections.push("")
+							auditSections.push("**Pending/untested requirements:**")
+							for (const r of pending.slice(0, 5)) {
+								auditSections.push(`- ⏳ \`${r.text.slice(0, 100)}\``)
+							}
+						}
+					}
+					auditSections.push("")
+				}
+
+				// 2. File change summary
+				const modifiedFiles = this.aggregateTaskFiles(task)
+				auditSections.push("## Files Modified")
+				if (modifiedFiles.length === 0) {
+					auditSections.push("No files were modified during this task (read-only or discovery only).")
+				} else {
+					auditSections.push(`**${modifiedFiles.length} file(s) changed or created.**`)
+					for (const f of modifiedFiles.slice(0, 30)) {
+						auditSections.push(`- \`${f}\``)
+					}
+					if (modifiedFiles.length > 30) {
+						auditSections.push(`... and ${modifiedFiles.length - 30} more`)
+					}
+				}
+				auditSections.push("")
+
+				// 3. Stub/TODO scan on modified files
+				if (modifiedFiles.length > 0 && task.cwd) {
+					const stubPatterns = [
+						/\/\/\s+TODO/i,
+						/\/\/\s+FIXME/i,
+						/\/\/\s+HACK/i,
+						/\/\/\s+XXX\b/,
+						/throw\s+new\s+Error\(['"]not\s+implemented/i,
+						/throw\s+new\s+Error\(['"]unimplemented/i,
+						/implement\s+later/i,
+					]
+					let stubCount = 0
+					let stubFiles = new Set<string>()
+					try {
+						const fs = await import("fs/promises")
+						const path = await import("path")
+						for (const f of modifiedFiles) {
+							const fullPath = path.resolve(task.cwd, f)
+							try {
+								const content = await fs.readFile(fullPath, "utf-8")
+								for (const pat of stubPatterns) {
+									if (pat.test(content)) {
+										stubCount++
+										stubFiles.add(f)
+										break
+									}
+								}
+							} catch {
+								// file deleted or unreadable
+							}
+						}
+					} catch {
+						// fs not available
+					}
+					auditSections.push("## Stub / TODO Detection")
+					if (stubCount === 0) {
+						auditSections.push("No TODO, FIXME, or stub patterns detected in modified files.")
+					} else {
+						auditSections.push(`**${stubCount} file(s)** contain TODO/FIXME/stub patterns:`)
+						for (const f of stubFiles) {
+							auditSections.push(`- ⚠️ \`${f}\``)
+						}
+						auditSections.push("")
+						auditSections.push("*These are flagged for review — they may indicate unfinished work.*")
+					}
+					auditSections.push("")
+				}
+
+				// 4. Codebase mapping summary (architecture + dead code)
+				try {
+					const { CodebaseMappingManager } = await import("../../services/codebase-mapping")
+					const context = task.providerRef.deref()?.context
+					if (context) {
+						const service = CodebaseMappingManager.getInstance(context, task.cwd)
+						if (service) {
+							const graph = await service.getDependencyGraph()
+							if (graph && graph.files.size > 0) {
+								const totalFiles = graph.files.size
+								const totalEdges = graph.edges.length
+								auditSections.push("## Architecture Summary (Codebase Mapping)")
+								auditSections.push(`- **${totalFiles} files** in the dependency graph`)
+								auditSections.push(`- **${totalEdges} dependency edges**`)
+
+								// Dead code
+								const deadCode = await service.getDeadCode()
+								if (deadCode && deadCode.length > 0) {
+									auditSections.push(`- ⚠️ **${deadCode.length} potentially dead symbol(s)** detected (zero references)`)
+									const byFile = new Map<string, number>()
+									for (const d of deadCode) {
+										const fp = d.filePath || "unknown"
+										byFile.set(fp, (byFile.get(fp) || 0) + 1)
+									}
+									for (const [fp, count] of [...byFile.entries()].slice(0, 5)) {
+										auditSections.push(`  - \`${fp}\`: ${count} symbol(s)`)
+									}
+								} else {
+									auditSections.push("- ✅ No dead symbols detected")
+								}
+
+								// Top hubs
+								const tops: Array<{ name: string; score: number }> = []
+								for (const [, fn] of graph.files) {
+									const fp = (fn as any).filePath || (fn as any).path || ""
+									const score = ((fn as any).imports || []).length + ((fn as any).exports || []).length
+									if (score > 2) tops.push({ name: fp, score })
+								}
+								tops.sort((a, b) => b.score - a.score)
+								if (tops.length > 0) {
+									auditSections.push("")
+									auditSections.push("**Top hub files (most connected):**")
+									for (const h of tops.slice(0, 5)) {
+										auditSections.push(`- \`${h.name}\` (${h.score} connections)`)
+									}
+								}
+								auditSections.push("")
+							}
+						}
+					}
+				} catch {
+					// codebase mapping not available
+				}
+
+				// 5. Verification gates summary
+				if (this.verificationEngine) {
+					const verStatus = this.verificationEngine.getStatus()
+					if (verStatus.lastResult) {
+						const lastResult = verStatus.lastResult as any
+						auditSections.push("## Verification Gates")
+						auditSections.push(`- **Overall:** ${lastResult.passed ? "✅ PASSED" : "❌ FAILED"}`)
+						auditSections.push(`- **Gates:** ${lastResult.gates?.length || 0} total`)
+						const passed = (lastResult.gates || []).filter((g: any) => g.passed || g.skipped).length
+						const total = (lastResult.gates || []).length
+						auditSections.push(`- **Passed/Skipped:** ${passed}/${total}`)
+						auditSections.push(`- **Strictness:** ${lastResult.strictness || "moderate"}`)
+						auditSections.push("")
+					}
+				}
+
+				// Append audit report to completion result
+				const auditReport = auditSections.join("\n")
+				if (auditReport.length > 100) {
+					result += "\n\n---\n" + auditReport
+					console.log("[Orchestrator] Deep code audit appended to completion result (" + auditSections.length + " sections)")
+				}
 			}
 
 			// ========================================================================
@@ -502,20 +813,26 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 										childrenMap = new Map()
 										AttemptCompletionTool.childTaskFiles.set(parentKey, childrenMap)
 									}
-									childrenMap.set(task.taskId, childFiles)
+									childrenMap.set(task.taskId, { files: childFiles, createdAt: Date.now() })
 									// Fix 3: Extract thought tokens from child's API history
 									const childThoughts = AttemptCompletionTool.extractChildThoughts(task)
 									if (childThoughts.length > 0) {
-										// Store thoughts as special entry with key '__thoughts__'
-										const thoughtEntry = childrenMap.get('__thoughts__') ?? []
+										// Fix 2: Forward reasoning thoughts tagged as 'reasoning' type
+										for (const thought of childThoughts) {
+											task.providerRef.deref()?.postMessageToWebview?.({
+												type: "parallelSubtaskThought",
+												payload: { subtaskId: task.taskId, token: thought, sourceType: "reasoning" },
+											})
+										}
+										// Also store for parent aggregation (post-hoc forwarding)
+										const thoughtEntry = ((childrenMap.get('__thoughts__') as any)?.files) || []
 										thoughtEntry.push(...childThoughts)
-										childrenMap.set('__thoughts__', thoughtEntry)
+										childrenMap.set('__thoughts__', { files: thoughtEntry, createdAt: Date.now() })
 									}
 								}
 							} catch {
 								// Non-blocking
-							}
-							const delegation = await this.delegateToParent(
+							}							const delegation = await this.delegateToParent(
 								task,
 								result,
 								provider,
@@ -555,7 +872,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const { response, text, images } = await task.ask("completion_result", "", false)
 
 			if (response === "yesButtonClicked") {
-				AttemptCompletionTool.clearVerificationFailures(task.taskId)
+				AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
 				this.emitTaskCompleted(task, result)
 				return
 			}
@@ -574,6 +891,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const feedbackText = `<user_message>\n${text}\n</user_message>`
 			pushToolResult(formatResponse.toolResult(feedbackText, images))
 		} catch (error) {
+			// Fix 3: Clean up child files on abort to prevent memory leak
+			AttemptCompletionTool.pruneChildFiles(task.taskId)
 			await handleError("inspecting site", error as Error)
 		}
 	}
@@ -628,10 +947,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 	}
 
+	/** Fix 4: Cache for extractChildThoughts to avoid O(n) re-scan on retries */
+	private static thoughtCache = new WeakMap<Task, string[]>()
+
 	/**
 	 * Extract reasoning/thought tokens from child task's API conversation history (Fix 3).
+	 * Caches results per Task instance so retries don't re-scan full history (Fix 4).
 	 */
 	private static extractChildThoughts(task: Task): string[] {
+		// Fix 4: Return cached result if available
+		const cached = AttemptCompletionTool.thoughtCache.get(task)
+		if (cached) return cached
 		const thoughts: string[] = []
 		try {
 			for (const msg of task.apiConversationHistory) {
@@ -641,23 +967,34 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const content = msg.content as any[]
 				for (const block of content) {
 					if (block.type === "reasoning" && block.text) {
-						thoughts.push(block.text.slice(0, 200))
+						thoughts.push(block.text)
 					}
 				}
 				// Also check for reasoning_content at the message level (OpenAI/DeepSeek)
 				if ((msg as any).reasoning_content) {
-					thoughts.push((msg as any).reasoning_content.slice(0, 200))
+					thoughts.push((msg as any).reasoning_content)
 				}
 			}
 		} catch {
 			// Non-blocking
 		}
+		// Fix 4: Cache result so retries don't re-scan full history
+		AttemptCompletionTool.thoughtCache.set(task, thoughts)
 		return thoughts
 	}
 
 	/**
 	 * Extract file paths from the agent's tool call history for file-changes gate scoping (Fix H).
 	 */
+	/** Fix 4: Regex patterns for CLI-created files */
+	private static readonly CLI_FILE_PATTERNS = [
+		/cat\s+>\s+([\w./-]+)/i,
+		/echo\s+['"][^'"]*['"]\s*[>]\s*([\w./-]+)/i,
+		/touch\s+([\w./-]+)/i,
+		/cp\s+[\w./-]+\s+([\w./-]+)/i,
+		/mv\s+[\w./-]+\s+([\w./-]+)/i,
+	]
+
 	private extractToolCallFiles(
 		apiMessages: Array<{ role: string; content: string | any[] }>,
 	): string[] {
@@ -672,6 +1009,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			for (const block of msg.content) {
 				if (block?.type !== "tool_use") continue
 				const toolName = (block.name || "").toLowerCase()
+				// Fix 4: Detect CLI-created files (execute_command with cat >, echo >, touch)
+				if (toolName === "execute_command") {
+					const command = block?.input?.command || ""
+					if (typeof command === "string") {
+						for (const pat of AttemptCompletionTool.CLI_FILE_PATTERNS) {
+							const match = command.match(pat)
+							if (match && match[1]) files.add(match[1])
+						}
+					}
+				}
 				if (!FILE_WRITE_TOOLS.has(toolName)) continue
 				const input = block?.input || {}
 				if (typeof input.path === "string") files.add(input.path)
@@ -702,10 +1049,39 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			}
 		}
 
+		// Fix 4: Also scan apiConversationHistory for user messages (handles string AND array content)
+		try {
+			const apiHistory = task.apiConversationHistory || []
+			for (const msg of apiHistory) {
+				if (msg.role !== "user") continue
+				// Fix 4: Handle both string content and array-typed content
+				let msgText = ""
+				if (typeof msg.content === "string") {
+					msgText = msg.content
+				} else if (Array.isArray(msg.content)) {
+					for (const block of msg.content) {
+						if (block.type === "text" && typeof block.text === "string") {
+							msgText += block.text + "\n"
+						}
+					}
+				}
+				if (msgText.trim().length >= 10) {
+					// Deduplicate against what we already have from clineMessages
+					if (!messages.some((m) => m === msgText.trim())) {
+						messages.push(msgText.trim())
+					}
+				}
+			}
+		} catch {
+			// Non-blocking
+		}
+
 		return messages
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
+		// Fix 2: Sweep stale entries before cleanup
+		AttemptCompletionTool.expireChildTaskFiles()
 		// Clean up child task file tracking to prevent memory leak (Fix B + Bug 5)
 		// Prune this task's own child records AND any completed grandchildren
 		const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)

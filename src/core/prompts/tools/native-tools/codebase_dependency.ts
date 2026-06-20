@@ -16,23 +16,24 @@ Use this tool when:
 - You need to find unused/dead code that can be safely removed
 - You need a quick summary of a module's structure without reading every file
 
-Parameters:
+|Parameters:
 - action: (required) One of: "reverse_deps", "forward_deps", "file_info", "dead_symbols", "module_map", "cycles"
 - target: (optional) File path or symbol name to query. Required for: reverse_deps, forward_deps, file_info
 - module: (optional) Directory path to scope a module_map query
+- limit: (optional) Maximum number of results to return. Default: 30. Set to null for unlimited.
 
 Examples:
-{ "action": "reverse_deps", "target": "src/services/auth.service.ts" }
-  → Files that import auth.service.ts
+{ "action": "reverse_deps", "target": "src/services/auth.service.ts", "limit": 20 }
+  → First 20 files that import auth.service.ts
   
-{ "action": "forward_deps", "target": "src/utils/date.ts" }
-  → What date.ts imports
+{ "action": "forward_deps", "target": "src/utils/date.ts", "limit": 10 }
+  → First 10 imports of date.ts
   
 { "action": "file_info", "target": "src/models/user.ts" }
   → Symbols, exports, imports for user.ts
   
-{ "action": "dead_symbols" }
-  → All symbols that nothing references
+{ "action": "dead_symbols", "limit": 50 }
+  → First 50 unreferenced symbols
   
 { "action": "module_map", "module": "src/services" }
   → Every file in services/ with dependency counts
@@ -62,9 +63,12 @@ export default {
 					type: ["string", "null"],
 					description: "Directory path for module_map query",
 				},
+				limit: {
+					type: ["number", "null"],
+					description: "Maximum results to return (default: 30, null for unlimited)",
+				},
 			},
-			required: ["action", "target", "module"],
-			additionalProperties: false,
+			required: ["action"],
 		},
 	},
 } satisfies OpenAI.Chat.ChatCompletionTool

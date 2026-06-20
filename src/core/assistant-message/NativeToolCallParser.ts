@@ -562,6 +562,7 @@ export class NativeToolCallParser {
 						action: partialArgs.action,
 						target: partialArgs.target,
 						module: partialArgs.module,
+						limit: partialArgs.limit,
 					}
 				}
 				break

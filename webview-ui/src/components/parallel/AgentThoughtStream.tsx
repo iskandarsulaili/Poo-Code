@@ -1,8 +1,14 @@
 import React, { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 
+interface ThoughtEntry {
+	subtaskId: string
+	token: string
+	sourceType?: "reasoning" | "metadata"
+}
+
 interface AgentThoughtStreamProps {
-	thoughts: Array<{ subtaskId: string; token: string }>
+	thoughts: ThoughtEntry[]
 	maxHeight?: string
 }
 
@@ -31,10 +37,10 @@ const AgentThoughtStream: React.FC<AgentThoughtStreamProps> = ({ thoughts, maxHe
 	}
 
 	// Group thoughts by subtaskId
-	const grouped = new Map<string, string[]>()
+	const grouped = new Map<string, ThoughtEntry[]>()
 	for (const t of thoughts) {
 		const existing = grouped.get(t.subtaskId) || []
-		existing.push(t.token)
+		existing.push(t)
 		grouped.set(t.subtaskId, existing)
 	}
 
@@ -52,18 +58,40 @@ const AgentThoughtStream: React.FC<AgentThoughtStreamProps> = ({ thoughts, maxHe
 				borderRadius: "4px",
 				padding: "8px",
 			}}>
-			{[...grouped.entries()].map(([subtaskId, tokens]) => (
+			{[...grouped.entries()].map(([subtaskId, entries]) => (
 				<div key={subtaskId} style={{ marginBottom: "8px" }}>
 					<div
 						style={{
 							fontWeight: "bold",
 							fontSize: "11px",
-							color: "var(--vscode-textLink-foreground, #3794ff)",
-							marginBottom: "2px",
+							color: "var(--vscode-descriptionForeground, #888)",
+							marginBottom: "4px",
 						}}>
 						[{subtaskId}]
 					</div>
-					<div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{tokens.join("")}</div>
+					{entries.map((entry, i) => {
+						// Fix 2: Style metadata vs reasoning differently
+						const isMetadata = entry.sourceType === "metadata" || entry.token.startsWith("Starting") || entry.token.startsWith("Completed") || entry.token.startsWith("Failed") || entry.token.startsWith("Executing")
+						return (
+							<div
+								key={i}
+								style={{
+									color: isMetadata
+										? "var(--vscode-descriptionForeground, #999)"
+										: "var(--vscode-editor-foreground, #d4d4d4)",
+									fontStyle: isMetadata ? "italic" : "normal",
+									fontWeight: isMetadata ? 400 : 700,
+									marginBottom: "2px",
+									paddingLeft: "8px",
+									borderLeft: isMetadata
+										? "2px solid var(--vscode-descriptionForeground, #555)"
+										: "2px solid var(--vscode-focusBorder, #007fd4)",
+									fontSize: isMetadata ? "11px" : "12px",
+								}}>
+								{entry.token}
+							</div>
+						)
+					})}
 				</div>
 			))}
 		</div>

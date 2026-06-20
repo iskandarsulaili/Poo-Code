@@ -200,7 +200,7 @@ export type NativeToolArgs = {
 		}>
 		maxParallel?: number
 	}
-	codebase_dependency: { action: string; target: string | null; module: string | null }
+	codebase_dependency: { action: string; target: string | null; module: string | null; limit?: number | null }
 	// Add more tools as they are migrated to native protocol
 }
 
