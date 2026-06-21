@@ -64,6 +64,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   private _rootFileCache: Map<string, string[]>;
   /** Guard against concurrent scanWorkspace() calls */
   public _scanInProgress: boolean = false;
+  /** A save/delete/folder-change event arrived while scanning — schedule a follow-up scan */
+  private _pendingRescan: boolean = false;
 
   constructor(options?: CodebaseMappingOptions) {
     this.config = { ...DEFAULT_CONFIG, ...options };
@@ -104,13 +106,16 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
     // Guard against concurrent scans — saves, folder changes, and manual refreshes can overlap
     if (this._scanInProgress) {
-      this.logger.warn("Scan already in progress — skipping duplicate call");
+      this.logger.warn("Scan already in progress — queuing follow-up rescan");
+      this._pendingRescan = true;
       return;
     }
 
     this.logger.info("Scanning workspace");
     this._scanInProgress = true;
+    this._pendingRescan = false;
     this._scanStatus = "scanning";
+    this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
     this._lastScanErrors = 0;
     this._filesScanned = 0;
     this._totalFilesToScan = 0;
@@ -245,6 +250,14 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
       });
     } finally {
       this._scanInProgress = false;
+      // If a save/delete/folder-change arrived during scan, run again to catch it
+      if (this._pendingRescan) {
+        this._pendingRescan = false;
+        this.logger.info("Re-scanning to catch pending changes that arrived during previous scan");
+        this.scanWorkspace().catch((reErr) => {
+          this.logger.error("Follow-up rescan also failed:", reErr);
+        });
+      }
     }
   }
 
@@ -415,6 +428,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.initialized = false;
     this._scanStatus = "completed";
     this._scanInProgress = false;
+    this._pendingRescan = false;
   }
 
   private ensureInitialized(): void {
