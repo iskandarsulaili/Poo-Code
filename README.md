@@ -1,8 +1,9 @@
-## Poo Code (v3.56.3)
+## Poo Code (v3.57.0)
 
-Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
+Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline.
 
-> **Release v3.56.3** — Major codebase mapping reliability fixes (see [Changelog](#changelog) below)
+> **Release v3.57.0** — Memory Bank: persistent project context across sessions (see [Changelog](#changelog) below)
+
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
 > **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer + parallel execution engine + codebase intelligence + verification system on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
@@ -228,6 +229,33 @@ Don't star this repo. It will just get me excited to drag you into the jobless c
 Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Org/Zoo-Code/issues as they know more than me (no cap)
 
 ## Changelog
+
+### v3.57.0 — Memory Bank: Persistent Project Context
+
+New feature inspired by roo-code-memory-bank methodology — structured markdown files
+that preserve project context across sessions.
+
+**MemoryBankManager service** (`src/services/memory-bank/`)
+- Creates `memory-bank/` directory at project root with 5 template files:
+  `productContext.md`, `activeContext.md`, `decisionLog.md`,
+  `systemPatterns.md`, `progress.md`
+- Append-mode files (decisionLog, progress) timestamp new entries
+- `updateFile()` handles both append and full-replace modes
+
+**Session-start context injection**
+- `getMemoryBankSection()` added to system prompt generation
+- Reads all 5 files at every task start and injects into the LLM prompt
+- Agent sees project goals, decisions, and progress immediately without being told
+
+**update_memory_bank native tool**
+- Agent calls it anytime: arch decisions → decisionLog.md, new task → progress.md,
+  focus change → activeContext.md, pattern discovered → systemPatterns.md
+- Always available to all modes
+- Append mode by default (except productContext/activeContext)
+
+**VS Code commands**
+- `zoo-code.initMemoryBank` — creates 5 template files with placeholder sections
+- `zoo-code.openMemoryBank` — reveals `memory-bank/` in the file explorer
 
 ### v3.56.3 — Codebase Mapping Reliability & UX Overhaul
 
