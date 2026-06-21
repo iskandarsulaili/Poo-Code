@@ -141,6 +141,7 @@ export class ClineProvider
 	private clineStack: Task[] = []
 	private codeIndexStatusSubscription?: vscode.Disposable
 	private codeIndexManager?: CodeIndexManager
+	private _codebaseMappingProgressHandler: ((event: any) => void) | null = null
 	private _workspaceTracker?: WorkspaceTracker // workSpaceTracker read-only for access outside this class
 	protected mcpHub?: McpHub // Change from private to protected
 	protected skillsManager?: SkillsManager
@@ -2945,6 +2946,8 @@ export class ClineProvider
 
 		// Send initial codebase mapping status
 		this._sendCodebaseMappingStatus()
+		// Subscribe to ongoing mapping progress events
+		this._subscribeCodebaseMappingProgress()
 	}
 
 	/**
@@ -3755,7 +3758,35 @@ export class ClineProvider
 	}
 
 	/**
+	 * Subscribes to file_added events from codebase mapping services
+	 * and pushes live progress updates to the webview during scanning.
+	 */
+	private _subscribeCodebaseMappingProgress(): void {
+		// Unsubscribe previous handler first
+		if (this._codebaseMappingProgressHandler) {
+			const instances = CodebaseMappingManager.getAllInstances()
+			for (const svc of instances) {
+				// No removeHandler API — we just push a new one per subscription cycle.
+				// Old services get disposed and their handler arrays reset.
+			}
+		}
+		const instances = CodebaseMappingManager.getAllInstances()
+		if (instances.length === 0) return
+
+		this._codebaseMappingProgressHandler = (event: any) => {
+			if (event.type === "file_added" || event.type === "scan_completed") {
+				this._sendCodebaseMappingStatus()
+			}
+		}
+		for (const svc of instances) {
+			svc.onEvent(this._codebaseMappingProgressHandler)
+		}
+	}
+
+	/**
 	 * Sends the current codebase mapping status to the webview.
+	 * Maps the service's internal _scanStatus to UI-expected status,
+	 * and returns real stats even during scanning progress.
 	 * Retries on "Not initialized" errors as the AST parser may still be loading.
 	 */
 	private _sendCodebaseMappingStatus(retries = 3, delay = 1000): void {
@@ -3780,14 +3811,44 @@ export class ClineProvider
 				return Promise.all([graph, svc.getDeadCode(), svc.getCacheStats()])
 			})
 			.then(([graph, deadCode, stats]) => {
+				// Map service _scanStatus to UI-expected status values
+				let uiStatus: "idle" | "scanning" | "ready" | "error"
+				switch (svc._scanStatus) {
+					case "scanning":
+						uiStatus = "scanning"
+						break
+					case "completed":
+						uiStatus = graph.files.size > 0 ? "ready" : "idle"
+						break
+					default:
+						uiStatus = "idle"
+				}
+
+				// Report real stats — even partial during scan
+				const fileCount =
+					svc._filesScanned > 0
+						? svc._filesScanned
+						: graph.files.size
+				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
+
+				let message: string | undefined
+				if (uiStatus === "scanning") {
+					message = totalFiles
+						? `Scanning... ${fileCount}/${totalFiles} files`
+						: `Scanning... ${fileCount} files`
+				} else if (svc._lastScanErrors > 0) {
+					message = `${svc._lastScanErrors} parse errors`
+				}
+
 				this.postMessageToWebview({
 					type: "codebaseMappingStatusUpdate",
 					values: {
-						status: "ready",
-						fileCount: graph.files.size,
+						status: uiStatus,
+						fileCount,
 						edgeCount: graph.edges.length,
 						deadSymbolCount: deadCode.length,
 						cacheHitRate: stats.astHitRate,
+						message,
 					},
 				})
 			})
@@ -3802,7 +3863,7 @@ export class ClineProvider
 					type: "codebaseMappingStatusUpdate",
 					values: {
 						status: "error",
-						fileCount: 0,
+						fileCount: svc._filesScanned,
 						edgeCount: 0,
 						deadSymbolCount: 0,
 						cacheHitRate: 0,

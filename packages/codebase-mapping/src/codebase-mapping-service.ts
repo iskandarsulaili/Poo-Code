@@ -54,6 +54,10 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   public _scanStatus: "idle" | "scanning" | "completed" = "idle";
   /** Fix 6: Parse error count from last scan */
   public _lastScanErrors: number = 0;
+  /** Number of files scanned so far in the current run */
+  public _filesScanned: number = 0;
+  /** Total file count for the current workspace scan */
+  public _totalFilesToScan: number = 0;
 
   constructor(options?: CodebaseMappingOptions) {
     this.config = { ...DEFAULT_CONFIG, ...options };
@@ -94,6 +98,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
     this._scanStatus = "scanning";
     this._lastScanErrors = 0;
+    this._filesScanned = 0;
+    this._totalFilesToScan = 0;
 
     this.allParseResults.clear();
     this.allSymbols.clear();
@@ -103,6 +109,16 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
     const allFileNodes: FileNode[] = [];
     const allEdges: import("./types.js").DependencyEdge[] = [];
+
+    // Count total files first
+    for (const rootPath of this.config.workspaceRoots) {
+      const files = await this.fileDiscovery.discoverFiles(rootPath);
+      this._totalFilesToScan += files.length;
+    }
+    this.logger.info(`Total files to scan: ${this._totalFilesToScan}`);
+
+    const PROGRESS_INTERVAL = 50; // emit progress every N files
+    let filesSinceLastProgress = 0;
 
     for (const rootPath of this.config.workspaceRoots) {
       this.logger.info(`Scanning root: ${rootPath}`);
@@ -116,14 +132,22 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
           const language = detectLanguage(filePath);
 
           const fileNode = createFileNode(filePath, language, size, hash, Date.now());
-          const parseResult = await this.astParser.parse(filePath, masked, language);
+
+          // Check cache before parsing
+          let parseResult = this.cacheManager.getAST(rootPath, filePath);
+          if (!parseResult) {
+            parseResult = await this.astParser.parse(filePath, masked, language);
+            this.cacheManager.setAST(rootPath, filePath, parseResult);
+          }
 
           this.allParseResults.set(filePath, parseResult);
-          this.cacheManager.setAST(rootPath, filePath, parseResult);
 
-          const symbols = this.symbolExtractor.extractSymbols(parseResult);
+          let symbols = this.cacheManager.getSymbols(rootPath, filePath);
+          if (!symbols) {
+            symbols = this.symbolExtractor.extractSymbols(parseResult);
+            this.cacheManager.setSymbols(rootPath, filePath, symbols);
+          }
           this.allSymbols.set(filePath, symbols);
-          this.cacheManager.setSymbols(rootPath, filePath, symbols);
 
           for (const sym of symbols) {
             const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
@@ -138,14 +162,28 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
           allFileNodes.push(fileNode);
 
-          this.emitEvent({
-            type: "file_added",
-            timestamp: Date.now(),
-            data: { filePath, symbolsFound: symbols.length },
-          });
+          this._filesScanned++;
+          filesSinceLastProgress++;
+
+          // Emit batched progress every PROGRESS_INTERVAL files
+          if (filesSinceLastProgress >= PROGRESS_INTERVAL) {
+            this.emitEvent({
+              type: "file_added",
+              timestamp: Date.now(),
+              data: {
+                filePath,
+                symbolsFound: symbols.length,
+                filesScanned: this._filesScanned,
+                totalFiles: this._totalFilesToScan,
+              },
+            });
+            filesSinceLastProgress = 0;
+          }
         } catch (err) {
           this.logger.error(`Error processing ${filePath}:`, err);
           this._lastScanErrors++;
+          this._filesScanned++;
+          filesSinceLastProgress++;
         }
       }
     }
@@ -156,7 +194,17 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.compressedResults = await this.compressInternal();
 
     this._scanStatus = "completed";
-    this.emitEvent({ type: "scan_completed", timestamp: Date.now(), data: {} });
+    this.emitEvent({
+      type: "scan_completed",
+      timestamp: Date.now(),
+      data: {
+        filesScanned: this._filesScanned,
+        totalFiles: this._totalFilesToScan,
+        edges: allEdges.length,
+        deadSymbols: this.deadCodeResults.length,
+        parseErrors: this._lastScanErrors,
+      },
+    });
     this.logger.info(
       `Scan complete: ${allFileNodes.length} files, ${allEdges.length} edges, ${this.deadCodeResults.length} dead symbols`,
     );

@@ -2742,14 +2742,45 @@ export const webviewMessageHandler = async (
 				const graph = await svc.getDependencyGraph()
 				const deadCode = await svc.getDeadCode()
 				const stats = await svc.getCacheStats()
+
+				// Map service _scanStatus to UI-expected status values
+				let uiStatus: "idle" | "scanning" | "ready" | "error"
+				switch (svc._scanStatus) {
+					case "scanning":
+						uiStatus = "scanning"
+						break
+					case "completed":
+						uiStatus = graph.files.size > 0 ? "ready" : "idle"
+						break
+					default:
+						uiStatus = "idle"
+				}
+
+				// Report real stats — even partial during scan
+				const fileCount =
+					svc._filesScanned > 0
+						? svc._filesScanned
+						: graph.files.size
+				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
+
+				let message: string | undefined
+				if (uiStatus === "scanning") {
+					message = totalFiles
+						? `Scanning... ${fileCount}/${totalFiles} files`
+						: `Scanning... ${fileCount} files`
+				} else if (svc._lastScanErrors > 0) {
+					message = `${svc._lastScanErrors} parse errors`
+				}
+
 				provider.postMessageToWebview({
 					type: "codebaseMappingStatusUpdate",
 					values: {
-						status: "ready",
-						fileCount: graph.files.size,
+						status: uiStatus,
+						fileCount,
 						edgeCount: graph.edges.length,
 						deadSymbolCount: deadCode.length,
 						cacheHitRate: stats.astHitRate,
+						message,
 					},
 				})
 			} catch (err) {
@@ -2757,7 +2788,7 @@ export const webviewMessageHandler = async (
 					type: "codebaseMappingStatusUpdate",
 					values: {
 						status: "error",
-						fileCount: 0,
+						fileCount: svc._filesScanned,
 						edgeCount: 0,
 						deadSymbolCount: 0,
 						cacheHitRate: 0,
@@ -2786,15 +2817,36 @@ export const webviewMessageHandler = async (
 				const graph = await svc.getDependencyGraph()
 				const deadCode = await svc.getDeadCode()
 				const stats = await svc.getCacheStats()
+
+				// Map service _scanStatus to UI-expected status values
+				let uiStatus: "idle" | "scanning" | "ready" | "error"
+				switch (svc._scanStatus) {
+					case "completed":
+						uiStatus = graph.files.size > 0 ? "ready" : "idle"
+						break
+					default:
+						uiStatus = "idle"
+				}
+
+				const fileCount =
+					svc._filesScanned > 0
+						? svc._filesScanned
+						: graph.files.size
+
+				let message: string | undefined = `Refreshed ${instances.length} workspace(s)`
+				if (svc._lastScanErrors > 0) {
+					message += `, ${svc._lastScanErrors} parse errors`
+				}
+
 				provider.postMessageToWebview({
 					type: "codebaseMappingStatusUpdate",
 					values: {
-						status: "ready",
-						fileCount: graph.files.size,
+						status: uiStatus,
+						fileCount,
 						edgeCount: graph.edges.length,
 						deadSymbolCount: deadCode.length,
 						cacheHitRate: stats.astHitRate,
-						message: `Refreshed ${instances.length} workspace(s)`,
+						message,
 					},
 				})
 			}
