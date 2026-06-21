@@ -62,6 +62,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   public _accumulatedEdges: number = 0;
   /** Cached file list from pre-count pass, reused in scan loop to avoid double walk */
   private _rootFileCache: Map<string, string[]>;
+  /** Guard against concurrent scanWorkspace() calls */
+  public _scanInProgress: boolean = false;
 
   constructor(options?: CodebaseMappingOptions) {
     this.config = { ...DEFAULT_CONFIG, ...options };
@@ -99,8 +101,15 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
   async scanWorkspace(): Promise<void> {
     this.ensureInitialized();
+
+    // Guard against concurrent scans — saves, folder changes, and manual refreshes can overlap
+    if (this._scanInProgress) {
+      this.logger.warn("Scan already in progress — skipping duplicate call");
+      return;
+    }
+
     this.logger.info("Scanning workspace");
-    this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
+    this._scanInProgress = true;
     this._scanStatus = "scanning";
     this._lastScanErrors = 0;
     this._filesScanned = 0;
@@ -117,108 +126,137 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     const allFileNodes: FileNode[] = [];
     const allEdges: import("./types.js").DependencyEdge[] = [];
 
-    // Single pre-count pass: cache file lists to avoid double filesystem walk
-    this._rootFileCache = new Map();
-    for (const rootPath of this.config.workspaceRoots) {
-      const files = await this.fileDiscovery.discoverFiles(rootPath);
-      this._rootFileCache.set(rootPath, files);
-      this._totalFilesToScan += files.length;
-    }
-    this.logger.info(`Total files to scan: ${this._totalFilesToScan}`);
+    try {
+      // Single pre-count pass: cache file lists to avoid double filesystem walk
+      this._rootFileCache = new Map();
+      for (const rootPath of this.config.workspaceRoots) {
+        const files = await this.fileDiscovery.discoverFiles(rootPath);
+        this._rootFileCache.set(rootPath, files);
+        this._totalFilesToScan += files.length;
+      }
+      this.logger.info(`Total files to scan: ${this._totalFilesToScan}`);
 
-    const PROGRESS_INTERVAL = 50; // emit progress every N files
-    let filesSinceLastProgress = 0;
+      const PROGRESS_INTERVAL = 50;
+      let filesSinceLastProgress = 0;
 
-    for (const rootPath of this.config.workspaceRoots) {
-      this.logger.info(`Scanning root: ${rootPath}`);
-      const files = this._rootFileCache.get(rootPath) ?? [];
-      this.logger.info(`Found ${files.length} files in ${rootPath}`);
+      for (const rootPath of this.config.workspaceRoots) {
+        this.logger.info(`Scanning root: ${rootPath}`);
+        const files = this._rootFileCache.get(rootPath) ?? [];
+        this.logger.info(`Found ${files.length} files in ${rootPath}`);
 
-      for (const filePath of files) {
-        try {
-          const { content, hash, size } = await this.fileDiscovery.readFile(filePath);
-          const { masked } = this.securityLayer.maskSecrets(content, filePath);
-          const language = detectLanguage(filePath);
+        for (const filePath of files) {
+          try {
+            const { content, hash, size } = await this.fileDiscovery.readFile(filePath);
+            const { masked } = this.securityLayer.maskSecrets(content, filePath);
+            const language = detectLanguage(filePath);
 
-          const fileNode = createFileNode(filePath, language, size, hash, Date.now());
+            const fileNode = createFileNode(filePath, language, size, hash, Date.now());
 
-          // Check cache before parsing
-          let parseResult = this.cacheManager.getAST(rootPath, filePath);
-          if (!parseResult) {
-            parseResult = await this.astParser.parse(filePath, masked, language);
-            this.cacheManager.setAST(rootPath, filePath, parseResult);
-          }
-
-          this.allParseResults.set(filePath, parseResult);
-
-          let symbols = this.cacheManager.getSymbols(rootPath, filePath);
-          if (!symbols) {
-            symbols = this.symbolExtractor.extractSymbols(parseResult);
-            this.cacheManager.setSymbols(rootPath, filePath, symbols);
-          }
-          this.allSymbols.set(filePath, symbols);
-
-          for (const sym of symbols) {
-            const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
-            if (metaKind === "import_statement") {
-              fileNode.imports.push(sym.name);
-              allEdges.push(createDependencyEdge(filePath, sym.name, "import", false, false));
+            let parseResult = this.cacheManager.getAST(rootPath, filePath);
+            if (!parseResult) {
+              parseResult = await this.astParser.parse(filePath, masked, language);
+              this.cacheManager.setAST(rootPath, filePath, parseResult);
             }
-            if (metaKind === "export_statement") {
-              fileNode.exports.push(sym.name);
+
+            this.allParseResults.set(filePath, parseResult);
+
+            let symbols = this.cacheManager.getSymbols(rootPath, filePath);
+            if (!symbols) {
+              symbols = this.symbolExtractor.extractSymbols(parseResult);
+              this.cacheManager.setSymbols(rootPath, filePath, symbols);
             }
+            this.allSymbols.set(filePath, symbols);
+
+            for (const sym of symbols) {
+              const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
+              if (metaKind === "import_statement") {
+                fileNode.imports.push(sym.name);
+                allEdges.push(createDependencyEdge(filePath, sym.name, "import", false, false));
+              }
+              if (metaKind === "export_statement") {
+                fileNode.exports.push(sym.name);
+              }
+            }
+
+            allFileNodes.push(fileNode);
+
+            this._filesScanned++;
+            this._accumulatedEdges = allEdges.length;
+            filesSinceLastProgress++;
+
+            if (filesSinceLastProgress >= PROGRESS_INTERVAL) {
+              this.emitEvent({
+                type: "file_added",
+                timestamp: Date.now(),
+                data: {
+                  filePath,
+                  symbolsFound: symbols.length,
+                  filesScanned: this._filesScanned,
+                  totalFiles: this._totalFilesToScan,
+                  edgesAccumulated: this._accumulatedEdges,
+                },
+              });
+              filesSinceLastProgress = 0;
+            }
+          } catch (err) {
+            this.logger.error(`Error processing ${filePath}:`, err);
+            this._lastScanErrors++;
+            this._filesScanned++;
+            filesSinceLastProgress++;
           }
-
-          allFileNodes.push(fileNode);
-
-          this._filesScanned++;
-          this._accumulatedEdges = allEdges.length;
-          filesSinceLastProgress++;
-
-          // Emit batched progress every PROGRESS_INTERVAL files
-          if (filesSinceLastProgress >= PROGRESS_INTERVAL) {
-            this.emitEvent({
-              type: "file_added",
-              timestamp: Date.now(),
-              data: {
-                filePath,
-                symbolsFound: symbols.length,
-                filesScanned: this._filesScanned,
-                totalFiles: this._totalFilesToScan,
-                edgesAccumulated: this._accumulatedEdges,
-              },
-            });
-            filesSinceLastProgress = 0;
-          }
-        } catch (err) {
-          this.logger.error(`Error processing ${filePath}:`, err);
-          this._lastScanErrors++;
-          this._filesScanned++;
-          filesSinceLastProgress++;
         }
       }
+
+      this.logger.info(`Building graph: ${allFileNodes.length} files, ${allEdges.length} edges`);
+      this.currentGraph = this.graphBuilder.buildGraph(allFileNodes, allEdges);
+      this.deadCodeResults = this.detectDeadCodeInternal();
+      this.compressedResults = await this.compressInternal();
+
+      this._scanStatus = "completed";
+      this.emitEvent({
+        type: "scan_completed",
+        timestamp: Date.now(),
+        data: {
+          filesScanned: this._filesScanned,
+          totalFiles: this._totalFilesToScan,
+          edges: allEdges.length,
+          deadSymbols: this.deadCodeResults.length,
+          parseErrors: this._lastScanErrors,
+        },
+      });
+      this.logger.info(
+        `Scan complete: ${allFileNodes.length} files, ${allEdges.length} edges, ${this.deadCodeResults.length} dead symbols`,
+      );
+    } catch (err) {
+      // Critical failure (e.g. disk error, permission denied) — reset status so UI doesn't stick on "scanning"
+      this.logger.error("Scan failed with critical error:", err);
+      this._scanStatus = "completed";
+      this.emitEvent({
+        type: "scan_completed",
+        timestamp: Date.now(),
+        data: {
+          filesScanned: this._filesScanned,
+          totalFiles: this._totalFilesToScan,
+          edges: allEdges.length,
+          deadSymbols: 0,
+          parseErrors: this._lastScanErrors,
+          criticalError: err instanceof Error ? err.message : String(err),
+        },
+      });
+    } finally {
+      this._scanInProgress = false;
     }
+  }
 
-    this.logger.info(`Building graph: ${allFileNodes.length} files, ${allEdges.length} edges`);
-    this.currentGraph = this.graphBuilder.buildGraph(allFileNodes, allEdges);
-    this.deadCodeResults = this.detectDeadCodeInternal();
-    this.compressedResults = await this.compressInternal();
+  onEvent(handler: (event: MappingEvent) => void): void {
+    this.eventHandlers.push(handler);
+  }
 
-    this._scanStatus = "completed";
-    this.emitEvent({
-      type: "scan_completed",
-      timestamp: Date.now(),
-      data: {
-        filesScanned: this._filesScanned,
-        totalFiles: this._totalFilesToScan,
-        edges: allEdges.length,
-        deadSymbols: this.deadCodeResults.length,
-        parseErrors: this._lastScanErrors,
-      },
-    });
-    this.logger.info(
-      `Scan complete: ${allFileNodes.length} files, ${allEdges.length} edges, ${this.deadCodeResults.length} dead symbols`,
-    );
+  offEvent(handler: (event: MappingEvent) => void): void {
+    const idx = this.eventHandlers.indexOf(handler);
+    if (idx !== -1) {
+      this.eventHandlers.splice(idx, 1);
+    }
   }
 
   async getSymbol(name: string, filePath?: string): Promise<ExtractedSymbol | null> {
@@ -363,10 +401,6 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
       }
     }
     return updates;
-  }
-
-  onEvent(handler: (event: MappingEvent) => void): void {
-    this.eventHandlers.push(handler);
   }
 
   dispose(): void {

@@ -2820,50 +2820,67 @@ export const webviewMessageHandler = async (
 						message: "Scanning...",
 					},
 				})
-				await Promise.all(instances.map((svc) => svc.scanWorkspace()))
-				const svc = instances[0]
-				const graph = await svc.getDependencyGraph()
-				const deadCode = await svc.getDeadCode()
-				const stats = await svc.getCacheStats()
-
-				// Map service _scanStatus to UI-expected status values
-				let uiStatus: "idle" | "scanning" | "ready" | "error"
-				switch (svc._scanStatus) {
-					case "completed":
-						uiStatus = graph.files.size > 0 ? "ready" : "idle"
-						break
-					default:
-						uiStatus = "idle"
+				try {
+					await Promise.all(instances.map((svc) => svc.scanWorkspace()))
+				} catch (scanErr) {
+					// Fallback: scanWorkspace has its own error handling, but this catches unexpected propagation
 				}
+				try {
+					const svc = instances[0]
+					const graph = await svc.getDependencyGraph()
+					const deadCode = await svc.getDeadCode()
+					const stats = await svc.getCacheStats()
 
-				const fileCount =
-					svc._filesScanned > 0
-						? svc._filesScanned
-						: graph.files.size
+					// Map service _scanStatus to UI-expected status values
+					let uiStatus: "idle" | "scanning" | "ready" | "error"
+					switch (svc._scanStatus) {
+						case "completed":
+							uiStatus = graph.files.size > 0 ? "ready" : "idle"
+							break
+						default:
+							uiStatus = "idle"
+					}
 
-				// Use provisional edges if available (post-scan no provisional needed, graph is built)
-				const edgeCount =
-					graph.edges.length > 0
-						? graph.edges.length
-						: svc._accumulatedEdges
+					const fileCount =
+						svc._filesScanned > 0
+							? svc._filesScanned
+							: graph.files.size
 
-				let message: string | undefined = `Refreshed ${instances.length} workspace(s)`
-				if (svc._lastScanErrors > 0) {
-					message += `, ${svc._lastScanErrors} parse errors`
+					const edgeCount =
+						graph.edges.length > 0
+							? graph.edges.length
+							: svc._accumulatedEdges
+
+					let message: string | undefined = `Refreshed ${instances.length} workspace(s)`
+					if (svc._lastScanErrors > 0) {
+						message += `, ${svc._lastScanErrors} parse errors`
+					}
+
+					provider.postMessageToWebview({
+						type: "codebaseMappingStatusUpdate",
+						values: {
+							status: uiStatus,
+							fileCount,
+							totalFileCount: svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined,
+							edgeCount,
+							deadSymbolCount: deadCode.length,
+							cacheHitRate: stats.astHitRate,
+							message,
+						},
+					})
+				} catch (err) {
+					provider.postMessageToWebview({
+						type: "codebaseMappingStatusUpdate",
+						values: {
+							status: "error",
+							fileCount: 0,
+							edgeCount: 0,
+							deadSymbolCount: 0,
+							cacheHitRate: 0,
+							message: err instanceof Error ? err.message : String(err),
+						},
+					})
 				}
-
-				provider.postMessageToWebview({
-					type: "codebaseMappingStatusUpdate",
-					values: {
-						status: uiStatus,
-						fileCount,
-						totalFileCount: svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined,
-						edgeCount,
-						deadSymbolCount: deadCode.length,
-						cacheHitRate: stats.astHitRate,
-						message,
-					},
-				})
 			}
 			break
 		}

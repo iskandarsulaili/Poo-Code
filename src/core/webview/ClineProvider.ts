@@ -755,6 +755,14 @@ export class ClineProvider
 			CloudService.instance.off("settings-updated", this.handleCloudSettingsUpdate)
 		}
 
+		// Clean up codebase mapping progress handler
+		if (this._codebaseMappingProgressHandler) {
+			for (const svc of CodebaseMappingManager.getAllInstances()) {
+				svc.offEvent(this._codebaseMappingProgressHandler)
+			}
+			this._codebaseMappingProgressHandler = null
+		}
+
 		while (this.disposables.length) {
 			const x = this.disposables.pop()
 
@@ -3762,12 +3770,10 @@ export class ClineProvider
 	 * and pushes live progress updates to the webview during scanning.
 	 */
 	private _subscribeCodebaseMappingProgress(): void {
-		// Unsubscribe previous handler first
+		// Unregister previous handler from all services before creating a new one
 		if (this._codebaseMappingProgressHandler) {
-			const instances = CodebaseMappingManager.getAllInstances()
-			for (const svc of instances) {
-				// No removeHandler API — we just push a new one per subscription cycle.
-				// Old services get disposed and their handler arrays reset.
+			for (const svc of CodebaseMappingManager.getAllInstances()) {
+				svc.offEvent(this._codebaseMappingProgressHandler)
 			}
 		}
 		const instances = CodebaseMappingManager.getAllInstances()
