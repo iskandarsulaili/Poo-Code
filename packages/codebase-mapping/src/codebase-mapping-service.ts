@@ -413,6 +413,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.deadCodeResults = [];
     this.compressedResults = [];
     this.initialized = false;
+    this._scanStatus = "completed";
+    this._scanInProgress = false;
   }
 
   private ensureInitialized(): void {

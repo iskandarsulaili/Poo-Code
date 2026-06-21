@@ -506,5 +506,6 @@ export interface CodebaseMappingAPI {
   getCacheStats(): Promise<CacheStats>;
   getDocUpdates(): Promise<DocUpdate[]>;
   onEvent(handler: (event: MappingEvent) => void): void;
+  offEvent(handler: (event: MappingEvent) => void): void;
   dispose(): void;
 }
