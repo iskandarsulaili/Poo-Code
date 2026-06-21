@@ -1,8 +1,8 @@
-## Poo Code (v3.57.0)
+## Poo Code (v3.57.1)
 
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline.
 
-> **Release v3.57.0** — Memory Bank: persistent project context across sessions (see [Changelog](#changelog) below)
+> **Release v3.57.1** — Memory Bank: singleton, toggle, auto-update, UMB (see [Changelog](#changelog) below)
 
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
@@ -229,6 +229,27 @@ Don't star this repo. It will just get me excited to drag you into the jobless c
 Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Org/Zoo-Code/issues as they know more than me (no cap)
 
 ## Changelog
+
+### v3.57.1 — Memory Bank: Singleton, Experiment Toggle, Auto-Update, UMB
+
+4 remaining blind spots from the initial memory bank implementation:
+
+**Singleton** — MemoryBankManager now uses static `getInstance(cwd)` with
+per-workspace cache. Tool handler and system prompt both use it.
+No wasteful re-initialization on every tool call.
+
+**Experiment toggle** — New `disableMemoryBank` experiment toggle:
+- Gated in system prompt injection (empty section when disabled)
+- Gated in tool filtering (tool removed from allowed set when disabled)
+- Auto-detected by Settings UI from schema
+
+**Auto-update on completion** — When user confirms `attempt_completion`,
+the task result is automatically appended to `progress.md` with
+timestamp. Non-blocking fire-and-forget — never blocks completion flow.
+
+**UMB command** — New `zoo-code.updateMemoryBank` command in palette.
+All 3 memory bank commands now registered in package.json for
+discoverability: Initialize, Open, Update (UMB).
 
 ### v3.57.0 — Memory Bank: Persistent Project Context
 
