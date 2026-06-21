@@ -297,6 +297,11 @@ export function filterNativeToolsForMode(
 		allowedToolNames.delete("codebase_dependency")
 	}
 
+	// Conditionally exclude update_memory_bank if experiment disables it
+	if (experiments?.disableMemoryBank) {
+		allowedToolNames.delete("update_memory_bank")
+	}
+
 	// Remove tools that are explicitly disabled via the disabledTools setting
 	if (settings?.disabledTools?.length) {
 		for (const toolName of settings.disabledTools) {

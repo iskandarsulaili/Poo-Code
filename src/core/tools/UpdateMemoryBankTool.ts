@@ -31,7 +31,7 @@ export class UpdateMemoryBankTool extends BaseTool<"update_memory_bank"> {
         return
       }
 
-      const manager = new MemoryBankManager(cwd)
+      const manager = MemoryBankManager.getInstance(cwd)
       await manager.initialize()
 
       const filename = file as MemoryBankFile

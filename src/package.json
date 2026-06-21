@@ -164,6 +164,21 @@
         "command": "zoo-code.toggleAutoApprove",
         "title": "%command.toggleAutoApprove.title%",
         "category": "%configuration.title%"
+      },
+      {
+        "command": "zoo-code.initMemoryBank",
+        "title": "Memory Bank: Initialize",
+        "category": "%configuration.title%"
+      },
+      {
+        "command": "zoo-code.openMemoryBank",
+        "title": "Memory Bank: Open",
+        "category": "%configuration.title%"
+      },
+      {
+        "command": "zoo-code.updateMemoryBank",
+        "title": "Memory Bank: Update (UMB)",
+        "category": "%configuration.title%"
       }
     ],
     "menus": {

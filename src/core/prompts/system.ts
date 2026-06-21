@@ -100,9 +100,12 @@ Use the \`codebase_dependency\` tool to query the dependency graph before refact
  * Injected into the system prompt so the agent has immediate awareness of
  * project goals, decisions, and progress across sessions.
  */
-async function getMemoryBankSection(cwd: string): Promise<string> {
+async function getMemoryBankSection(cwd: string, experiments?: Partial<Experiments>): Promise<string> {
+	// Return empty if user explicitly disabled memory bank
+	if (experiments?.disableMemoryBank) return ""
+
 	try {
-		const manager = new MemoryBankManager(cwd)
+		const manager = MemoryBankManager.getInstance(cwd)
 		const exists = await manager.exists()
 		if (!exists) return ""
 
@@ -217,7 +220,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
 ${await getCodebaseMappingSection(cwd, context, experiments)}
-${await getMemoryBankSection(cwd)}
+${await getMemoryBankSection(cwd, experiments)}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}

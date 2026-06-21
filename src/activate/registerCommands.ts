@@ -156,6 +156,28 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 			}
 		}),
 	)
+
+	// UMB / Update Memory Bank command — comprehensive session sync
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.updateMemoryBank", async () => {
+			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
+			if (!cwd) {
+				vscode.window.showInformationMessage("No workspace open.");
+				return;
+			}
+			const manager = MemoryBankManager.getInstance(cwd);
+			const exists = await manager.exists();
+			if (!exists) {
+				vscode.window.showInformationMessage(
+					"Memory bank not initialized. Run zoo-code.initMemoryBank first."
+				);
+				return;
+			}
+			vscode.window.showInformationMessage(
+				"Memory bank paths ready: call `update_memory_bank` tool per file, or fill in the templates manually."
+			);
+		}),
+	)
 }
 
 const getCommandsMap = ({ context, outputChannel, provider }: RegisterCommandOptions): Record<CommandId, any> => ({

@@ -13,6 +13,7 @@ import { getModeBySlug } from "../../shared/modes"
 import { BaseTool, ToolCallbacks } from "./BaseTool"
 import { RequirementsVerifier } from "../../services/self-improving/RequirementsVerifier"
 import { VerificationEngine } from "../../services/self-improving/VerificationEngine"
+import { MemoryBankManager } from "../../services/memory-bank"
 
 interface AttemptCompletionParams {
 	result: string
@@ -873,6 +874,10 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			if (response === "yesButtonClicked") {
 				AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
+				// Auto-update memory bank on successful task completion (non-blocking)
+				if (task.cwd && result) {
+					this._updateMemoryBankOnCompletion(task.cwd, result).catch(() => {})
+				}
 				this.emitTaskCompleted(task, result)
 				return
 			}
@@ -894,6 +899,27 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Fix 3: Clean up child files on abort to prevent memory leak
 			AttemptCompletionTool.pruneChildFiles(task.taskId)
 			await handleError("inspecting site", error as Error)
+		}
+	}
+
+	/**
+	 * Auto-update memory bank when a task completes successfully.
+	 * Non-blocking — never throws.
+	 */
+	private async _updateMemoryBankOnCompletion(cwd: string, result: string): Promise<void> {
+		try {
+			const manager = MemoryBankManager.getInstance(cwd)
+			const exists = await manager.exists()
+			if (!exists) return
+
+			const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
+			await manager.updateFile(
+				"progress.md",
+				`### Task Completed (${timestamp})\n${result.trim()}\n`,
+				true,
+			)
+		} catch {
+			// Non-blocking — silent failure
 		}
 	}
 

@@ -114,9 +114,31 @@ export class MemoryBankManager {
   private _initialized: boolean = false
   private _contentCache: Map<MemoryBankFile, string> = new Map()
 
+  /** Singleton instances keyed by workspace path */
+  private static instances = new Map<string, MemoryBankManager>()
+
   constructor(cwd: string) {
     this.cwd = cwd
     this.memoryBankDir = path.join(cwd, MEMORY_BANK_DIR)
+  }
+
+  /**
+   * Get or create a MemoryBankManager for the given workspace path.
+   */
+  static getInstance(cwd: string): MemoryBankManager {
+    let inst = MemoryBankManager.instances.get(cwd)
+    if (!inst) {
+      inst = new MemoryBankManager(cwd)
+      MemoryBankManager.instances.set(cwd, inst)
+    }
+    return inst
+  }
+
+  /**
+   * Reset the cached instance for a workspace path (for testing / workspace switch).
+   */
+  static resetInstance(cwd: string): void {
+    MemoryBankManager.instances.delete(cwd)
   }
 
   /**

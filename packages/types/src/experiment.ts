@@ -38,6 +38,7 @@ export const experimentIds = [
 	"parallelSubtask",
 	"disableCodebaseDependency",
 	"disableOrchestratorWiring",
+	"disableMemoryBank",
 ] as const
 
 export const experimentIdsSchema = z.enum(experimentIds)
@@ -115,6 +116,8 @@ export const experimentsSchema = z.object({
 	parallelSubtask: z.boolean().optional(),
 	disableCodebaseDependency: z.boolean().optional(),
 	disableOrchestratorWiring: z.boolean().optional(),
+	/** If true, disables the memory bank feature (session context files). */
+	disableMemoryBank: z.boolean().optional(),
 
 	/**
 	 * Parallel subtask execution configuration.
