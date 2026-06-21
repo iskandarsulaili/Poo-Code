@@ -1,6 +1,8 @@
-## Poo Code (v3.57.0)
+## Poo Code (v3.56.3)
 
-Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
+Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline. I named it "Poo" because I don't know if it will work or not. In other words, it can either be total sh\\*t or become organic fertilizer that will take legacy "spaghetti code" and "crap architectures," breaks them down, and uses full AI automation to fertilize it into beautifully optimized, blooming software to flush out bad code so your codebase can grow.
+
+> **Release v3.56.3** — Major codebase mapping reliability fixes (see [Changelog](#changelog) below)
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
 > **⚠ EXPERIMENTAL** — This fork adds a full self-improving AI layer + parallel execution engine + codebase intelligence + verification system on top of Zoo-Code. All new features are gated behind experiment toggles. Enable at your own risk. Source: [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch.
@@ -224,6 +226,51 @@ Revenue generated so far: 0 and still counting zero
 Don't star this repo. It will just get me excited to drag you into the jobless community
 
 Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Org/Zoo-Code/issues as they know more than me (no cap)
+
+## Changelog
+
+### v3.56.3 — Codebase Mapping Reliability & UX Overhaul
+
+Complete rewrite of codebase mapping status system across 8 files.
+
+**Real scan status** — Previously always showed green "Ready" with zero stats.
+- Service: `_scanStatus` (`idle→scanning→completed`) properly mapped to UI (`idle→scanning→ready→error`)
+- All 3 status senders (`ClineProvider._sendCodebaseMappingStatus`, `requestCodebaseMappingStatus`, `refreshCodebaseMap`) now read real status instead of hardcoding `"ready"`
+- Empty graph (null currentGraph) no longer falsely reported as "ready" with zeros
+
+**Live progress indicator** — No feedback during long scans.
+- `_filesScanned` / `_totalFilesToScan` counters emit batched progress every 50 files
+- Progress bar in popover (CSS, shows percentage when `totalFileCount` known)
+- Live edge count (`_accumulatedEdges`) during scan instead of 0 until graph build
+- Scan message shows `Scanning... 234/1500 files, 890 edges`
+
+**Precise stats** — `Files: 0 Edges: 0 Cache hit rate: 0.0%`.
+- `scanWorkspace()` checks cache before parse (`getAST()`/`getSymbols()` first) so cache hits accumulate on re-scan
+- Cache hit rate now correctly >0% on subsequent scans after file saves
+- `totalFileCount?: number` added to `CodebaseMappingStatus` type, populated in all status payloads
+
+**Concurrency & safety** — Scan corruption, stuck status, handler leaks.
+- `_scanInProgress` guard prevents overlapping scans (save watcher + folder change + manual refresh)
+- `_pendingRescan` flag: if a save/delete/folder-change arrives during scan, it's queued and re-triggered in `finally`
+- Full try/catch/finally: critical disk errors don't leave status stuck on "scanning"
+- `offEvent()` added to service + interface; progress handlers properly unregistered on re-subscribe and dispose
+- Dispose resets `_scanStatus`, `_scanInProgress`, `_pendingRescan`
+- `refreshCodebaseMap` handler wrapped in try/catch — no silent hangs on scan failure
+
+**Performance** — Double filesystem walk removed.
+- `_rootFileCache` caches `discoverFiles()` results from pre-count pass for reuse in scan loop
+- Saves ~50K `stat()` calls per scan on large monorepos
+
+**Install compatibility** — `"Invalid extension detected"`.
+- `engines.node` changed from exact `"20.20.2"` to range `">=20.20.2"` — VS Code 1.124 snap bundles different Node patch version
+
+### v3.56.2 — Initial codebase mapping fixes + VSIX packaging
+
+- Wire codebase mapping service to webview status updates
+- Fix `defaultNS: "common"` for webview dashboard i18n
+- Various self-improving and orchestrator bug fixes
+
+---
 
 ## FAQ
 
