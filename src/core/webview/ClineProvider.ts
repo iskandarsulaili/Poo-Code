@@ -3831,11 +3831,19 @@ export class ClineProvider
 						: graph.files.size
 				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
 
+				// Use provisional edge count during scan, real edge count after graph build
+				const edgeCount =
+					uiStatus === "scanning" && svc._accumulatedEdges > 0
+						? svc._accumulatedEdges
+						: graph.edges.length
+				// Cache hit rate is always from stats — it's cumulative
+				const cacheHitRate = stats.astHitRate
+
 				let message: string | undefined
 				if (uiStatus === "scanning") {
 					message = totalFiles
-						? `Scanning... ${fileCount}/${totalFiles} files`
-						: `Scanning... ${fileCount} files`
+						? `Scanning... ${fileCount}/${totalFiles} files, ${edgeCount} edges`
+						: `Scanning... ${fileCount} files, ${edgeCount} edges`
 				} else if (svc._lastScanErrors > 0) {
 					message = `${svc._lastScanErrors} parse errors`
 				}
@@ -3845,9 +3853,10 @@ export class ClineProvider
 					values: {
 						status: uiStatus,
 						fileCount,
-						edgeCount: graph.edges.length,
+						totalFileCount: totalFiles,
+						edgeCount,
 						deadSymbolCount: deadCode.length,
-						cacheHitRate: stats.astHitRate,
+						cacheHitRate,
 						message,
 					},
 				})

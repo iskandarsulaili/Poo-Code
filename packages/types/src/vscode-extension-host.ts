@@ -826,6 +826,7 @@ export interface IndexingStatusUpdateMessage {
 export interface CodebaseMappingStatus {
 	status: "idle" | "scanning" | "ready" | "error"
 	fileCount: number
+	totalFileCount?: number
 	edgeCount: number
 	deadSymbolCount: number
 	cacheHitRate: number

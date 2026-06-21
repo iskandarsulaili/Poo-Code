@@ -2763,11 +2763,18 @@ export const webviewMessageHandler = async (
 						: graph.files.size
 				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
 
+				// Use provisional edge count during scan, real edges after graph build
+				const edgeCount =
+					uiStatus === "scanning" && svc._accumulatedEdges > 0
+						? svc._accumulatedEdges
+						: graph.edges.length
+				const cacheHitRate = stats.astHitRate
+
 				let message: string | undefined
 				if (uiStatus === "scanning") {
 					message = totalFiles
-						? `Scanning... ${fileCount}/${totalFiles} files`
-						: `Scanning... ${fileCount} files`
+						? `Scanning... ${fileCount}/${totalFiles} files, ${edgeCount} edges`
+						: `Scanning... ${fileCount} files, ${edgeCount} edges`
 				} else if (svc._lastScanErrors > 0) {
 					message = `${svc._lastScanErrors} parse errors`
 				}
@@ -2777,9 +2784,10 @@ export const webviewMessageHandler = async (
 					values: {
 						status: uiStatus,
 						fileCount,
-						edgeCount: graph.edges.length,
+						totalFileCount: totalFiles,
+						edgeCount,
 						deadSymbolCount: deadCode.length,
-						cacheHitRate: stats.astHitRate,
+						cacheHitRate,
 						message,
 					},
 				})
@@ -2833,6 +2841,12 @@ export const webviewMessageHandler = async (
 						? svc._filesScanned
 						: graph.files.size
 
+				// Use provisional edges if available (post-scan no provisional needed, graph is built)
+				const edgeCount =
+					graph.edges.length > 0
+						? graph.edges.length
+						: svc._accumulatedEdges
+
 				let message: string | undefined = `Refreshed ${instances.length} workspace(s)`
 				if (svc._lastScanErrors > 0) {
 					message += `, ${svc._lastScanErrors} parse errors`
@@ -2843,7 +2857,8 @@ export const webviewMessageHandler = async (
 					values: {
 						status: uiStatus,
 						fileCount,
-						edgeCount: graph.edges.length,
+						totalFileCount: svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined,
+						edgeCount,
 						deadSymbolCount: deadCode.length,
 						cacheHitRate: stats.astHitRate,
 						message,

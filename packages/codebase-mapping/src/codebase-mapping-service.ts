@@ -58,6 +58,10 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   public _filesScanned: number = 0;
   /** Total file count for the current workspace scan */
   public _totalFilesToScan: number = 0;
+  /** Provisional edge count accumulated during scanning (before graph build) */
+  public _accumulatedEdges: number = 0;
+  /** Cached file list from pre-count pass, reused in scan loop to avoid double walk */
+  private _rootFileCache: Map<string, string[]>;
 
   constructor(options?: CodebaseMappingOptions) {
     this.config = { ...DEFAULT_CONFIG, ...options };
@@ -80,6 +84,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.currentGraph = null;
     this.deadCodeResults = [];
     this.compressedResults = [];
+    this._rootFileCache = new Map();
   }
 
   async initialize(options?: CodebaseMappingOptions): Promise<void> {
@@ -100,6 +105,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this._lastScanErrors = 0;
     this._filesScanned = 0;
     this._totalFilesToScan = 0;
+    this._accumulatedEdges = 0;
+    this._rootFileCache.clear();
 
     this.allParseResults.clear();
     this.allSymbols.clear();
@@ -110,9 +117,11 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     const allFileNodes: FileNode[] = [];
     const allEdges: import("./types.js").DependencyEdge[] = [];
 
-    // Count total files first
+    // Single pre-count pass: cache file lists to avoid double filesystem walk
+    this._rootFileCache = new Map();
     for (const rootPath of this.config.workspaceRoots) {
       const files = await this.fileDiscovery.discoverFiles(rootPath);
+      this._rootFileCache.set(rootPath, files);
       this._totalFilesToScan += files.length;
     }
     this.logger.info(`Total files to scan: ${this._totalFilesToScan}`);
@@ -122,7 +131,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
     for (const rootPath of this.config.workspaceRoots) {
       this.logger.info(`Scanning root: ${rootPath}`);
-      const files = await this.fileDiscovery.discoverFiles(rootPath);
+      const files = this._rootFileCache.get(rootPath) ?? [];
       this.logger.info(`Found ${files.length} files in ${rootPath}`);
 
       for (const filePath of files) {
@@ -163,6 +172,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
           allFileNodes.push(fileNode);
 
           this._filesScanned++;
+          this._accumulatedEdges = allEdges.length;
           filesSinceLastProgress++;
 
           // Emit batched progress every PROGRESS_INTERVAL files
@@ -175,6 +185,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
                 symbolsFound: symbols.length,
                 filesScanned: this._filesScanned,
                 totalFiles: this._totalFilesToScan,
+                edgesAccumulated: this._accumulatedEdges,
               },
             });
             filesSinceLastProgress = 0;

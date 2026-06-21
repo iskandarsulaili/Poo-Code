@@ -107,6 +107,24 @@ export const CodebaseMappingPopover: React.FC<CodebaseMappingPopoverProps> = ({
 								? ` - ${mappingStatus.message}`
 								: ""}
 						</div>
+						{/* Progress bar: visible when scanning and totalFileCount is known */}
+						{mappingStatus.status === "scanning" &&
+							mappingStatus.totalFileCount != null &&
+							mappingStatus.totalFileCount > 0 && (
+								<div className="w-full h-1.5 bg-vscode-dropdown-border rounded-full overflow-hidden mt-1">
+									<div
+										className="h-full bg-vscode-statusBarItem-prominentForeground rounded-full transition-all duration-300 ease-out"
+										style={{
+											width: `${Math.min(
+												100,
+												Math.round(
+													(mappingStatus.fileCount / mappingStatus.totalFileCount) * 100,
+												),
+											)}%`,
+										}}
+									/>
+								</div>
+							)}
 					</div>
 
 					{/* Stats Section */}
