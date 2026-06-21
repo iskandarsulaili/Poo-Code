@@ -567,6 +567,16 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "update_memory_bank":
+				if (partialArgs.file !== undefined || partialArgs.content !== undefined) {
+					nativeArgs = {
+						file: partialArgs.file,
+						content: partialArgs.content,
+						mode: partialArgs.mode,
+					}
+				}
+				break
+
 			case "switch_mode":
 				if (partialArgs.mode_slug !== undefined || partialArgs.reason !== undefined) {
 					nativeArgs = {

@@ -54,6 +54,7 @@ export const toolNames = [
 	"execute_parallel_subtask",
 	"execute_parallel_child_task",
 	"codebase_dependency",
+	"update_memory_bank",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

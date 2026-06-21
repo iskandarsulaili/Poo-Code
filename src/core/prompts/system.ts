@@ -13,6 +13,7 @@ import { CodeIndexManager } from "../../services/code-index/manager"
 import { SkillsManager } from "../../services/skills/SkillsManager"
 import { SelfImprovingManager, type PromptContext } from "../../services/self-improving"
 import { CodebaseMappingManager } from "../../services/codebase-mapping"
+import { MemoryBankManager } from "../../services/memory-bank"
 
 import type { SystemPromptSettings } from "./types"
 import {
@@ -89,6 +90,26 @@ Use the \`codebase_dependency\` tool to query the dependency graph before refact
 - \`codebase_dependency(action="module_map", module="src/feature")\` — module overview
 - \`codebase_dependency(action="dead_symbols")\` — find unreferenced code
 - \`codebase_dependency(action="cycles")\` — detect circular dependencies`
+	} catch {
+		return ""
+	}
+}
+
+/**
+ * Build a memory bank context section from the project's memory-bank/ directory.
+ * Injected into the system prompt so the agent has immediate awareness of
+ * project goals, decisions, and progress across sessions.
+ */
+async function getMemoryBankSection(cwd: string): Promise<string> {
+	try {
+		const manager = new MemoryBankManager(cwd)
+		const exists = await manager.exists()
+		if (!exists) return ""
+
+		const context = await manager.getMemoryBankContext()
+		if (!context) return ""
+
+		return `\n${context}`
 	} catch {
 		return ""
 	}
@@ -196,6 +217,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
 ${await getCodebaseMappingSection(cwd, context, experiments)}
+${await getMemoryBankSection(cwd)}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}

@@ -39,6 +39,7 @@ import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { codebaseDependencyTool } from "../tools/CodebaseDependencyTool"
+import { updateMemoryBankTool } from "../tools/UpdateMemoryBankTool"
 import { webFetchTool } from "../tools/WebFetchTool"
 import { webSearchTool } from "../tools/WebSearchTool"
 import { webExtractTool } from "../tools/WebExtractTool"
@@ -376,6 +377,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.query}']`
 					case "codebase_dependency":
 						return `[${block.name}: ${block.params.action}${block.params.target ? ` on '${block.params.target}'` : ""}]`
+					case "update_memory_bank":
+						return `[${block.name} to '${block.params.file}']`
 					case "read_command_output":
 						return `[${block.name} for '${block.params.artifact_id}']`
 					case "update_todo_list":
@@ -804,6 +807,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_dependency":
 					await codebaseDependencyTool.handle(cline, block as ToolUse<"codebase_dependency">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "update_memory_bank":
+					await updateMemoryBankTool.handle(cline, block as ToolUse<"update_memory_bank">, {
 						askApproval,
 						handleError,
 						pushToolResult,

@@ -15,6 +15,7 @@ import { importSettingsWithFeedback } from "../core/config/importExport"
 import { MdmService } from "../services/mdm/MdmService"
 import { t } from "../i18n"
 import { CodebaseMappingManager } from "../services/codebase-mapping"
+import { MemoryBankManager, MEMORY_BANK_DIR } from "../services/memory-bank"
 
 /**
  * Helper to get the visible ClineProvider instance or log if not found.
@@ -121,6 +122,38 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 				language: "markdown",
 			});
 			vscode.window.showTextDocument(doc);
+		}),
+	)
+
+	// Memory Bank Commands
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.initMemoryBank", async () => {
+			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
+			if (!cwd) {
+				vscode.window.showInformationMessage("No workspace open.");
+				return;
+			}
+			const manager = new MemoryBankManager(cwd);
+			await manager.initialize();
+			vscode.window.showInformationMessage(
+				`Memory bank initialized in ${MEMORY_BANK_DIR}/ — 5 files created with templates.`
+			);
+		}),
+	)
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.openMemoryBank", async () => {
+			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
+			if (!cwd) {
+				vscode.window.showInformationMessage("No workspace open.");
+				return;
+			}
+			const mbDir = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, MEMORY_BANK_DIR)
+			try {
+				await vscode.commands.executeCommand("revealInExplorer", mbDir)
+			} catch {
+				vscode.env.openExternal(mbDir)
+			}
 		}),
 	)
 }

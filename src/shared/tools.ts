@@ -201,6 +201,7 @@ export type NativeToolArgs = {
 		maxParallel?: number
 	}
 	codebase_dependency: { action: string; target: string | null; module: string | null; limit?: number | null }
+	update_memory_bank: { file: string; content: string; mode?: "append" | "replace" }
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -394,6 +395,7 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	attempt_completion: "complete tasks",
 	switch_mode: "switch modes",
 	codebase_dependency: "query the project dependency graph",
+	update_memory_bank: "update persistent project context (memory bank)",
 	new_task: "create new task",
 	codebase_search: "codebase search",
 	update_todo_list: "update todo list",
@@ -445,6 +447,7 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"skill",
 	"skill_manage",
 	"codebase_dependency",
+	"update_memory_bank",
 	"execute_parallel_subtask",
 	"execute_parallel_child_task",
 	"list_files",

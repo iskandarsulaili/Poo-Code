@@ -28,6 +28,7 @@ import webExtract from "./web_extract"
 import executeParallelSubtask from "./execute_parallel_subtask"
 import executeParallelChildTask from "./execute_parallel_child_task"
 import codebaseDependency from "./codebase_dependency"
+import updateMemoryBank from "./update_memory_bank"
 
 export { getMcpServerTools } from "./mcp_server"
 export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
@@ -84,7 +85,8 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		executeParallelSubtask,
 		executeParallelChildTask,
 	codebaseDependency,
-	] satisfies OpenAI.Chat.ChatCompletionTool[]
+	updateMemoryBank,
+] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
 
 // Backward compatibility: export default tools with line ranges enabled
