@@ -55,7 +55,6 @@ interface ApiToolUseBlock {
  */
 interface ApiMessage {
 	role: "user" | "assistant"
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	content: string | any[]
 	ts?: number
 }

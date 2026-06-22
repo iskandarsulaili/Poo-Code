@@ -3,7 +3,6 @@ import { BookMarked } from "lucide-react"
 
 import { cn } from "@src/lib/utils"
 import { vscode } from "@src/utils/vscode"
-import { useAppTranslation } from "@src/i18n/TranslationContext"
 
 import { Popover, PopoverContent, PopoverTrigger, StandardTooltip, Button } from "@src/components/ui"
 
@@ -16,7 +15,6 @@ interface MemoryBankStatus {
 }
 
 export const MemoryBankStatusBadge: React.FC<{ className?: string }> = ({ className }) => {
-	const { t } = useAppTranslation()
 	const [open, setOpen] = useState(false)
 	const [status, setStatus] = useState<MemoryBankStatus>({
 		exists: false,

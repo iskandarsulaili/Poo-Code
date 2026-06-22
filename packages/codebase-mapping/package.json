@@ -26,6 +26,7 @@
     "minimatch": "^10.0.1"
   },
   "devDependencies": {
+    "@roo-code/config-eslint": "workspace:^",
     "@types/node": "^22.13.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.3",

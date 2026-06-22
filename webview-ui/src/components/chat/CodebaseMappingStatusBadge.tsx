@@ -5,7 +5,6 @@ import type { CodebaseMappingStatus } from "@roo-code/types"
 
 import { cn } from "@src/lib/utils"
 import { vscode } from "@src/utils/vscode"
-import { useAppTranslation } from "@src/i18n/TranslationContext"
 
 import { useExtensionState } from "@src/context/ExtensionStateContext"
 import { PopoverTrigger, StandardTooltip, Button } from "@src/components/ui"
@@ -17,7 +16,6 @@ interface CodebaseMappingStatusBadgeProps {
 }
 
 export const CodebaseMappingStatusBadge: React.FC<CodebaseMappingStatusBadgeProps> = ({ className }) => {
-	const { t } = useAppTranslation()
 	const { cwd } = useExtensionState()
 
 	const [mappingStatus, setMappingStatus] = useState<CodebaseMappingStatus>({
