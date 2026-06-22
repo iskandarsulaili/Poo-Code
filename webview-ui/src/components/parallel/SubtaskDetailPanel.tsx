@@ -1,6 +1,6 @@
 import React from "react"
 import { useTranslation } from "react-i18next"
-import SubtaskCard from "./SubtaskCard"
+import _SubtaskCard from "./SubtaskCard"
 import type { SubtaskNode } from "@roo-code/types"
 
 interface SubtaskDetailPanelProps {

@@ -20,7 +20,7 @@ const statusColors: Record<string, string> = {
 	timed_out: "#f48771",
 }
 
-const DAGVisualization: React.FC<DAGVisualizationProps> = ({ nodes, waves, selectedId, onSelectNode }) => {
+const DAGVisualization: React.FC<DAGVisualizationProps> = ({ nodes: _nodes, waves, selectedId, onSelectNode }) => {
 	const { t } = useTranslation()
 	if (waves.length === 0) {
 		return (

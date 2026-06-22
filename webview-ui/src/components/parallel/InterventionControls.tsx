@@ -33,7 +33,7 @@ const InterventionControls: React.FC<InterventionControlsProps> = ({
 	const isRunning = status === "running"
 	const isPending = status === "pending" || status === "ready"
 	const isFailed = status === "failed" || status === "timed_out"
-	const isCompleted = status === "completed"
+	const _isCompleted = status === "completed"
 	const isSkipped = status === "skipped" || status === "blocked"
 
 	return (
