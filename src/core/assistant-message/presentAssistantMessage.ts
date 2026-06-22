@@ -39,6 +39,7 @@ import { applyDiffTool as applyDiffToolClass } from "../tools/ApplyDiffTool"
 import { isValidToolName, validateToolUse } from "../tools/validateToolUse"
 import { codebaseSearchTool } from "../tools/CodebaseSearchTool"
 import { codebaseDependencyTool } from "../tools/CodebaseDependencyTool"
+import { codebaseMappingQueryTool } from "../tools/CodebaseMappingQueryTool"
 import { updateMemoryBankTool } from "../tools/UpdateMemoryBankTool"
 import { webFetchTool } from "../tools/WebFetchTool"
 import { webSearchTool } from "../tools/WebSearchTool"
@@ -377,6 +378,8 @@ export async function presentAssistantMessage(cline: Task) {
 						return `[${block.name} for '${block.params.query}']`
 					case "codebase_dependency":
 						return `[${block.name}: ${block.params.action}${block.params.target ? ` on '${block.params.target}'` : ""}]`
+					case "codebase_mapping_query":
+						return `[${block.name}: ${block.params.action}]`
 					case "update_memory_bank":
 						return `[${block.name} to '${block.params.file}']`
 					case "read_command_output":
@@ -807,6 +810,13 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "codebase_dependency":
 					await codebaseDependencyTool.handle(cline, block as ToolUse<"codebase_dependency">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "codebase_mapping_query":
+					await codebaseMappingQueryTool.handle(cline, block as ToolUse<"codebase_mapping_query">, {
 						askApproval,
 						handleError,
 						pushToolResult,

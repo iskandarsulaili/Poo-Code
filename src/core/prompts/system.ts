@@ -1,4 +1,5 @@
 import * as vscode from "vscode"
+import * as path from "path"
 import type { Experiments } from "@roo-code/types"
 
 import { type ModeConfig, type PromptComponent, type CustomModePrompts, type TodoItem } from "@roo-code/types"
@@ -89,7 +90,10 @@ Use the \`codebase_dependency\` tool to query the dependency graph before refact
 - \`codebase_dependency(action="file_info", target="src/file.ts")\` — detailed file analysis
 - \`codebase_dependency(action="module_map", module="src/feature")\` — module overview
 - \`codebase_dependency(action="dead_symbols")\` — find unreferenced code
-- \`codebase_dependency(action="cycles")\` — detect circular dependencies`
+- \`codebase_dependency(action="cycles")\` — detect circular dependencies
+\`codebase_mapping_query(action="schema")\` — codebase mapping types/schema
+\`codebase_mapping_query(action="formats")\` — export formats
+\`codebase_mapping_query(action="stats")\` — scan stats and cache info`
 	} catch {
 		return ""
 	}

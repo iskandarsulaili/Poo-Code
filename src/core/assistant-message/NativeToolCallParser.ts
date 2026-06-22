@@ -567,6 +567,14 @@ export class NativeToolCallParser {
 				}
 				break
 
+			case "codebase_mapping_query":
+				if (partialArgs.action !== undefined) {
+					nativeArgs = {
+						action: partialArgs.action,
+					}
+				}
+				break
+
 			case "update_memory_bank":
 				if (partialArgs.file !== undefined || partialArgs.content !== undefined) {
 					nativeArgs = {
