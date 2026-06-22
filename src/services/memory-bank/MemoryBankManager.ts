@@ -27,6 +27,12 @@ export const MEMORY_BANK_FILES = [
 
 export type MemoryBankFile = typeof MEMORY_BANK_FILES[number]
 
+/** Max size for append-only files (decisionLog.md, progress.md) before auto-truncation */
+export const MAX_APPEND_FILE_SIZE_BYTES = 100 * 1024 // 100 KB
+
+/** Lines to retain from the start when truncating (the header/template) */
+const TRUNCATE_RETAIN_HEADER_LINES = 10
+
 interface MemoryBankFileMeta {
   /** Short label for tool display */
   label: string
@@ -131,6 +137,7 @@ export class MemoryBankManager {
 
   /**
    * Initialize memory bank: create directory + template files if missing.
+   * Also updates .gitignore with memory-bank/ entry if needed.
    * Safe to call multiple times — skips existing files.
    */
   async initialize(): Promise<void> {
@@ -149,6 +156,9 @@ export class MemoryBankManager {
         }
       }
 
+      // Ensure .gitignore has memory-bank/ entry
+      await this._ensureGitignoreEntry()
+
       this._initialized = true
     } catch (err) {
       console.error("[MemoryBankManager] Initialization failed:", err)
@@ -156,7 +166,8 @@ export class MemoryBankManager {
   }
 
   /**
-   * Check if memory-bank directory exists and has files
+   * Check if memory-bank directory exists and has files.
+   * If not, auto-initialize (creates templates and .gitignore entry).
    */
   async exists(): Promise<boolean> {
     try {
@@ -166,7 +177,18 @@ export class MemoryBankManager {
       }
       return true
     } catch {
-      return false
+      // Auto-initialize on first check — creates templates if they don't exist
+      await this.initialize()
+      // Check again
+      try {
+        await fs.access(this.memoryBankDir)
+        for (const filename of MEMORY_BANK_FILES) {
+          await fs.access(path.join(this.memoryBankDir, filename))
+        }
+        return true
+      } catch {
+        return false
+      }
     }
   }
 
@@ -187,6 +209,7 @@ export class MemoryBankManager {
   /**
    * Update a memory bank file.
    * If appendMode is true and content is not a full replacement, appends with timestamp.
+   * Automatically truncates append-only files (decisionLog.md, progress.md) if they exceed MAX_APPEND_FILE_SIZE_BYTES.
    * Otherwise replaces the entire file.
    */
   async updateFile(
@@ -203,7 +226,13 @@ export class MemoryBankManager {
 
     if (shouldAppend && !content.startsWith("#")) {
       // Append mode: read existing content and add new section with timestamp
-      const existing = await this.readFile(filename)
+      let existing = await this.readFile(filename)
+
+      // Auto-truncate append-only files that exceed size limit
+      if (meta.appendMode) {
+        existing = await this._truncateIfNeeded(filename, existing)
+      }
+
       const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
       const separator = existing.endsWith("\n") ? "" : "\n"
       await fs.writeFile(
@@ -217,6 +246,71 @@ export class MemoryBankManager {
     }
 
     this._contentCache.set(filename, content)
+  }
+
+  /**
+   * Truncate an append-only file if it exceeds the max size.
+   * Keeps the first TRUNCATE_RETAIN_HEADER_LINES lines as header,
+   * then keeps the most recent entries up to the limit.
+   */
+  private async _truncateIfNeeded(filename: MemoryBankFile, content: string): Promise<string> {
+    const filePath = path.join(this.memoryBankDir, filename)
+    try {
+      const stat = await fs.stat(filePath)
+      if (stat.size <= MAX_APPEND_FILE_SIZE_BYTES) return content
+
+      console.warn(`[MemoryBankManager] ${filename} is ${stat.size} bytes, truncating to ${MAX_APPEND_FILE_SIZE_BYTES} bytes`)
+
+      const lines = content.split("\n")
+      const header = lines.slice(0, TRUNCATE_RETAIN_HEADER_LINES).join("\n")
+      const body = lines.slice(TRUNCATE_RETAIN_HEADER_LINES)
+
+      // Keep the newest entries (take from end, not start)
+      // Estimate 200 bytes per entry, calculate how many to keep
+      const maxBodySize = MAX_APPEND_FILE_SIZE_BYTES - header.length - 200 // 200 bytes safety margin
+      let keptSize = 0
+      const keptLines: string[] = []
+
+      for (let i = body.length - 1; i >= 0; i--) {
+        const lineCost = body[i].length + 1 // +1 for newline
+        if (keptSize + lineCost > maxBodySize) break
+        keptLines.unshift(body[i])
+        keptSize += lineCost
+      }
+
+      const truncated = keptLines.length > 0
+        ? `${header}\n\n<!-- Older entries truncated (file exceeded ${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB limit) -->\n\n${keptLines.join("\n")}\n`
+        : `${header}\n\n<!-- File truncated to header only (exceeded ${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB limit) -->\n`
+
+      // Write truncated version
+      await fs.writeFile(filePath, truncated, "utf-8")
+      return truncated
+    } catch {
+      return content
+    }
+  }
+
+  /**
+   * Ensure .gitignore has a memory-bank/ entry.
+   * Creates .gitignore if it doesn't exist.
+   */
+  private async _ensureGitignoreEntry(): Promise<void> {
+    const gitignorePath = path.join(this.cwd, ".gitignore")
+    try {
+      let content = ""
+      try {
+        content = await fs.readFile(gitignorePath, "utf-8")
+      } catch {
+        // .gitignore doesn't exist, we'll create it
+      }
+
+      const entry = `\n# Memory bank — per-session project context\n${MEMORY_BANK_DIR}/\n`
+      if (!content.includes(MEMORY_BANK_DIR)) {
+        await fs.writeFile(gitignorePath, content + entry, "utf-8")
+      }
+    } catch {
+      // Non-blocking — .gitignore is optional
+    }
   }
 
   /**
@@ -254,6 +348,13 @@ Update it with the \`update_memory_bank\` tool whenever you:
 - Change core product understanding (→ productContext.md)
 
 ${sections.join("\n\n")}`
+  }
+
+  /**
+   * Reset all cached instances (for workspace switch / shutdown).
+   */
+  static resetAllInstances(): void {
+    MemoryBankManager.instances.clear()
   }
 
   /** Cached initialized status */

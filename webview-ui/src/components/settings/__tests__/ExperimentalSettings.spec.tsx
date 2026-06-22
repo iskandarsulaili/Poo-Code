@@ -107,9 +107,9 @@ import { ExperimentalSettings } from "../ExperimentalSettings"
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("ExperimentalSettings — data structure integrity", () => {
-	it("experimentConfigsMap has exactly 31 entries", () => {
+	it("experimentConfigsMap has exactly 32 entries", () => {
 		const keys = Object.keys(experimentConfigsMap)
-		expect(keys).toHaveLength(31)
+		expect(keys).toHaveLength(32)
 	})
 
 	it("all experimentConfigsMap keys are valid ExperimentKeys", () => {

@@ -101,7 +101,7 @@ const CATEGORIES: ExperimentCategory[] = [
 		key: "memory",
 		labelKey: "settings:experimental.categories.memory",
 		descriptionKey: "settings:experimental.categories.memoryDescription",
-		experimentKeys: [],
+		experimentKeys: ["DISABLE_MEMORY_BANK"],
 	},
 	{
 		key: "infrastructure",

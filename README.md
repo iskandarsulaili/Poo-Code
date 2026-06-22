@@ -1,8 +1,8 @@
-## Poo Code (v3.57.1)
+## Poo Code (v3.57.3)
 
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline.
 
-> **Release v3.57.1** — Memory Bank: singleton, toggle, auto-update, UMB (see [Changelog](#changelog) below)
+> **Release v3.57.3** — Settings toggle, auto-init, .gitignore, file truncation (see [Changelog](#changelog) below)
 
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
@@ -230,28 +230,31 @@ Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Or
 
 ## Changelog
 
-### v3.57.1 — Memory Bank: Singleton, Experiment Toggle, Auto-Update, UMB
+### v3.57.3 — Memory Bank: Settings Toggle, Auto-Init, .gitignore, File Truncation
 
-4 remaining blind spots from the initial memory bank implementation:
+**Settings UI toggle** — `disableMemoryBank` experiment now appears in
+the Experimental Settings panel under "Memory" category. Turn off to
+remove memory bank from system prompt and hide the update_memory_bank
+tool. i18n entries added to English locale.
 
-**Singleton** — MemoryBankManager now uses static `getInstance(cwd)` with
-per-workspace cache. Tool handler and system prompt both use it.
-No wasteful re-initialization on every tool call.
+**Auto-initialization** — `exists()` now auto-creates template files on
+first check if the memory-bank directory doesn't exist. No need to
+manually run `zoo-code.initMemoryBank` anymore.
 
-**Experiment toggle** — New `disableMemoryBank` experiment toggle:
-- Gated in system prompt injection (empty section when disabled)
-- Gated in tool filtering (tool removed from allowed set when disabled)
-- Auto-detected by Settings UI from schema
+**.gitignore management** — `initialize()` adds `memory-bank/` entry
+to `.gitignore` automatically. Creates .gitignore if it doesn't exist.
+Prevents session-specific state from being committed to version control.
 
-**Auto-update on completion** — When user confirms `attempt_completion`,
-the task result is automatically appended to `progress.md` with
-timestamp. Non-blocking fire-and-forget — never blocks completion flow.
+**File truncation** — Append-only files (decisionLog.md, progress.md)
+are automatically truncated when they exceed 100KB. Keeps the header
+and the most recent entries. Old entries are replaced with a notice.
+Prevents unbounded growth that wastes context window.
 
-**UMB command** — New `zoo-code.updateMemoryBank` command in palette.
-All 3 memory bank commands now registered in package.json for
-discoverability: Initialize, Open, Update (UMB).
+**Workspace switch cleanup** — `MemoryBankManager.resetAllInstances()`
+called on workspace change via `ClineProvider.updateCodeIndexStatusSubscription()`.
+Stale cached instances are cleared when switching projects.
 
-### v3.57.0 — Memory Bank: Persistent Project Context
+### v3.57.2 — Memory Bank: 4 formatting and blind-spot fixes
 
 New feature inspired by roo-code-memory-bank methodology — structured markdown files
 that preserve project context across sessions.

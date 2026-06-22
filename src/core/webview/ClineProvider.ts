@@ -75,6 +75,7 @@ import { MarketplaceManager } from "../../services/marketplace"
 import { ShadowCheckpointService } from "../../services/checkpoints/ShadowCheckpointService"
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { CodebaseMappingManager } from "../../services/codebase-mapping"
+import { MemoryBankManager } from "../../services/memory-bank"
 import type { IndexProgressUpdate } from "../../services/code-index/interfaces/manager"
 import { MdmService } from "../../services/mdm/MdmService"
 import {
@@ -2956,6 +2957,8 @@ export class ClineProvider
 		this._sendCodebaseMappingStatus()
 		// Subscribe to ongoing mapping progress events
 		this._subscribeCodebaseMappingProgress()
+		// Reset memory bank instance on workspace switch so stale cached state isn't reused
+		MemoryBankManager.resetAllInstances()
 	}
 
 	/**

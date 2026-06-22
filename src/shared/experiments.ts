@@ -34,6 +34,7 @@ export const EXPERIMENT_IDS = {
 	PARALLEL_SUBTASK: "parallelSubtask",
 	DISABLE_CODEBASE_DEPENDENCY: "disableCodebaseDependency",
 	DISABLE_ORCHESTRATOR_WIRING: "disableOrchestratorWiring",
+	DISABLE_MEMORY_BANK: "disableMemoryBank",
 } as const satisfies Record<string, ExperimentId>
 
 type ExperimentKey = Keys<typeof EXPERIMENT_IDS>
@@ -76,6 +77,7 @@ export const experimentConfigsMap: Record<ExperimentKey, ExperimentConfig> = {
 	PARALLEL_SUBTASK: { enabled: true },
 	DISABLE_CODEBASE_DEPENDENCY: { enabled: true },
 	DISABLE_ORCHESTRATOR_WIRING: { enabled: true },
+	DISABLE_MEMORY_BANK: { enabled: false },
 }
 
 export const experimentDefault = Object.fromEntries(

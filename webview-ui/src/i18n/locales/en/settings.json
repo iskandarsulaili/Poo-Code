@@ -1042,6 +1042,10 @@
 			"maxParallelLabel": "Max Parallel Subtasks",
 			"heartbeatLabel": "Heartbeat Interval (ms)",
 			"lockTimeoutLabel": "Lock Timeout (ms)"
+		},
+		"DISABLE_MEMORY_BANK": {
+			"name": "Disable Memory Bank",
+			"description": "When enabled, the memory bank feature (persistent project context files in memory-bank/) is disabled. The update_memory_bank tool is removed and session context files are not loaded."
 		}
 	},
 	"promptCaching": {
