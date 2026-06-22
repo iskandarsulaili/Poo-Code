@@ -100,6 +100,8 @@ export class ParallelSubtaskOrchestrator {
 	private abortRequested = false
 	private maxParallel: number
 	private heartbeatTimer: NodeJS.Timeout | null = null
+	/** Guard against concurrent execute() calls */
+	private _executing = false
 
 	/**
 	 * Real subtask executor — calls task.startSubtask() to spawn a child agent.
@@ -170,6 +172,12 @@ export class ParallelSubtaskOrchestrator {
 	 * @returns The final SubtaskDAG with execution results
 	 */
 	async execute(tasks: SubtaskNode[]): Promise<SubtaskDAG> {
+		if (this._executing) {
+			throw new Error(
+				"[ParallelSubtaskOrchestrator] execute() called while already executing — concurrent calls not supported",
+			)
+		}
+		this._executing = true
 		const correlationId = CorrelationIdManager.generate()
 		CorrelationIdManager.set(correlationId)
 
@@ -245,6 +253,7 @@ export class ParallelSubtaskOrchestrator {
 			dag.status = "failed"
 		} finally {
 			this.isRunning = false
+			this._executing = false
 			this.stopHeartbeatMonitor()
 			this.lockManager.cleanupAllHeartbeats()
 		}
@@ -547,6 +556,8 @@ export class ParallelSubtaskOrchestrator {
 				const heartbeatInterval = setInterval(() => {
 					this.lockManager.touchHeartbeat(heartbeatPath)
 				}, 5000)
+				// Don't keep Node process alive for heartbeat refresh
+				heartbeatInterval.unref()
 
 				try {
 					const result = await this.subtaskExecutor({
@@ -705,6 +716,13 @@ export class ParallelSubtaskOrchestrator {
 			}
 
 			if (!this.lockManager.isHeartbeatAlive(node.metadata.heartbeatPath)) {
+				// TOCTOU guard: subtask may have completed between status check and heartbeat check
+				// (executeSingleSubtask's finally block deletes the heartbeat file on completion).
+				// Re-check status — if no longer running, the completion was legitimate.
+				if (node.status !== "running") {
+					continue
+				}
+
 				this.logAggregator.log({
 					correlationId: CorrelationIdManager.get(),
 					subtaskId: node.id,
