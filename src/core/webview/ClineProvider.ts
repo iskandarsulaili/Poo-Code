@@ -3783,7 +3783,7 @@ export class ClineProvider
 		if (instances.length === 0) return
 
 		this._codebaseMappingProgressHandler = (event: any) => {
-			if (event.type === "scan_started" || event.type === "file_added" || event.type === "scan_completed") {
+			if (event.type === "scan_started" || event.type === "file_added" || event.type === "file_modified" || event.type === "scan_completed") {
 				this._sendCodebaseMappingStatus()
 			}
 		}

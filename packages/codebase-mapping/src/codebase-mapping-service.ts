@@ -91,6 +91,23 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this._rootFileCache = new Map();
   }
 
+  /** Reset partial scan state for force restart (clears stale intermediate data). */
+  resetScanState(): void {
+    this.allParseResults.clear();
+    this.allSymbols.clear();
+    this.currentGraph = null;
+    this.deadCodeResults = [];
+    this.compressedResults = [];
+    this._filesScanned = 0;
+    this._totalFilesToScan = 0;
+    this._accumulatedEdges = 0;
+    this._lastScanErrors = 0;
+    this._scanInProgress = false;
+    this._pendingRescan = false;
+    this._scanStatus = "idle";
+    this._rootFileCache.clear();
+  }
+
   async initialize(options?: CodebaseMappingOptions): Promise<void> {
     if (options) {
       this.config = { ...this.config, ...options };

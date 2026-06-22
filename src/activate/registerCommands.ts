@@ -86,7 +86,7 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		}),
 	)
 
-	// Force restart scan — resets stuck _scanInProgress guard
+	// Force restart scan — resets stuck _scanInProgress guard and clears partial state
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.forceRescanCodebaseMap", async () => {
 			const instances = CodebaseMappingManager.getAllInstances();
@@ -95,7 +95,7 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 				return;
 			}
 			for (const svc of instances) {
-				(svc as any)._scanInProgress = false;
+				svc.resetScanState();
 			}
 			vscode.window.showInformationMessage("Force-restarting codebase map scan...");
 			await Promise.all(instances.map((svc) => svc.scanWorkspace()));

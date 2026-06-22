@@ -609,4 +609,12 @@ ${sections.join("\n\n")}`
   get initialized(): boolean {
     return this._initialized
   }
+
+  /**
+   * Re-ensure .gitignore and .rooignore have memory-bank/ entries.
+   * Safe to call anytime — recreates files if they were deleted externally.
+   */
+  async refreshIgnoreFiles(): Promise<void> {
+    await this._ensureGitignoreEntry()
+  }
 }

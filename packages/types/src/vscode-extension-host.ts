@@ -842,6 +842,19 @@ export interface CodebaseMappingStatusUpdateMessage {
 	values: CodebaseMappingStatus
 }
 
+export interface MemoryBankStatus {
+	exists: boolean
+	initializing?: boolean
+	fileCount: number
+	totalSizeKB: number
+	lastUpdated: string | null
+}
+
+export interface MemoryBankStatusUpdateMessage {
+	type: "memoryBankStatusUpdate"
+	values: MemoryBankStatus
+}
+
 export interface LanguageModelChatSelector {
 	vendor?: string
 	family?: string

@@ -121,6 +121,9 @@ async function getMemoryBankSection(cwd: string, experiments?: Partial<Experimen
 			}
 		})
 
+		// Refresh ignore files on every session start (recreates if deleted externally)
+		manager.refreshIgnoreFiles().catch(() => {})
+
 		// Adaptive context limit: use at most 10% of the model's context window (default 128K tokens)
 		const contextWindow = settings?.contextWindow ?? 128_000
 		const maxContextBytes = Math.floor((contextWindow) * 10 / 100) // 10% of context window in ~tokens

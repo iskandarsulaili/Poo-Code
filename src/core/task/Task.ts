@@ -2380,11 +2380,6 @@ Choose an alternative approach now.]`
 		// Force final token usage update before abort event
 		this.emitFinalTokenUsageUpdate()
 
-		// Update memory bank progress on abort (non-blocking)
-		if (this.cwd && !this.experiments?.disableMemoryBank) {
-			this._updateMemoryBankOnAbort().catch(() => {})
-		}
-
 		this.emit(RooCodeEventName.TaskAborted)
 
 		try {
@@ -2399,6 +2394,15 @@ Choose an alternative approach now.]`
 			await this.saveClineMessages()
 		} catch (error) {
 			console.error(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
+		}
+
+		// Update memory bank progress on abort (awaited, errors caught internally)
+		if (this.cwd && !this.experiments?.disableMemoryBank) {
+			try {
+				await this._updateMemoryBankOnAbort()
+			} catch {
+				// Non-blocking — memory bank write failure is not critical
+			}
 		}
 	}
 
