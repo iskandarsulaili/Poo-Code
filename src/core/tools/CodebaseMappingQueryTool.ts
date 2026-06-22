@@ -252,28 +252,119 @@ export class CodebaseMappingQueryTool extends BaseTool<"codebase_mapping_query">
 		}
 	}
 
+	private async getFormatsDoc(context: vscode.ExtensionContext, cwd: string): Promise<string> {
+		try {
+			const service = CodebaseMappingManager.getInstance(context, cwd)
+			if (!service) return FORMATS_DOC
+
+			const graph = await service.getDependencyGraph()
+			const stats = await service.getCacheStats()
+
+			return `## Supported Serialization Formats
+
+**${graph.files.size} files** in current project, **${stats.astCacheSize} AST cache entries**.
+
+### JSON
+Full structured export with metadata, files, symbols, edges, and dead code.
+\`\`\`
+{ metadata: { totalFiles, totalSymbols, totalEdges, generatedAt },
+  files: [{ path, language, size, symbolCount, importCount, exportCount }],
+  symbols: [{ id, name, kind, filePath, referenceCount }],
+  edges: [{ from, to, kind, isDynamic }],
+  deadCode: [{ name, kind, filePath, reason, confidence }] }
+\`\`\`
+
+### Mermaid.js
+Visualizable as a flow chart diagram in markdown.
+\`\`\`
+graph TD
+    A[src/main.ts] --> B[src/utils.ts]
+\`\`\`
+
+### Graphviz (DOT)
+\`\`\`
+digraph { "src/main.ts" -> "src/utils.ts"; }
+\`\`\`
+
+### ASCII
+Text-based tree view, useful for terminal/CLI.
+
+### HTML
+Interactive HTML page with expandable file trees.
+
+### Markdown
+Human-readable markdown document with tables and lists.
+
+### Usage
+\`\`\`
+const mermaid = await service.serialize(4) // SerializationFormat.Mermaid
+const json = await service.serialize(0)    // SerializationFormat.JSON
+\`\`\``
+		} catch {
+			return FORMATS_DOC
+		}
+	}
+
+	private async getHelpDoc(context: vscode.ExtensionContext, cwd: string): Promise<string> {
+		try {
+			const service = CodebaseMappingManager.getInstance(context, cwd)
+			if (!service) return HELP_DOC
+
+			const graph = await service.getDependencyGraph()
+			const deadCode = await service.getDeadCode()
+			const stats = await service.getCacheStats()
+
+			return `## Codebase Mapping — Usage Guide
+
+**Current project**: ${graph.files.size} files, ${graph.edges.length} edges, ${deadCode.length} dead symbols
+**Cache**: ${(stats.astHitRate * 100).toFixed(1)}% hit rate
+
+### Available Tools
+- \`codebase_dependency\` — Query the dependency graph
+- \`codebase_mapping_query\` — Query mapping metadata (this tool)
+
+### VS Code Commands
+- \`zoo-code.refreshCodebaseMap\` — Start/rescan
+- \`zoo-code.forceRescanCodebaseMap\` — Force restart stuck scan
+- \`zoo-code.showCodebaseMap\` — Show current stats
+
+### Workflow Tips
+1. Before refactoring: \`codebase_dependency(action="reverse_deps", target="<file>")\`
+2. Before deleting: \`codebase_dependency(action="dead_symbols")\`
+3. For docs: \`codebase_mapping_query(action="formats")\`
+4. After saving: graph auto-updates via incremental scan`
+		} catch {
+			return HELP_DOC
+		}
+	}
+
 	async execute(params: CodebaseMappingQueryParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { handleError, pushToolResult } = callbacks
 		const { action } = params
 
 		try {
+			const context = task.providerRef.deref()?.context
+
 			switch (action) {
 				case "schema": {
-					const context = task.providerRef.deref()?.context
-					if (context && task.cwd) {
-						const dynamicDoc = await this.getSchemaDoc(context, task.cwd)
-						pushToolResult(dynamicDoc)
-					} else {
-						pushToolResult(SCHEMA_DOC)
-					}
+					const dynamicDoc = context && task.cwd
+						? await this.getSchemaDoc(context, task.cwd)
+						: SCHEMA_DOC
+					pushToolResult(dynamicDoc)
 					break
 				}
 				case "formats": {
-					pushToolResult(FORMATS_DOC)
+					const dynamicDoc = context && task.cwd
+						? await this.getFormatsDoc(context, task.cwd)
+						: FORMATS_DOC
+					pushToolResult(dynamicDoc)
 					break
 				}
 				case "help": {
-					pushToolResult(HELP_DOC)
+					const dynamicDoc = context && task.cwd
+						? await this.getHelpDoc(context, task.cwd)
+						: HELP_DOC
+					pushToolResult(dynamicDoc)
 					break
 				}
 				case "stats": {

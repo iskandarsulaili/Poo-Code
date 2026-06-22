@@ -924,14 +924,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Uses content hash dedup to prevent duplicate entries for the same decision
 			const lower = result.toLowerCase()
 			if (lower.includes("decision:") || lower.includes("## decision") || lower.includes("architectural")) {
-				const entryContent = `### Decision (${timestamp})\n${result.trim().substring(0, 500)}\n`
-				// Check if decisionLog already contains similar content (dedup)
+				const decisionContent = result.trim().substring(0, 500)
+				// Strip timestamp before hashing for reliable dedup
+				const entryContent = `### Decision\n${decisionContent}\n`
+				const entryHash = manager.hashContent(entryContent)
+				// Check if decisionLog already contains this hash
 				const existingLog = await manager.readFile("decisionLog.md")
-				const resultHash = manager.hashContent(entryContent)
-				if (!existingLog.includes(resultHash)) {
+				if (!existingLog.includes(entryHash)) {
+					const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
 					await manager.updateFile(
 						"decisionLog.md",
-						entryContent,
+						`### Decision (${timestamp})\n${decisionContent}\n`,
 						true,
 					)
 				}

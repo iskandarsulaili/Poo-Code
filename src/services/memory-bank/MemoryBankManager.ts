@@ -328,8 +328,16 @@ export class MemoryBankManager {
         this._writeLock = false
       }
     } else {
-      // Replace mode or content is a full document (starts with #)
-      await fs.writeFile(filePath, content, "utf-8")
+      // Replace mode: acquire write lock to prevent interleaving
+      while (this._writeLock) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      this._writeLock = true
+      try {
+        await fs.writeFile(filePath, content, "utf-8")
+      } finally {
+        this._writeLock = false
+      }
     }
 
     // Invalidate cache so next read is fresh

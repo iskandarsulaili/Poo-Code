@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react"
-import { Database } from "lucide-react"
+import { BookMarked } from "lucide-react"
 
 import { cn } from "@src/lib/utils"
 import { vscode } from "@src/utils/vscode"
@@ -71,7 +71,7 @@ export const MemoryBankStatusBadge: React.FC<{ className?: string }> = ({ classN
 							"focus:outline-none focus-visible:ring-1 focus-visible:ring-vscode-focusBorder",
 							className,
 						)}>
-						<Database className="w-4 h-4" />
+						<BookMarked className="w-4 h-4" />
 						<span
 							className={cn(
 								"absolute top-0 right-0 w-1.5 h-1.5 rounded-full transition-colors duration-200",

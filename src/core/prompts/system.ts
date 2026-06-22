@@ -140,7 +140,9 @@ async function getMemoryBankSection(cwd: string, experiments?: Partial<Experimen
 		// Append change summary if available
 		const changeSummary = await manager.getChangeSummary()
 
-		return `\n${context}${changeSummary}`
+		// Build final section with status prefix instruction
+		const prefixLine = "Start every response with `[MEMORY BANK: ACTIVE]` to indicate context is loaded."
+		return `\n${context}\n\n${prefixLine}\n${changeSummary}`
 	} catch {
 		return ""
 	}

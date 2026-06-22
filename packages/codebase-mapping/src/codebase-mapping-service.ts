@@ -64,6 +64,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   private _rootFileCache: Map<string, string[]>;
   /** Guard against concurrent scanWorkspace() calls */
   public _scanInProgress: boolean = false;
+  /** Timestamp when the last scan started (for stuck detection) */
+  private _scanStartTime: number = 0;
   /** Guard against concurrent updateSingleFile() calls */
   public _updateInProgress: boolean = false;
   /** A save/delete/folder-change event arrived while scanning — schedule a follow-up scan */
@@ -121,14 +123,24 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
   }
 
+  /** Timeout for auto-detecting a stuck scan (10 minutes) */
+  private static readonly SCAN_TIMEOUT_MS = 10 * 60 * 1000;
+
   async scanWorkspace(): Promise<void> {
     this.ensureInitialized();
 
-    // Guard against concurrent scans — saves, folder changes, and manual refreshes can overlap
+    // Auto-detect stuck scan — if scan has been running longer than timeout, force-reset
     if (this._scanInProgress) {
-      this.logger.warn("Scan already in progress — queuing follow-up rescan");
-      this._pendingRescan = true;
-      return;
+      const elapsed = Date.now() - this._scanStartTime;
+      if (elapsed > CodebaseMappingService.SCAN_TIMEOUT_MS) {
+        this.logger.warn(`Scan stuck for ${Math.round(elapsed / 1000)}s, force-resetting`);
+        this._scanInProgress = false;
+        this._scanStatus = "idle";
+      } else {
+        this.logger.warn("Scan already in progress — queuing follow-up rescan");
+        this._pendingRescan = true;
+        return;
+      }
     }
 
     this.logger.info("Scanning workspace");
@@ -419,7 +431,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   async persistCacheStats(storagePath: string): Promise<void> {
     const cm = this.cacheManager as any;
     const data = { astHits: cm.hits?.get("ast") ?? 0, astMisses: cm.misses?.get("ast") ?? 0, symbolHits: cm.hits?.get("symbol") ?? 0, symbolMisses: cm.misses?.get("symbol") ?? 0, graphHits: cm.hits?.get("graph") ?? 0, graphMisses: cm.misses?.get("graph") ?? 0, embeddingHits: cm.hits?.get("embedding") ?? 0, embeddingMisses: cm.misses?.get("embedding") ?? 0 };
-    try { const fs = await import("fs/promises"); const p = await import("path"); await fs.writeFile(p.join(storagePath, "codebase-mapping-cache-stats.json"), JSON.stringify(data), "utf-8"); } catch {}
+    try { const fs = await import("fs/promises"); const p = await import("path"); const filePath = p.join(storagePath, "codebase-mapping-cache-stats.json"); await fs.writeFile(filePath, JSON.stringify(data), "utf-8"); } catch {}
   }
 
   async restoreCacheStats(storagePath: string): Promise<void> {
