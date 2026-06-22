@@ -47,6 +47,7 @@ import { MessageEnhancer } from "./messageEnhancer"
 
 import { CodeIndexManager } from "../../services/code-index/manager"
 import { CodebaseMappingManager } from "../../services/codebase-mapping"
+import { MemoryBankManager, MEMORY_BANK_DIR } from "../../services/memory-bank"
 import { checkExistKey } from "../../shared/checkExistApiConfig"
 import { getRouterRemovalMessage, getRouterUnavailableSignInMessage } from "../config/routerRemoval"
 import { experimentDefault } from "../../shared/experiments"
@@ -2913,6 +2914,61 @@ export const webviewMessageHandler = async (
 				})
 				vscode.window.showTextDocument(doc)
 			}
+			break
+		}
+		case "requestMemoryBankStatus": {
+			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
+			if (!cwd) {
+				provider.postMessageToWebview({
+					type: "memoryBankStatusUpdate",
+					values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+				})
+				break
+			}
+			try {
+				const manager = MemoryBankManager.getInstance(cwd)
+				const exists = await manager.exists()
+				if (!exists) {
+					provider.postMessageToWebview({
+						type: "memoryBankStatusUpdate",
+						values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+					})
+					break
+				}
+				let fileCount = 0
+				let totalSizeKB = 0
+				let lastUpdated: string | null = null
+				let latestMtime = 0
+				for (const f of ["productContext.md", "activeContext.md", "decisionLog.md", "systemPatterns.md", "progress.md"]) {
+					const filePath = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, MEMORY_BANK_DIR, f)
+					try {
+						const stat = await vscode.workspace.fs.stat(filePath)
+						fileCount++
+						totalSizeKB += stat.size / 1024
+						if (stat.mtime > latestMtime) {
+							latestMtime = stat.mtime
+							lastUpdated = new Date(stat.mtime).toISOString().replace("T", " ").substring(0, 16)
+						}
+					} catch { /* file doesn't exist */ }
+				}
+				provider.postMessageToWebview({
+					type: "memoryBankStatusUpdate",
+					values: { exists: true, fileCount, totalSizeKB, lastUpdated },
+				})
+			} catch {
+				provider.postMessageToWebview({
+					type: "memoryBankStatusUpdate",
+					values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+				})
+			}
+			break
+		}
+		case "initMemoryBank": {
+			await vscode.commands.executeCommand("zoo-code.initMemoryBank")
+			break
+		}
+		case "openMemoryBank": {
+			await vscode.commands.executeCommand("zoo-code.openMemoryBank")
 			break
 		}
 		case "startIndexing": {

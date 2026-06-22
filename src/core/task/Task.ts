@@ -57,6 +57,7 @@ import {
 } from "@roo-code/types"
 import { TelemetryService } from "@roo-code/telemetry"
 import { CloudService } from "@roo-code/cloud"
+import { MemoryBankManager } from "../../services/memory-bank"
 
 // api
 import { ApiHandler, ApiHandlerCreateMessageMetadata, buildApiHandler } from "../../api"
@@ -2379,6 +2380,11 @@ Choose an alternative approach now.]`
 		// Force final token usage update before abort event
 		this.emitFinalTokenUsageUpdate()
 
+		// Update memory bank progress on abort (non-blocking)
+		if (this.cwd && !this.experiments?.disableMemoryBank) {
+			this._updateMemoryBankOnAbort().catch(() => {})
+		}
+
 		this.emit(RooCodeEventName.TaskAborted)
 
 		try {
@@ -2393,6 +2399,26 @@ Choose an alternative approach now.]`
 			await this.saveClineMessages()
 		} catch (error) {
 			console.error(`Error saving messages during abort for task ${this.taskId}.${this.instanceId}:`, error)
+		}
+	}
+
+	/**
+	 * Update memory bank progress on task abort (non-blocking).
+	 */
+	private async _updateMemoryBankOnAbort(): Promise<void> {
+		try {
+			const manager = MemoryBankManager.getInstance(this.cwd!)
+			const exists = await manager.exists()
+			if (!exists) return
+
+			const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
+			await manager.updateFile(
+				"progress.md",
+				`### Task Aborted (${timestamp})\nThe task was cancelled or aborted before completion.\n`,
+				true,
+			)
+		} catch {
+			// Non-blocking — silent failure
 		}
 	}
 

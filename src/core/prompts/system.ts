@@ -109,6 +109,18 @@ async function getMemoryBankSection(cwd: string, experiments?: Partial<Experimen
 		const exists = await manager.exists()
 		if (!exists) return ""
 
+		// Register init notification (fires once when templates are first created)
+		manager.onInit(() => {
+			const initMsg = `Memory bank initialized at ${path.join(cwd, "memory-bank")}/`
+			try {
+				// Only show VS Code notification if we have access to the API
+				const vscode = require("vscode") as typeof import("vscode")
+				vscode.window.showInformationMessage(initMsg)
+			} catch {
+				console.log(`[MemoryBank] ${initMsg}`)
+			}
+		})
+
 		// Adaptive context limit: use at most 10% of the model's context window (default 128K tokens)
 		const contextWindow = settings?.contextWindow ?? 128_000
 		const maxContextBytes = Math.floor((contextWindow) * 10 / 100) // 10% of context window in ~tokens
@@ -118,7 +130,10 @@ async function getMemoryBankSection(cwd: string, experiments?: Partial<Experimen
 		const context = await manager.getMemoryBankContext(maxContentBytes)
 		if (!context) return ""
 
-		return `\n${context}`
+		// Append change summary if available
+		const changeSummary = await manager.getChangeSummary()
+
+		return `\n${context}${changeSummary}`
 	} catch {
 		return ""
 	}

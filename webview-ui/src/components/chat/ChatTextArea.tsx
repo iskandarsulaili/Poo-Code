@@ -32,6 +32,7 @@ import { MAX_IMAGES_PER_MESSAGE } from "./ChatView"
 import ContextMenu from "./ContextMenu"
 import { IndexingStatusBadge } from "./IndexingStatusBadge"
 import { CodebaseMappingStatusBadge } from "./CodebaseMappingStatusBadge"
+import { MemoryBankStatusBadge } from "./MemoryBankStatusBadge"
 import { ZooCodeAuthBadge } from "./ZooCodeAuthBadge"
 import { usePromptHistory } from "./hooks/usePromptHistory"
 
@@ -1345,6 +1346,7 @@ export const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						)}
 						{!isEditMode ? <IndexingStatusBadge /> : null}
 						{!isEditMode ? <CodebaseMappingStatusBadge /> : null}
+						{!isEditMode ? <MemoryBankStatusBadge /> : null}
 						{!isEditMode ? <ZooCodeAuthBadge /> : null}
 					</div>
 				</div>

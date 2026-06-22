@@ -113,6 +113,12 @@ export class MemoryBankManager {
   private _contentCache: Map<MemoryBankFile, string> = new Map()
   /** File watcher for detecting external edits to memory-bank/ files */
   private _watcher: fsSync.FSWatcher | null = null
+  /** Simple write lock to prevent concurrent append interleaving */
+  private _writeLock: boolean = false
+  /** Content hashes for cross-session change detection */
+  private _contentHashes: Map<MemoryBankFile, string> = new Map()
+  /** Callback for initialization notification */
+  private _onInit: (() => void) | null = null
 
   /** Singleton instances keyed by workspace path */
   private static instances = new Map<string, MemoryBankManager>()
@@ -145,6 +151,7 @@ export class MemoryBankManager {
    * Initialize memory bank: create directory + template files if missing.
    * Also updates .gitignore with memory-bank/ entry if needed.
    * Safe to call multiple times — skips existing files.
+   * Fires onInit callback on first initialization.
    */
   async initialize(): Promise<void> {
     if (this._initialized) return
@@ -152,6 +159,7 @@ export class MemoryBankManager {
     try {
       await fs.mkdir(this.memoryBankDir, { recursive: true })
 
+      let createdAny = false
       for (const filename of MEMORY_BANK_FILES) {
         const filePath = path.join(this.memoryBankDir, filename)
         try {
@@ -159,6 +167,7 @@ export class MemoryBankManager {
         } catch {
           // File doesn't exist — create with template
           await fs.writeFile(filePath, FILE_META[filename].template, "utf-8")
+          createdAny = true
         }
       }
 
@@ -169,9 +178,22 @@ export class MemoryBankManager {
       this._startWatcher()
 
       this._initialized = true
+
+      // Fire init notification callback if any files were created
+      if (createdAny && this._onInit) {
+        this._onInit()
+      }
     } catch (err) {
       console.error("[MemoryBankManager] Initialization failed:", err)
     }
+  }
+
+  /**
+   * Register a callback that fires when memory bank is first initialized
+   * (template files created). Used for VS Code info notifications.
+   */
+  onInit(callback: () => void): void {
+    this._onInit = callback
   }
 
   /**
@@ -246,12 +268,20 @@ export class MemoryBankManager {
    * Compresses append-only files (decisionLog.md, progress.md) only when they exceed CRITICAL size.
    * Compression preserves all entries but condenses old ones to summary format.
    * Otherwise replaces the entire file.
+   * Validates content is non-empty markdown. Uses write lock to prevent concurrent append interleaving.
+   * Warns via console when file approaches compression threshold.
    */
   async updateFile(
     filename: MemoryBankFile,
     content: string,
     append?: boolean,
   ): Promise<void> {
+    // Validate content
+    if (!content || !content.trim()) {
+      console.warn(`[MemoryBankManager] Refusing to write empty content to ${filename}`)
+      return
+    }
+
     const filePath = path.join(this.memoryBankDir, filename)
     const meta = FILE_META[filename]
     const shouldAppend = append ?? meta.appendMode
@@ -260,21 +290,40 @@ export class MemoryBankManager {
     await fs.mkdir(this.memoryBankDir, { recursive: true })
 
     if (shouldAppend && !content.startsWith("#")) {
-      // Append mode: read existing content and add new section with timestamp
-      let existing = await this.readFile(filename)
-
-      // Compress append-only files ONLY if they exceed critical size threshold
-      if (meta.appendMode) {
-        existing = await this._compressIfNeeded(filename, existing)
+      // Append mode: acquire write lock to prevent interleaving
+      while (this._writeLock) {
+        await new Promise(resolve => setTimeout(resolve, 10))
       }
+      this._writeLock = true
 
-      const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
-      const separator = existing.endsWith("\n") ? "" : "\n"
-      await fs.writeFile(
-        filePath,
-        `${existing}${separator}\n---\n*Updated ${timestamp}*\n\n${content}\n`,
-        "utf-8",
-      )
+      try {
+        let existing = await this.readFile(filename)
+
+        // Warn if file is approaching compression threshold
+        try {
+          const stat = await fs.stat(filePath)
+          if (stat.size > MAX_APPEND_FILE_SIZE_BYTES * 0.8 && stat.size <= MAX_APPEND_FILE_SIZE_BYTES) {
+            console.warn(
+              `[MemoryBankManager] ${filename} is ${stat.size} bytes (approaching ${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB compression threshold)`
+            )
+          }
+        } catch { /* stat failed, skip warning */ }
+
+        // Compress append-only files ONLY if they exceed critical size threshold
+        if (meta.appendMode) {
+          existing = await this._compressIfNeeded(filename, existing)
+        }
+
+        const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
+        const separator = existing.endsWith("\n") ? "" : "\n"
+        await fs.writeFile(
+          filePath,
+          `${existing}${separator}\n---\n*Updated ${timestamp}*\n\n${content}\n`,
+          "utf-8",
+        )
+      } finally {
+        this._writeLock = false
+      }
     } else {
       // Replace mode or content is a full document (starts with #)
       await fs.writeFile(filePath, content, "utf-8")
@@ -282,6 +331,48 @@ export class MemoryBankManager {
 
     // Invalidate cache so next read is fresh
     this._contentCache.delete(filename)
+  }
+
+  /**
+   * Get a summary of what changed since the last session.
+   * Returns a markdown string with file names and sizes.
+   */
+  async getChangeSummary(): Promise<string> {
+    const changes: string[] = []
+    for (const filename of MEMORY_BANK_FILES) {
+      const filePath = path.join(this.memoryBankDir, filename)
+      try {
+        const stat = await fs.stat(filePath)
+        const oldHash = this._contentHashes.get(filename)
+        // Read current content and compute hash
+        const content = await fs.readFile(filePath, "utf-8")
+        const newHash = this._simpleHash(content)
+        this._contentHashes.set(filename, newHash)
+
+        if (oldHash && oldHash !== newHash) {
+          const meta = FILE_META[filename]
+          changes.push(`- ${meta.label} (${filename}): ${(stat.size / 1024).toFixed(1)}KB`)
+        }
+      } catch {
+        // File doesn't exist yet
+      }
+    }
+    return changes.length > 0
+      ? `\n\n### Memory Bank Changes Since Last Session\n${changes.join("\n")}`
+      : ""
+  }
+
+  /**
+   * Simple string hash for change detection.
+   */
+  private _simpleHash(str: string): string {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return hash.toString(36)
   }
 
   /**
