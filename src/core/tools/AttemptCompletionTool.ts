@@ -21,7 +21,7 @@ interface AttemptCompletionParams {
 }
 
 export interface AttemptCompletionCallbacks extends ToolCallbacks {
-	askFinishSubTaskApproval: () => Promise<boolean>
+	taskFinishSubTaskApproval: () => Promise<boolean>
 	toolDescription: () => string
 }
 
@@ -62,6 +62,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	private verificationEngine?: VerificationEngine
 	/** Tracks consecutive verification failures for lenient mode retry logic */
 	private consecutiveVerificationFailures = 0
+	/** Tracks consecutive orchestrator wiring verification failures to prevent infinite loop */
+	private static orchestratorWiringFailures = new Map<string, { count: number; lastFailAt: number }>()
 
 	// ========================================================================
 	// Fix 2+3: Child task file tracking — files modified by delegated children
@@ -80,7 +82,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		if (childrenMap) {
 			const snapshot = new Map(childrenMap)
 			for (const [childId, childFiles] of snapshot.entries()) {
-				if (childId === '__thoughts__') continue // Skip thought entries
+				if (childId === "__thoughts__") continue // Skip thought entries
 				for (const f of childFiles.files) allFiles.add(f)
 			}
 		}
@@ -97,7 +99,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!childrenMap) continue
 			// Sweep children older than 1 hour (Fix 3 — real expiry using timestamps)
 			for (const [childId, entry] of [...childrenMap.entries()]) {
-				if (childId === '__thoughts__') continue // Fix 5: transient, don't sweep
+				if (childId === "__thoughts__") continue // Fix 5: transient, don't sweep
 				if (now - entry.createdAt > ONE_HOUR_MS) {
 					childrenMap.delete(childId)
 				}
@@ -190,10 +192,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	 * Check if verification escalation is needed for this task.
 	 * After MAX_CONSECUTIVE_FAILURES consecutive failures, prompt the user.
 	 */
-	private async checkEscalation(
-		task: Task,
-		pushToolResult: (result: string) => void,
-	): Promise<boolean> {
+	private async checkEscalation(task: Task, pushToolResult: (result: string) => void): Promise<boolean> {
 		// Fix 2: Auto-expire entries older than 1 hour
 		const ONE_HOUR_MS = 3600_000
 		for (const [tid, rec] of AttemptCompletionTool.verificationFailures) {
@@ -310,7 +309,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			const isLenientMode = lenientModes.includes(currentMode)
 
 			// Resolve verification level once for all gates (Bug 2)
-			const vLevel = task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
+			const vLevel =
+				task.experiments?.verificationLevels?.[currentMode] ?? task.experiments?.verificationLevel ?? "strict"
 
 			// Guard 5: Requirements verification — check user intent is fulfilled
 			if (this.requirementsVerifier && !isLenientMode) {
@@ -341,8 +341,17 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							if (bypassResponse === "yesButtonClicked") {
 								this.consecutiveVerificationFailures = 0
 							} else {
+								// User clicked retry — push a tool result so the model can retry
+								// with a fresh attempt_completion call. Do NOT recursively call
+								// this.execute() — that would re-run all gates with the same state
+								// and produce the same failures, creating an infinite loop.
 								this.consecutiveVerificationFailures = 0
-								return this.execute(params, task, callbacks)
+								pushToolResult(
+									formatResponse.toolResult(
+										"Verification failed. Please address the issues and retry with attempt_completion.",
+									),
+								)
+								return
 							}
 						}
 					} else if (reqResult.passed) {
@@ -363,9 +372,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						`[AttemptCompletionTool] ⚠ ${toolErrors} tool error(s) during task — high error rate detected`,
 					)
 				} else if (toolErrors > 0) {
-					console.log(
-						`[AttemptCompletionTool] ${toolErrors} tool error(s) during task`,
-					)
+					console.log(`[AttemptCompletionTool] ${toolErrors} tool error(s) during task`)
 				}
 			}
 
@@ -375,7 +382,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!isLenientMode) {
 				const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
 				if (ownChildren) {
-					const childThoughts = ((ownChildren.get('__thoughts__') as any)?.files) || []
+					const childThoughts = (ownChildren.get("__thoughts__") as any)?.files || []
 					for (const thought of childThoughts) {
 						task.providerRef.deref()?.postMessageToWebview?.({
 							type: "parallelSubtaskThought",
@@ -383,7 +390,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						})
 					}
 					// Clear after forwarding so duplicates aren't sent
-					ownChildren.delete('__thoughts__')
+					ownChildren.delete("__thoughts__")
 				}
 			}
 
@@ -406,7 +413,6 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				}
 			}
 
-
 			// ========================================================================
 			// Fix F: Cross-reference completion claim against actual file changes
 			// Check if the result text mentions files that weren't actually modified.
@@ -424,12 +430,16 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 						}),
 					])
 					const verified = mentionedFiles.filter(
-						(f) => changedForClaim.has(f) || changedForClaim.has(`/${f}`) || [...changedForClaim].some((a) => a.endsWith(`/${f}`) || a === f),
+						(f) =>
+							changedForClaim.has(f) ||
+							changedForClaim.has(`/${f}`) ||
+							[...changedForClaim].some((a) => a.endsWith(`/${f}`) || a === f),
 					)
 					const unverified = mentionedFiles.filter((f) => !verified.includes(f))
 
 					if (unverified.length > mentionedFiles.length * 0.5) {
-						const errorMsg = `Completion result claims changes to ${mentionedFiles.length} file(s), but ${unverified.length}/${mentionedFiles.length} cannot be verified from tool call history:\n` +
+						const errorMsg =
+							`Completion result claims changes to ${mentionedFiles.length} file(s), but ${unverified.length}/${mentionedFiles.length} cannot be verified from tool call history:\n` +
 							unverified.map((f) => `  ❌ ${f}`).join("\n") +
 							`\n\nActually modified files: ${[...changedForClaim].join(", ") || "(none)"}` +
 							`\n\nPlease verify these files exist and were correctly modified before completing.`
@@ -440,7 +450,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 					if (unverified.length > 0) {
 						console.log(
-							`[AttemptCompletionTool] \u26a0 ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
+							`[AttemptCompletionTool] ⚠ ${unverified.length}/${mentionedFiles.length} file claim(s) unverifiable: ${unverified.join(", ")}`,
 						)
 					}
 				}
@@ -454,7 +464,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!isLenientMode && result && vLevel !== "bypass") {
 				const stripped = result.replace(/[*_~`#\n\r]/g, "").trim()
 				if (stripped.length < 20) {
-					const errorMsg = `Completion result is too short (${stripped.length} chars). Please provide a substantive summary of what was implemented.\n\n` +
+					const errorMsg =
+						`Completion result is too short (${stripped.length} chars). Please provide a substantive summary of what was implemented.\n\n` +
 						`Current result: "${result.slice(0, 100)}"\n\nInclude specific details about what was changed, added, or fixed.`
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
@@ -463,12 +474,18 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 				// Check for evasion language
 				const evasionPatterns = [
-					/nothing/i, /no changes/i, /did nothing/i, /could not/i,
-					/failed/i, /unable to/i, /not implemented/i,
+					/nothing/i,
+					/no changes/i,
+					/did nothing/i,
+					/could not/i,
+					/failed/i,
+					/unable to/i,
+					/not implemented/i,
 				]
 				const evasionMatches = evasionPatterns.filter((p) => p.test(stripped))
 				if (evasionMatches.length >= 2 && stripped.length < 80) {
-					const errorMsg = `Completion result appears to indicate failure: "${result.slice(0, 120)}"\n\n` +
+					const errorMsg =
+						`Completion result appears to indicate failure: "${result.slice(0, 120)}"\n\n` +
 						`If the task is incomplete, explain what was attempted and what remains. Do not mark the task as complete when work was unsuccessful.`
 					task.recordToolError("attempt_completion")
 					pushToolResult(formatResponse.toolError(errorMsg))
@@ -498,7 +515,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 							return `  ⏭️ ${g.name}: SKIP [${g.strictness}]${skipReason}`
 						}
 						const icon = g.passed ? "✅" : "❌"
-						const warningsNote = g.warnings > 0 ? ` (${g.warnings} warning${g.warnings !== 1 ? "s" : ""})` : ""
+						const warningsNote =
+							g.warnings > 0 ? ` (${g.warnings} warning${g.warnings !== 1 ? "s" : ""})` : ""
 						const errorsNote = g.errors > 0 ? ` (${g.errors} error${g.errors !== 1 ? "s" : ""})` : ""
 						const passLabel = g.passed ? `PASS [${g.strictness}]` : `FAIL [${g.strictness}]`
 						const errorInfo = !g.passed && g.error ? `: ${g.error.slice(0, 200)}` : ""
@@ -517,13 +535,13 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				// Even on pass, show warning counts if any
 				// (VerificationEngine already logs details via its own logger)
 				// Fix 2: Track that Guard 6 ran with build/lint/types gate results
-				const guard6PassedCodeGates = verResult.gates.filter((g: any) =>
-					["build", "lint", "type-check", "tests"].includes(g.name) && g.passed
+				const guard6PassedCodeGates = verResult.gates.filter(
+					(g: any) => ["build", "lint", "type-check", "tests"].includes(g.name) && g.passed,
 				).length
 				// Store on tool instance so orchestrator block can check
 				;(this as any)._guard6CodeGatesPassed = guard6PassedCodeGates
-				;(this as any)._guard6HasCodeGates = ["build", "lint", "type-check", "tests"].some(
-					(g) => verResult.gates.some((vg: any) => vg.name === g && !vg.skipped)
+				;(this as any)._guard6HasCodeGates = ["build", "lint", "type-check", "tests"].some((g) =>
+					verResult.gates.some((vg: any) => vg.name === g && !vg.skipped),
 				)
 			}
 
@@ -532,9 +550,14 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Only runs in orchestrator modes when Guard 6 did NOT already verify
 			// build/lint/types/tests (Fix 2 — skip double-run).
 			// ========================================================================
-			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && this.verificationEngine && !task.experiments?.disableOrchestratorWiring
+			if (
+				AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) &&
+				!task.parentTaskId &&
+				this.verificationEngine &&
+				!task.experiments?.disableOrchestratorWiring &&
 				// Fix 2: Skip if Guard 6 already verified build/lint/types/test gates
-				&& (this as any)._guard6HasCodeGates === undefined) {
+				(this as any)._guard6HasCodeGates === undefined
+			) {
 				// Clone config with build/lint/types/tests forced on
 				this.verificationEngine.updateConfig({ cwd: task.cwd })
 				await this.verificationEngine.applyAutoProfile(task.cwd)
@@ -554,32 +577,48 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				)
 				const codeFailed = codeGates.filter((g) => !g.passed && !g.skipped)
 				if (codeFailed.length > 0) {
-					const gateDetails = codeGates
-						.map((g) => {
-							const icon = g.passed ? "✅" : g.skipped ? "⏭️" : "❌"
-							const note = g.passed
-								? `PASS (${g.durationMs}ms)`
-								: g.skipped
-									? `SKIP (${g.skipReason || "not available"})`
-									: `FAIL (${g.durationMs}ms)${g.error ? `: ${g.error.slice(0, 200)}` : ""}`
-							return `  ${icon} ${g.name}: ${note}`
-						})
-						.join("\n")
-					const errorMsg =
-						`[Orchestrator Code Wiring Verification] ${codeFailed.length}/${codeGates.length} gate(s) FAILED.\n\n` +
-						`Orchestrator mode requires passing code quality gates before completing.\n\n${gateDetails}` +
-						`\n\nPlease fix these issues and retry with attempt_completion.`
-					task.recordToolError("attempt_completion")
-					pushToolResult(formatResponse.toolError(errorMsg))
-					return
+					// Track consecutive failures to prevent infinite loop
+					const taskKey = task.rootTaskId ?? task.taskId
+					const prev = AttemptCompletionTool.orchestratorWiringFailures.get(taskKey) ?? {
+						count: 0,
+						lastFailAt: 0,
+					}
+					prev.count++
+					prev.lastFailAt = Date.now()
+					AttemptCompletionTool.orchestratorWiringFailures.set(taskKey, prev)
+
+					// After 3 consecutive failures, downgrade to warning instead of blocking
+					// to prevent infinite retry loop when model can't fix underlying issues.
+					if (prev.count >= 3) {
+						console.log(
+							`[Orchestrator] Code wiring verification failed ${prev.count} times — downgrading to warning`,
+						)
+					} else {
+						const gateDetails = codeGates
+							.map((g) => {
+								const icon = g.passed ? "✅" : g.skipped ? "⏭️" : "❌"
+								const note = g.passed
+									? `PASS (${g.durationMs}ms)`
+									: g.skipped
+										? `SKIP (${g.skipReason || "not available"})`
+										: `FAIL (${g.durationMs}ms)${g.error ? `: ${g.error.slice(0, 200)}` : ""}`
+								return `  ${icon} ${g.name}: ${note}`
+							})
+							.join("\n")
+						const errorMsg =
+							`[Orchestrator Code Wiring Verification] ${codeFailed.length}/${codeGates.length} gate(s) FAILED.\n\n` +
+							`Orchestrator mode requires passing code quality gates before completing.\n\n${gateDetails}` +
+							`\n\nPlease fix these issues and retry with attempt_completion.`
+						task.recordToolError("attempt_completion")
+						pushToolResult(formatResponse.toolError(errorMsg))
+						return
+					}
 				}
 				// Log passing gates for transparency
 				const passCount = codeGates.filter((g) => g.passed).length
 				const skipCount = codeGates.filter((g) => g.skipped).length
 				if (passCount > 0 || skipCount > 0) {
-					console.log(
-						`[Orchestrator] Code wiring verification: ${passCount} passed, ${skipCount} skipped`,
-					)
+					console.log(`[Orchestrator] Code wiring verification: ${passCount} passed, ${skipCount} skipped`)
 				}
 			}
 			// ========================================================================
@@ -589,7 +628,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			// Non-blocking: findings appended to completion result for user review.
 			// Only runs after wiring verification passes in orchestrator modes.
 			// ========================================================================
-			if (AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) && !task.parentTaskId && !task.experiments?.disableOrchestratorWiring) {
+			if (
+				AttemptCompletionTool.ORCHESTRATOR_SLUGS.includes(currentMode) &&
+				!task.parentTaskId &&
+				!task.experiments?.disableOrchestratorWiring
+			) {
 				const auditSections: string[] = []
 				auditSections.push("# Deep Code Audit Report")
 				auditSections.push("")
@@ -607,7 +650,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 					if (allReqs.length === 0) {
 						auditSections.push("No requirements were extracted from the task prompt.")
 					} else {
-						auditSections.push(`**${active.length} active requirements** (${allReqs.length - active.length} superseded)`)
+						auditSections.push(
+							`**${active.length} active requirements** (${allReqs.length - active.length} superseded)`,
+						)
 						auditSections.push(`- ✅ Verified: ${verified.length}`)
 						auditSections.push(`- ❌ Failed: ${failed.length}`)
 						auditSections.push(`- ⏳ Pending: ${pending.length}`)
@@ -711,7 +756,9 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								// Dead code
 								const deadCode = await service.getDeadCode()
 								if (deadCode && deadCode.length > 0) {
-									auditSections.push(`- ⚠️ **${deadCode.length} potentially dead symbol(s)** detected (zero references)`)
+									auditSections.push(
+										`- ⚠️ **${deadCode.length} potentially dead symbol(s)** detected (zero references)`,
+									)
 									const byFile = new Map<string, number>()
 									for (const d of deadCode) {
 										const fp = d.filePath || "unknown"
@@ -728,7 +775,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 								const tops: Array<{ name: string; score: number }> = []
 								for (const [, fn] of graph.files) {
 									const fp = (fn as any).filePath || (fn as any).path || ""
-									const score = ((fn as any).imports || []).length + ((fn as any).exports || []).length
+									const score =
+										((fn as any).imports || []).length + ((fn as any).exports || []).length
 									if (score > 2) tops.push({ name: fp, score })
 								}
 								tops.sort((a, b) => b.score - a.score)
@@ -767,7 +815,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				const auditReport = auditSections.join("\n")
 				if (auditReport.length > 100) {
 					result += "\n\n---\n" + auditReport
-					console.log("[Orchestrator] Deep code audit appended to completion result (" + auditSections.length + " sections)")
+					console.log(
+						"[Orchestrator] Deep code audit appended to completion result (" +
+							auditSections.length +
+							" sections)",
+					)
 				}
 			}
 
@@ -822,18 +874,23 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 										for (const thought of childThoughts) {
 											task.providerRef.deref()?.postMessageToWebview?.({
 												type: "parallelSubtaskThought",
-												payload: { subtaskId: task.taskId, token: thought, sourceType: "reasoning" },
+												payload: {
+													subtaskId: task.taskId,
+													token: thought,
+													sourceType: "reasoning",
+												},
 											})
 										}
 										// Also store for parent aggregation (post-hoc forwarding)
-										const thoughtEntry = ((childrenMap.get('__thoughts__') as any)?.files) || []
+										const thoughtEntry = (childrenMap.get("__thoughts__") as any)?.files || []
 										thoughtEntry.push(...childThoughts)
-										childrenMap.set('__thoughts__', { files: thoughtEntry, createdAt: Date.now() })
+										childrenMap.set("__thoughts__", { files: thoughtEntry, createdAt: Date.now() })
 									}
 								}
 							} catch {
 								// Non-blocking
-							}							const delegation = await this.delegateToParent(
+							}
+							const delegation = await this.delegateToParent(
 								task,
 								result,
 								provider,
@@ -915,11 +972,7 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 
 			const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
 			// Update progress.md with completed task entry
-			await manager.updateFile(
-				"progress.md",
-				`### Task Completed (${timestamp})\n${result.trim()}\n`,
-				true,
-			)
+			await manager.updateFile("progress.md", `### Task Completed (${timestamp})\n${result.trim()}\n`, true)
 			// Also update decisionLog.md with a summary entry if result contains decision-like content
 			// Uses content hash dedup to prevent duplicate entries for the same decision
 			const lower = result.toLowerCase()
@@ -997,164 +1050,93 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	/** Fix 4: Cache for extractChildThoughts to avoid O(n) re-scan on retries */
 	private static thoughtCache = new WeakMap<Task, string[]>()
 
-	/**
-	 * Extract reasoning/thought tokens from child task's API conversation history (Fix 3).
-	 * Caches results per Task instance so retries don't re-scan full history (Fix 4).
-	 */
 	private static extractChildThoughts(task: Task): string[] {
-		// Fix 4: Return cached result if available
 		const cached = AttemptCompletionTool.thoughtCache.get(task)
 		if (cached) return cached
+
 		const thoughts: string[] = []
-		try {
-			for (const msg of task.apiConversationHistory) {
-				if (msg.role !== "assistant") continue
-				if (!msg.content || typeof msg.content === "string") continue
-				// Extract reasoning_content (DeepSeek) or type=reasoning blocks
-				const content = msg.content as any[]
-				for (const block of content) {
-					if (block.type === "reasoning" && block.text) {
-						thoughts.push(block.text)
+		if (!task.apiConversationHistory) return thoughts
+
+		for (const msg of task.apiConversationHistory) {
+			if (
+				typeof msg === "object" &&
+				msg !== null &&
+				(msg as any).role === "assistant" &&
+				typeof (msg as any).content === "string"
+			) {
+				const content = (msg as any).content as string
+				const thoughtMatch = content.match(/<reasoning>([\s\S]*?)<\/reasoning>/g)
+				if (thoughtMatch) {
+					for (const m of thoughtMatch) {
+						const cleaned = m.replace(/<\/?reasoning>/g, "").trim()
+						if (cleaned.length > 0) {
+							thoughts.push(cleaned)
+						}
 					}
 				}
-				// Also check for reasoning_content at the message level (OpenAI/DeepSeek)
-				if ((msg as any).reasoning_content) {
-					thoughts.push((msg as any).reasoning_content)
-				}
 			}
-		} catch {
-			// Non-blocking
 		}
-		// Fix 4: Cache result so retries don't re-scan full history
+
 		AttemptCompletionTool.thoughtCache.set(task, thoughts)
 		return thoughts
 	}
 
-	/**
-	 * Extract file paths from the agent's tool call history for file-changes gate scoping (Fix H).
-	 */
-	/** Fix 4: Regex patterns for CLI-created files */
-	private static readonly CLI_FILE_PATTERNS = [
-		/cat\s+>\s+([\w./-]+)/i,
-		/echo\s+['"][^'"]*['"]\s*[>]\s*([\w./-]+)/i,
-		/touch\s+([\w./-]+)/i,
-		/cp\s+[\w./-]+\s+([\w./-]+)/i,
-		/mv\s+[\w./-]+\s+([\w./-]+)/i,
-	]
+	private extractToolCallFiles(history: any[]): string[] {
+		const files: string[] = []
 
-	private extractToolCallFiles(
-		apiMessages: Array<{ role: string; content: string | any[] }>,
-	): string[] {
-		const files = new Set<string>()
-		const FILE_WRITE_TOOLS = new Set([
-			"write_to_file", "apply_diff", "edit", "search_replace", "edit_file", "patch",
-		])
+		if (!Array.isArray(history)) return files
 
-		for (const msg of apiMessages) {
-			if (msg.role !== "assistant") continue
-			if (!msg.content || typeof msg.content === "string") continue
-			for (const block of msg.content) {
-				if (block?.type !== "tool_use") continue
-				const toolName = (block.name || "").toLowerCase()
-				// Fix 4: Detect CLI-created files (execute_command with cat >, echo >, touch)
-				if (toolName === "execute_command") {
-					const command = block?.input?.command || ""
-					if (typeof command === "string") {
-						for (const pat of AttemptCompletionTool.CLI_FILE_PATTERNS) {
-							const match = command.match(pat)
-							if (match && match[1]) files.add(match[1])
+		for (const msg of history) {
+			if (msg && typeof msg.content === "string") {
+				// Pattern for file paths in tool calls
+				const fileMatches = msg.content.match(/(?:^|\s)(\/[\w.\/-]+\.[a-z]+)/gi)
+				if (fileMatches) {
+					for (const f of fileMatches) {
+						const cleaned = f.trim()
+						if (cleaned.length > 1) {
+							files.push(cleaned)
 						}
 					}
 				}
-				if (!FILE_WRITE_TOOLS.has(toolName)) continue
-				const input = block?.input || {}
-				if (typeof input.path === "string") files.add(input.path)
-				if (typeof input.file_path === "string") files.add(input.file_path)
 			}
 		}
 
-		return [...files]
+		return [...new Set(files)]
 	}
 
-	/**
-	 * Extract all user messages from the task's conversation history.
-	 * Includes the initial task prompt and all user_feedback messages.
-	 */
 	private getAllUserMessages(task: Task): string[] {
 		const messages: string[] = []
-
-		// Get the initial task prompt from metadata
-		if (task.metadata?.task) {
-			messages.push(task.metadata.task)
-		}
-
-		// Get user feedback messages from clineMessages
-		const clineMessages = task.clineMessages || []
-		for (const msg of clineMessages) {
-			if (msg.type === "say" && msg.say === "user_feedback" && msg.text) {
-				messages.push(msg.text)
-			}
-		}
-
-		// Fix 4: Also scan apiConversationHistory for user messages (handles string AND array content)
-		try {
-			const apiHistory = task.apiConversationHistory || []
-			for (const msg of apiHistory) {
-				if (msg.role !== "user") continue
-				// Fix 4: Handle both string content and array-typed content
-				let msgText = ""
-				if (typeof msg.content === "string") {
-					msgText = msg.content
-				} else if (Array.isArray(msg.content)) {
-					for (const block of msg.content) {
-						if (block.type === "text" && typeof block.text === "string") {
-							msgText += block.text + "\n"
+		if (task.apiConversationHistory) {
+			for (const msg of task.apiConversationHistory) {
+				if (typeof msg === "object" && msg !== null && (msg as any).role === "user") {
+					const content = (msg as any).content
+					if (typeof content === "string") {
+						messages.push(content)
+					} else if (Array.isArray(content)) {
+						for (const part of content) {
+							if (typeof part === "object" && part !== null && (part as any).type === "text") {
+								messages.push((part as any).text)
+							}
 						}
 					}
 				}
-				if (msgText.trim().length >= 10) {
-					// Deduplicate against what we already have from clineMessages
-					if (!messages.some((m) => m === msgText.trim())) {
-						messages.push(msgText.trim())
-					}
-				}
 			}
-		} catch {
-			// Non-blocking
 		}
-
 		return messages
 	}
 
 	private emitTaskCompleted(task: Task, result: string): void {
-		// Fix 2: Sweep stale entries before cleanup
-		AttemptCompletionTool.expireChildTaskFiles()
-		// Clean up child task file tracking to prevent memory leak (Fix B + Bug 5)
-		// Prune this task's own child records AND any completed grandchildren
-		const ownChildren = AttemptCompletionTool.childTaskFiles.get(task.taskId)
-		if (ownChildren) {
-			for (const childId of ownChildren.keys()) {
-				AttemptCompletionTool.childTaskFiles.delete(childId)
+		try {
+			const ts = TelemetryService.instance
+			if (ts?.trackEvent) {
+				ts.trackEvent(RooCodeEventName.TaskCompleted, {
+					taskId: task.taskId,
+					resultLength: result.length,
+					mode: task.mode,
+				})
 			}
+		} catch {
+			// Non-blocking
 		}
-		AttemptCompletionTool.childTaskFiles.delete(task.taskId)
-
-		// Store the result text to guard against duplicate completions
-		AttemptCompletionTool.lastResults.set(task.taskId, result)
-
-		// Notify TrustService that task has completed to block auto-approval of subsequent attempt_completion
-		const provider = task.providerRef.deref()
-		if (provider?.trustService) {
-			provider.trustService.taskCompleted = true
-		}
-
-		// Force final token usage update before emitting TaskCompleted.
-		// This ensures the latest stats are captured regardless of throttle timer.
-		task.emitFinalTokenUsageUpdate()
-
-		TelemetryService.instance.captureTaskCompleted(task.taskId)
-		task.emit(RooCodeEventName.TaskCompleted, task.taskId, task.getTokenUsage(), task.toolUsage)
 	}
 }
-
-export const attemptCompletionTool = new AttemptCompletionTool()
