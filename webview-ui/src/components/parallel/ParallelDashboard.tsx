@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useRef, useState } from "react"
 import { useEvent } from "react-use"
 import { useTranslation } from "react-i18next"
 import type { ExtensionMessage, SubtaskNode, SubtaskDAG } from "@roo-code/types"
@@ -52,9 +52,11 @@ const ParallelDashboard: React.FC = () => {
 	const [logs, setLogs] = useState<LogEntry[]>([])
 	const [thoughts, setThoughts] = useState<ThoughtEntry[]>([])
 	const [savedDAGs, setSavedDAGs] = useState<SavedDAG[]>([])
-	const [progress, setProgress] = useState<{ subtaskId: string; tokenPercent: number; filesModified: number } | null>(
-		null,
-	)
+	const [_progress, _setProgress] = useState<{
+		subtaskId: string
+		tokenPercent: number
+		filesModified: number
+	} | null>(null)
 
 	const logsRef = useRef<LogEntry[]>([])
 	logsRef.current = logs
@@ -106,7 +108,7 @@ const ParallelDashboard: React.FC = () => {
 			}
 			case "parallelSubtaskProgress": {
 				const prog = message.payload as { subtaskId: string; tokenPercent: number; filesModified: number }
-				setProgress(prog)
+				_setProgress(prog)
 				break
 			}
 			case "parallelSubtaskSavedDAGs": {

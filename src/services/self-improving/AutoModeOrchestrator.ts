@@ -228,22 +228,9 @@ export class AutoModeOrchestrator {
 			}
 		}
 
-		// Strategy 2: Transient/streaming failure → use ResilienceService for retry scheduling
-		if (this.resilienceService && this.failureCount < 3) {
-			const delay = this.resilienceService.onStreamingFailure()
-			if (delay > 0) {
-				this.logger.appendLine(
-					`[AutoMode] Auto-heal: scheduled retry in ${delay}ms (failure #${this.failureCount})`,
-				)
-				return
-			}
-			if (delay === -1) {
-				this.logger.appendLine(`[AutoMode] Auto-heal: max retries exceeded, entering recovery mode`)
-				// Reset counter so next failure can trigger strategy change
-				this.failureCount = 0
-				return
-			}
-		}
+		// Strategy 2: Transient/streaming failure → handled by Task.ts directly
+		// (ResilienceService.onStreamingFailure is called from Task.recursivelyMakeRooRequests)
+		// Do NOT call onStreamingFailure here — it would double-count and create conflicting recovery loops.
 
 		// Strategy 3: Same tool failed 3+ times → suggest different approach
 		if (this.failureCount >= 3 && this.lastFailureTool) {

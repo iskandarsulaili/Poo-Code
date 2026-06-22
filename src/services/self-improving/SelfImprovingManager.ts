@@ -595,6 +595,8 @@ export class SelfImprovingManager {
 			this.updateReviewTelemetry(this.runtime.store, safeActions)
 			this.promptRevision += 1
 			this.runtime.store.resetCounters()
+			// Clear processed events so they aren't re-analyzed next cycle
+			this.runtime.store.clearEvents()
 			await this.runtime.store.persist()
 
 			// Refresh the memory snapshot so newly learned patterns are visible in prompts

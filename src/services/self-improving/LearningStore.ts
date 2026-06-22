@@ -317,6 +317,14 @@ export class LearningStore {
 		this.state.recentEvents.push(event)
 	}
 
+	/**
+	 * Clear all processed events after a review cycle.
+	 * Prevents the same events from being re-analyzed on every cycle.
+	 */
+	clearEvents(): void {
+		this.state.recentEvents = []
+	}
+
 	addPattern(pattern: LearnedPattern): void {
 		const existing = this.state.patterns.findIndex((candidate) => candidate.id === pattern.id)
 		if (existing >= 0) {

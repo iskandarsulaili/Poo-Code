@@ -4,8 +4,7 @@ import { GitBranch, RefreshCw, FileText, Share2 } from "lucide-react"
 import type { CodebaseMappingStatus } from "@roo-code/types"
 
 import { vscode } from "@src/utils/vscode"
-import { useAppTranslation } from "@src/i18n/TranslationContext"
-import { Popover, PopoverContent, StandardTooltip, Button } from "@src/components/ui"
+import { Popover, PopoverContent, Button } from "@src/components/ui"
 import { useRooPortal } from "@src/components/ui/hooks/useRooPortal"
 
 interface CodebaseMappingPopoverProps {
@@ -17,7 +16,6 @@ export const CodebaseMappingPopover: React.FC<CodebaseMappingPopoverProps> = ({
 	children,
 	mappingStatus: externalMappingStatus,
 }) => {
-	const { t } = useAppTranslation()
 	const [open, setOpen] = useState(false)
 	const [mappingStatus, setMappingStatus] = useState<CodebaseMappingStatus>(externalMappingStatus)
 
