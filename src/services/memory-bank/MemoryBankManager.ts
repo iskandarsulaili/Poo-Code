@@ -27,11 +27,14 @@ export const MEMORY_BANK_FILES = [
 
 export type MemoryBankFile = typeof MEMORY_BANK_FILES[number]
 
-/** Max size for append-only files (decisionLog.md, progress.md) before auto-truncation */
-export const MAX_APPEND_FILE_SIZE_BYTES = 100 * 1024 // 100 KB
+/** Max size for append-only files (decisionLog.md, progress.md) before auto-compression */
+export const MAX_APPEND_FILE_SIZE_BYTES = 200 * 1024 // 200 KB — critical threshold
 
-/** Lines to retain from the start when truncating (the header/template) */
-const TRUNCATE_RETAIN_HEADER_LINES = 10
+/** Lines to retain from the start when compressing (the header/template) */
+const COMPRESS_RETAIN_HEADER_LINES = 10
+
+/** After compression: max entries to preserve in detail */
+const COMPRESS_KEEP_ENTRIES = 20
 
 interface MemoryBankFileMeta {
   /** Short label for tool display */
@@ -194,10 +197,15 @@ export class MemoryBankManager {
 
   /**
    * Read a single memory bank file.
+   * Bypasses cache when forceRefresh is true (for detecting manual edits).
    */
-  async readFile(filename: MemoryBankFile): Promise<string> {
+  async readFile(filename: MemoryBankFile, forceRefresh?: boolean): Promise<string> {
     const filePath = path.join(this.memoryBankDir, filename)
     try {
+      // If cached and no force refresh, return cached
+      if (!forceRefresh && this._contentCache.has(filename)) {
+        return this._contentCache.get(filename)!
+      }
       const content = await fs.readFile(filePath, "utf-8")
       this._contentCache.set(filename, content)
       return content
@@ -207,9 +215,30 @@ export class MemoryBankManager {
   }
 
   /**
+   * Invalidate the content cache for a file (or all files).
+   * Call after external/human edits to ensure fresh reads.
+   */
+  invalidateCache(filename?: MemoryBankFile): void {
+    if (filename) {
+      this._contentCache.delete(filename)
+    } else {
+      this._contentCache.clear()
+    }
+  }
+
+  /**
+   * Re-read a file from disk, bypassing cache.
+   * Use after detecting external edits.
+   */
+  async refreshFile(filename: MemoryBankFile): Promise<string> {
+    return this.readFile(filename, true)
+  }
+
+  /**
    * Update a memory bank file.
    * If appendMode is true and content is not a full replacement, appends with timestamp.
-   * Automatically truncates append-only files (decisionLog.md, progress.md) if they exceed MAX_APPEND_FILE_SIZE_BYTES.
+   * Compresses append-only files (decisionLog.md, progress.md) only when they exceed CRITICAL size.
+   * Compression preserves all entries but condenses old ones to summary format.
    * Otherwise replaces the entire file.
    */
   async updateFile(
@@ -228,9 +257,9 @@ export class MemoryBankManager {
       // Append mode: read existing content and add new section with timestamp
       let existing = await this.readFile(filename)
 
-      // Auto-truncate append-only files that exceed size limit
+      // Compress append-only files ONLY if they exceed critical size threshold
       if (meta.appendMode) {
-        existing = await this._truncateIfNeeded(filename, existing)
+        existing = await this._compressIfNeeded(filename, existing)
       }
 
       const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
@@ -245,46 +274,88 @@ export class MemoryBankManager {
       await fs.writeFile(filePath, content, "utf-8")
     }
 
-    this._contentCache.set(filename, content)
+    // Invalidate cache so next read is fresh
+    this._contentCache.delete(filename)
   }
 
   /**
-   * Truncate an append-only file if it exceeds the max size.
-   * Keeps the first TRUNCATE_RETAIN_HEADER_LINES lines as header,
-   * then keeps the most recent entries up to the limit.
+   * Compress an append-only file ONLY if it exceeds the critical size threshold.
+   * Does NOT delete entries — compresses OLD entries into a concise summary format,
+   * preserving the most recent COMPRESS_KEEP_ENTRIES in full detail.
    */
-  private async _truncateIfNeeded(filename: MemoryBankFile, content: string): Promise<string> {
+  private async _compressIfNeeded(filename: MemoryBankFile, content: string): Promise<string> {
     const filePath = path.join(this.memoryBankDir, filename)
     try {
       const stat = await fs.stat(filePath)
       if (stat.size <= MAX_APPEND_FILE_SIZE_BYTES) return content
 
-      console.warn(`[MemoryBankManager] ${filename} is ${stat.size} bytes, truncating to ${MAX_APPEND_FILE_SIZE_BYTES} bytes`)
+      console.warn(
+        `[MemoryBankManager] ${filename} is ${stat.size} bytes (>${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB), compressing old entries`
+      )
 
       const lines = content.split("\n")
-      const header = lines.slice(0, TRUNCATE_RETAIN_HEADER_LINES).join("\n")
-      const body = lines.slice(TRUNCATE_RETAIN_HEADER_LINES)
+      const header = lines.slice(0, COMPRESS_RETAIN_HEADER_LINES).join("\n")
+      const body = lines.slice(COMPRESS_RETAIN_HEADER_LINES)
 
-      // Keep the newest entries (take from end, not start)
-      // Estimate 200 bytes per entry, calculate how many to keep
-      const maxBodySize = MAX_APPEND_FILE_SIZE_BYTES - header.length - 200 // 200 bytes safety margin
-      let keptSize = 0
-      const keptLines: string[] = []
-
-      for (let i = body.length - 1; i >= 0; i--) {
-        const lineCost = body[i].length + 1 // +1 for newline
-        if (keptSize + lineCost > maxBodySize) break
-        keptLines.unshift(body[i])
-        keptSize += lineCost
+      // Split body into entries: each `---` line is a separator between entries
+      // or each `###` / `*Updated` is an entry start
+      const entries: string[] = []
+      let currentEntry: string[] = []
+      for (const line of body) {
+        if (line.trim() === "---" || line.startsWith("### ")) {
+          if (currentEntry.length > 0) {
+            entries.push(currentEntry.join("\n"))
+          }
+          currentEntry = [line]
+        } else {
+          currentEntry.push(line)
+        }
+      }
+      if (currentEntry.length > 0) {
+        entries.push(currentEntry.join("\n"))
       }
 
-      const truncated = keptLines.length > 0
-        ? `${header}\n\n<!-- Older entries truncated (file exceeded ${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB limit) -->\n\n${keptLines.join("\n")}\n`
-        : `${header}\n\n<!-- File truncated to header only (exceeded ${Math.round(MAX_APPEND_FILE_SIZE_BYTES / 1024)}KB limit) -->\n`
+      // Keep recent entries in full, compress old ones
+      const recentEntries = entries.slice(-COMPRESS_KEEP_ENTRIES)
+      const oldEntries = entries.slice(0, -COMPRESS_KEEP_ENTRIES)
 
-      // Write truncated version
-      await fs.writeFile(filePath, truncated, "utf-8")
-      return truncated
+      // Compress old entries: count them and extract key info (timestamps + first lines)
+      const compressedOld: string[] = []
+      let totalOldEntries = 0
+      for (const entry of oldEntries) {
+        totalOldEntries++
+        const entryLines = entry.split("\n").filter(l => l.trim())
+        // Extract timestamp from *Updated lines
+        const timestampLine = entryLines.find(l => l.includes("*Updated"))
+        const firstContent = entryLines.find(l => !l.startsWith("---") && !l.startsWith("*Updated") && l.trim())
+        const dateStr = timestampLine
+          ? timestampLine.replace(/\*Updated |\*/g, "").trim()
+          : "unknown date"
+        const summary = firstContent
+          ? firstContent.trim().substring(0, 100)
+          : "(no content)"
+        compressedOld.push(`- ${dateStr}: ${summary}`)
+      }
+
+      // Build compressed file: header + summary of old entries + recent entries in full
+      let compressed = header
+
+      if (totalOldEntries > 0) {
+        const label = filename === "decisionLog.md" ? "Decisions" : "Tasks"
+        compressed += `\n\n<!-- Older ${label} (${totalOldEntries}) — compressed: -->\n`
+        for (const summary of compressedOld) {
+          compressed += `${summary}\n`
+        }
+        compressed += `\n<!-- ${recentEntries.length} most recent ${label.toLowerCase()} in full detail below -->\n`
+      }
+
+      for (const entry of recentEntries) {
+        compressed += `\n${entry}\n`
+      }
+
+      // Write compressed version
+      await fs.writeFile(filePath, compressed, "utf-8")
+      return compressed
     } catch {
       return content
     }

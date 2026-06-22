@@ -113,7 +113,7 @@ export const CodebaseMappingPopover: React.FC<CodebaseMappingPopoverProps> = ({
 							mappingStatus.totalFileCount > 0 && (
 								<div className="w-full h-1.5 bg-vscode-dropdown-border rounded-full overflow-hidden mt-1">
 									<div
-										className="h-full bg-vscode-statusBarItem-prominentForeground rounded-full transition-all duration-300 ease-out"
+										className="h-full rounded-full transition-all duration-300 ease-out"
 										style={{
 											width: `${Math.min(
 												100,
@@ -121,6 +121,7 @@ export const CodebaseMappingPopover: React.FC<CodebaseMappingPopoverProps> = ({
 													(mappingStatus.fileCount / mappingStatus.totalFileCount) * 100,
 												),
 											)}%`,
+											backgroundColor: "var(--vscode-statusBarItem-prominentForeground, #4CAF50)",
 										}}
 									/>
 								</div>

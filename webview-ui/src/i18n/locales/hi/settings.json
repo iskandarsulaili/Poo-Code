@@ -964,6 +964,10 @@
 			"heartbeatLabel": "Heartbeat Interval (ms)",
 			"lockTimeoutLabel": "Lock Timeout (ms)"
 		},
+		"DISABLE_MEMORY_BANK": {
+			"name": "Disable Memory Bank",
+			"description": "When enabled, the memory bank feature (persistent project context files in memory-bank/) is disabled. The update_memory_bank tool is removed and session context files are not loaded."
+		},
 		"PARALLEL_EXECUTION": {
 			"name": "Parallel Execution",
 			"description": "DAG-आधारित निर्भरता समाधान और लॉक-जागरूक शेड्यूलिंग के साथ कमांड के समानांतर निष्पादन को सक्षम करें"
