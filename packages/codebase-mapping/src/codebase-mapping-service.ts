@@ -64,6 +64,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
   private _rootFileCache: Map<string, string[]>;
   /** Guard against concurrent scanWorkspace() calls */
   public _scanInProgress: boolean = false;
+  /** Guard against concurrent updateSingleFile() calls */
+  public _updateInProgress: boolean = false;
   /** A save/delete/folder-change event arrived while scanning — schedule a follow-up scan */
   private _pendingRescan: boolean = false;
 
@@ -104,6 +106,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this._lastScanErrors = 0;
     this._scanInProgress = false;
     this._pendingRescan = false;
+    this._updateInProgress = false;
     this._scanStatus = "idle";
     this._rootFileCache.clear();
   }
@@ -131,6 +134,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this.logger.info("Scanning workspace");
     this._scanInProgress = true;
     this._pendingRescan = false;
+    this._updateInProgress = false;
     this._scanStatus = "scanning";
     this.emitEvent({ type: "scan_started", timestamp: Date.now(), data: {} });
     this._lastScanErrors = 0;
@@ -270,6 +274,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
       // If a save/delete/folder-change arrived during scan, run again to catch it
       if (this._pendingRescan) {
         this._pendingRescan = false;
+    this._updateInProgress = false;
         this.logger.info("Re-scanning to catch pending changes that arrived during previous scan");
         this.scanWorkspace().catch((reErr) => {
           this.logger.error("Follow-up rescan also failed:", reErr);
@@ -427,6 +432,11 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
       this.logger.info(`Graph not ready, fallback to full scan for ${filePath}`);
       await this.scanWorkspace(); return;
     }
+    if (this._updateInProgress) {
+      this.logger.warn(`Incremental update already in progress, queued after for ${filePath}`);
+      this._pendingRescan = true; return;
+    }
+    this._updateInProgress = true;
     try {
       const { content, hash, size } = await this.fileDiscovery.readFile(filePath);
       const { masked } = this.securityLayer.maskSecrets(content, filePath);
@@ -459,6 +469,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     } catch (err) {
       this.logger.error(`Incremental update failed for ${filePath}:`, err);
       this._lastScanErrors++; await this.scanWorkspace();
+    } finally {
+      this._updateInProgress = false;
     }
   }
 
@@ -497,6 +509,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     this._scanStatus = "completed";
     this._scanInProgress = false;
     this._pendingRescan = false;
+    this._updateInProgress = false;
   }
 
   private ensureInitialized(): void {

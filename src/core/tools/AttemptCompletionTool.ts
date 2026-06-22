@@ -921,14 +921,20 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 				true,
 			)
 			// Also update decisionLog.md with a summary entry if result contains decision-like content
-			// (starts with "Decision:" or "## Decision" or contains "architectural")
+			// Uses content hash dedup to prevent duplicate entries for the same decision
 			const lower = result.toLowerCase()
 			if (lower.includes("decision:") || lower.includes("## decision") || lower.includes("architectural")) {
-				await manager.updateFile(
-					"decisionLog.md",
-					`### Decision (${timestamp})\n${result.trim().substring(0, 500)}\n`,
-					true,
-				)
+				const entryContent = `### Decision (${timestamp})\n${result.trim().substring(0, 500)}\n`
+				// Check if decisionLog already contains similar content (dedup)
+				const existingLog = await manager.readFile("decisionLog.md")
+				const resultHash = manager.hashContent(entryContent)
+				if (!existingLog.includes(resultHash)) {
+					await manager.updateFile(
+						"decisionLog.md",
+						entryContent,
+						true,
+					)
+				}
 			}
 		} catch {
 			// Non-blocking — silent failure

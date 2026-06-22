@@ -37,6 +37,9 @@ const COMPRESS_RETAIN_HEADER_LINES = 10
 /** After compression: max entries to preserve in detail */
 const COMPRESS_KEEP_ENTRIES = 20
 
+/** Max age in days for append-only entries before they're removed */
+export const MAX_ENTRY_AGE_DAYS = 90
+
 interface MemoryBankFileMeta {
   /** Short label for tool display */
   label: string
@@ -346,7 +349,7 @@ export class MemoryBankManager {
         const oldHash = this._contentHashes.get(filename)
         // Read current content and compute hash
         const content = await fs.readFile(filePath, "utf-8")
-        const newHash = this._simpleHash(content)
+        const newHash = this.hashContent(content)
         this._contentHashes.set(filename, newHash)
 
         if (oldHash && oldHash !== newHash) {
@@ -363,9 +366,9 @@ export class MemoryBankManager {
   }
 
   /**
-   * Simple string hash for change detection.
+   * Simple string hash for change detection and dedup.
    */
-  private _simpleHash(str: string): string {
+  hashContent(str: string): string {
     let hash = 0
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i)
@@ -510,10 +513,16 @@ export class MemoryBankManager {
     const sections: string[] = []
 
     for (const filename of MEMORY_BANK_FILES) {
-      const content = await this.readFile(filename)
+      let content = await this.readFile(filename)
       if (content && content.trim()) {
         const meta = FILE_META[filename]
-        sections.push(`=== ${meta.label} (${filename}) ===
+        // Compress on read if append-only file exceeds threshold
+        // This handles files that grew past threshold via external edits
+        if (meta.appendMode) {
+          content = await this._compressIfNeeded(filename, content)
+        }
+        const metaInfo = FILE_META[filename]
+        sections.push(`=== ${metaInfo.label} (${filename}) ===
 ${content.trim()}`)
       }
     }

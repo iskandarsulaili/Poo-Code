@@ -164,6 +164,94 @@ const HELP_DOC = `## Codebase Mapping — Usage Guide
 export class CodebaseMappingQueryTool extends BaseTool<"codebase_mapping_query"> {
 	readonly name = "codebase_mapping_query" as const
 
+	/**
+	 * Build schema doc dynamically from actual mapping service types.
+	 */
+	private async getSchemaDoc(context: vscode.ExtensionContext, cwd: string): Promise<string> {
+		try {
+			const service = CodebaseMappingManager.getInstance(context, cwd)
+			if (!service) return SCHEMA_DOC // fallback to static
+
+			const graph = await service.getDependencyGraph()
+			const sampleFile = graph.files.size > 0 ? Array.from(graph.files.values())[0] : null
+			const allSymbols = await service.getSymbols()
+			const sampleSymbol = allSymbols.length > 0 ? allSymbols[0] : null
+
+			let doc = `## Codebase Mapping — Schema
+
+### Core Types
+
+**FileNode** — Represents a single file in the dependency graph (${graph.files.size} files in current project):
+\`\`\`
+{
+  filePath: string${sampleFile ? `  // e.g. "${sampleFile.filePath}"` : ""}
+  language: Language${sampleFile ? `  // e.g. "${sampleFile.language}"` : ""}
+  size: number          ${sampleFile ? `// e.g. ${sampleFile.size} bytes` : ""}
+  contentHash: string
+  lastModified: number  // Unix timestamp
+  symbols: string[]     // Symbol IDs defined in this file
+  imports: string[]     // Import paths
+  exports: string[]     // Export paths
+  pageRank: number      // PageRank centrality (0.0 - 1.0)
+}
+\`\`\`
+
+**DependencyEdge** — A directed dependency between files (${graph.edges.length} edges in current project):
+\`\`\`
+{
+  from: string
+  to: string
+  kind: "import" | "dynamic_import" | "require" | "type_import" | "re_export"
+  isExternal: boolean
+  isDynamic: boolean
+}
+\`\`\`
+
+**DependencyGraph** — Container for the entire graph:
+\`\`\`
+{
+  files: Map<string, FileNode>
+  edges: DependencyEdge[]
+  rootPaths: string[]
+  buildTimeMs: number    // Last build: ${graph.buildTimeMs}ms
+}
+\`\`\`
+
+**ExtractedSymbol** — A code symbol found in a file (${allSymbols.length} symbols found):
+\`\`\`
+{
+  id: string${sampleSymbol ? `  // e.g. "${sampleSymbol.id.substring(0, 16)}..."` : ""}
+  name: string${sampleSymbol ? `   // e.g. "${sampleSymbol.name}"` : ""}
+  kind: SymbolKind${sampleSymbol ? `  // e.g. "${sampleSymbol.kind}"` : ""}
+  filePath: string
+  range: SourceRange
+  parentId: string | null
+  isExported: boolean
+  documentation: string | null
+  references: SymbolReference[]
+  visibility: "public" | "protected" | "private" | "internal"
+}
+\`\`\`
+
+### Enums
+
+**Language**: typescript, javascript, python, rust, go, java, c, cpp, ruby, php, shell, swift, kotlin, scala, dart, lua, haskell, elixir, clojure, erlang, r, julia, sql, graphql, yaml, json, markdown, dockerfile, makefile, toml, unknown
+
+**SymbolKind**: class, interface, type, enum, function, method, property, variable, constant, parameter, module, namespace, decorator, generic, constructor, getter, setter, event, mixin, alias
+
+**SerializationFormat**: json, mermaid, graphviz, ascii, html, markdown
+
+**LevelOfDetail**: L0_Summary, L1_Signatures, L2_Declarations, L3_Implementation, L4_FullSource
+
+**DeadCodeReason**: unused_export, unreachable_code, orphan_function, unused_parameter, unused_variable, dead_branch, unused_type, unused_import
+\`\`\``
+
+			return doc
+		} catch {
+			return SCHEMA_DOC // fallback to static on error
+		}
+	}
+
 	async execute(params: CodebaseMappingQueryParams, task: Task, callbacks: ToolCallbacks): Promise<void> {
 		const { handleError, pushToolResult } = callbacks
 		const { action } = params
@@ -171,7 +259,13 @@ export class CodebaseMappingQueryTool extends BaseTool<"codebase_mapping_query">
 		try {
 			switch (action) {
 				case "schema": {
-					pushToolResult(SCHEMA_DOC)
+					const context = task.providerRef.deref()?.context
+					if (context && task.cwd) {
+						const dynamicDoc = await this.getSchemaDoc(context, task.cwd)
+						pushToolResult(dynamicDoc)
+					} else {
+						pushToolResult(SCHEMA_DOC)
+					}
 					break
 				}
 				case "formats": {

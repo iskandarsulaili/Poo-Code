@@ -138,12 +138,14 @@ export class CodebaseMappingManager {
     let saveTimer: ReturnType<typeof setTimeout> | undefined = undefined
     const DEBOUNCE_MS = 2000 // 2-second debounce window
     const saveWatcher = vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.uri.fsPath.startsWith(workspacePath)) {
+      // Check if file belongs to any workspace root (multi-root support)
+      const matchedRoot = service["config"]?.workspaceRoots?.find(
+        (root: string) => doc.uri.fsPath.startsWith(root)
+      )
+      if (matchedRoot) {
         if (saveTimer) clearTimeout(saveTimer)
         saveTimer = setTimeout(() => {
-          // Use incremental single-file update when graph is built, full scan otherwise
-          const relativePath = path.relative(workspacePath, doc.uri.fsPath)
-          service.updateSingleFile(doc.uri.fsPath, workspacePath).catch(() => {
+          service.updateSingleFile(doc.uri.fsPath, matchedRoot).catch(() => {
             service.scanWorkspace().catch(() => {})
           })
           saveTimer = undefined
