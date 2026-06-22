@@ -43,16 +43,12 @@ const FILE_META: Record<MemoryBankFile, MemoryBankFileMeta> = {
     template: `# Product Context
 
 ## Project Goal
-<!-- What is this project trying to achieve? Who is it for? -->
 
 ## Key Features
-<!-- List the main features and capabilities -->
 
 ## Overall Architecture
-<!-- High-level architecture diagram/description -->
 
 ## Technology Stack
-<!-- Languages, frameworks, databases, infrastructure -->
 `,
   },
   "activeContext.md": {
@@ -61,13 +57,10 @@ const FILE_META: Record<MemoryBankFile, MemoryBankFileMeta> = {
     template: `# Active Context
 
 ## Current Focus
-<!-- What is being worked on right now? -->
 
 ## Recent Changes
-<!-- Summary of recent changes and their impact -->
 
 ## Open Questions / Issues
-<!-- Any unresolved questions, blockers, or decisions pending -->
 `,
   },
   "decisionLog.md": {
@@ -85,10 +78,8 @@ Each entry: | Date | Decision | Rationale | Implementation Details |
     template: `# System Patterns
 
 ## Coding Patterns
-<!-- Coding conventions, naming conventions, file structure -->
 
 ## Architectural Patterns
-<!-- Design patterns, layers, modules, dependencies -->
 `,
   },
   "progress.md": {
@@ -97,13 +88,10 @@ Each entry: | Date | Decision | Rationale | Implementation Details |
     template: `# Progress
 
 ## Completed Tasks
-<!-- Tasks that have been finished -->
 
 ## Current Tasks
-<!-- Tasks currently being worked on -->
 
 ## Next Steps
-<!-- Planned future work -->
 `,
   },
 }
@@ -243,13 +231,29 @@ export class MemoryBankManager {
       const content = await this.readFile(filename)
       if (content && content.trim()) {
         const meta = FILE_META[filename]
-        sections.push(`=== ${meta.label} (${filename}) ===\n${content.trim()}`)
+        sections.push(`=== ${meta.label} (${filename}) ===
+${content.trim()}`)
       }
     }
 
     if (sections.length === 0) return ""
 
-    return `====\n\nMEMORY BANK — PERSISTENT PROJECT CONTEXT\n\nThe memory bank stores structured knowledge about this project across sessions.\nIt is loaded at the start of every session so you have immediate awareness of\nproject goals, architecture, decisions, and progress.\n\nUpdate it with the \`update_memory_bank\` tool whenever you:\n- Make an architectural decision (→ decisionLog.md)\n- Discover a reusable pattern (→ systemPatterns.md)\n- Complete a task or start a new one (→ progress.md)\n- Change the project's focus or direction (→ activeContext.md)\n- Change core product understanding (→ productContext.md)\n\n${sections.join("\n\n")}`
+    return `====
+
+MEMORY BANK — PERSISTENT PROJECT CONTEXT
+
+The memory bank stores structured knowledge about this project across sessions.
+It is loaded at the start of every session so you have immediate awareness of
+project goals, architecture, decisions, and progress.
+
+Update it with the \`update_memory_bank\` tool whenever you:
+- Make an architectural decision (→ decisionLog.md)
+- Discover a reusable pattern (→ systemPatterns.md)
+- Complete a task or start a new one (→ progress.md)
+- Change the project's focus or direction (→ activeContext.md)
+- Change core product understanding (→ productContext.md)
+
+${sections.join("\n\n")}`
   }
 
   /** Cached initialized status */

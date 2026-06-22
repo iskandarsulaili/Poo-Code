@@ -133,7 +133,7 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 				vscode.window.showInformationMessage("No workspace open.");
 				return;
 			}
-			const manager = new MemoryBankManager(cwd);
+			const manager = MemoryBankManager.getInstance(cwd);
 			await manager.initialize();
 			vscode.window.showInformationMessage(
 				`Memory bank initialized in ${MEMORY_BANK_DIR}/ — 5 files created with templates.`

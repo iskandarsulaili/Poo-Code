@@ -875,7 +875,8 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (response === "yesButtonClicked") {
 				AttemptCompletionTool.clearVerificationFailures(task.rootTaskId ?? task.taskId)
 				// Auto-update memory bank on successful task completion (non-blocking)
-				if (task.cwd && result) {
+				// Only if memory bank is not disabled via experiment toggle
+				if (task.cwd && result && !task.experiments?.disableMemoryBank) {
 					this._updateMemoryBankOnCompletion(task.cwd, result).catch(() => {})
 				}
 				this.emitTaskCompleted(task, result)
