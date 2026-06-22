@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { CodebaseMappingService } from "../../../packages/codebase-mapping/src/index.js";
 import type { CodebaseMappingConfig, MappingEvent } from "../../../packages/codebase-mapping/src/types.js";
 import { WorkspaceManager } from "../../core/orchestration/WorkspaceManager";
@@ -32,6 +33,7 @@ export function bridgeToOrchestrationGraph(
 interface MappingManagerInstance {
   service: CodebaseMappingService;
   workspacePath: string;
+  storagePath: string;
   disposables: vscode.Disposable[];
 }
 
@@ -112,6 +114,8 @@ export class CodebaseMappingManager {
 
     // Initialize and scan asynchronously (independent of code indexing — Fix 1)
     service.initialize(config).then(() => {
+      // Restore cache stats from previous session
+      service.restoreCacheStats(context.globalStorageUri.fsPath).catch(() => {});
       // Trigger workspace scan immediately after initialization
       // This runs independently of code indexing, so the dependency graph
       // is available even when vector search is not configured.
@@ -137,7 +141,11 @@ export class CodebaseMappingManager {
       if (doc.uri.fsPath.startsWith(workspacePath)) {
         if (saveTimer) clearTimeout(saveTimer)
         saveTimer = setTimeout(() => {
-          service.scanWorkspace().catch(() => {});
+          // Use incremental single-file update when graph is built, full scan otherwise
+          const relativePath = path.relative(workspacePath, doc.uri.fsPath)
+          service.updateSingleFile(doc.uri.fsPath, workspacePath).catch(() => {
+            service.scanWorkspace().catch(() => {})
+          })
           saveTimer = undefined
         }, DEBOUNCE_MS)
       }
@@ -156,6 +164,7 @@ export class CodebaseMappingManager {
     const instance: MappingManagerInstance = {
       service,
       workspacePath,
+      storagePath: context.globalStorageUri.fsPath,
       disposables,
     };
 
@@ -194,6 +203,9 @@ export class CodebaseMappingManager {
   static dispose(workspacePath: string): void {
     const instance = CodebaseMappingManager.instances.get(workspacePath);
     if (!instance) return;
+
+    // Persist cache stats before disposal (fire-and-forget, non-blocking)
+    instance.service.persistCacheStats(instance.storagePath).catch(() => {});
 
     for (const d of instance.disposables) {
       d.dispose();

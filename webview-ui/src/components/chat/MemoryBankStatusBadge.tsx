@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger, StandardTooltip, Button } from
 
 interface MemoryBankStatus {
 	exists: boolean
+	initializing?: boolean
 	fileCount: number
 	totalSizeKB: number
 	lastUpdated: string | null
@@ -19,6 +20,7 @@ export const MemoryBankStatusBadge: React.FC<{ className?: string }> = ({ classN
 	const [open, setOpen] = useState(false)
 	const [status, setStatus] = useState<MemoryBankStatus>({
 		exists: false,
+		initializing: true,
 		fileCount: 0,
 		totalSizeKB: 0,
 		lastUpdated: null,
@@ -43,11 +45,14 @@ export const MemoryBankStatusBadge: React.FC<{ className?: string }> = ({ classN
 	}, [open])
 
 	const statusColorClass = useMemo(() => {
+		if (status.initializing && !status.exists) return "bg-yellow-500 animate-pulse"
 		if (!status.exists) return "bg-vscode-descriptionForeground/60"
 		return "bg-green-500"
-	}, [status.exists])
+	}, [status.exists, status.initializing])
 
-	const tooltipText = status.exists
+	const tooltipText = status.initializing && !status.exists
+		? "Memory Bank: Initializing..."
+		: status.exists
 		? `Memory Bank: ${status.fileCount} files, ${status.totalSizeKB.toFixed(0)}KB`
 		: "Memory Bank: Not initialized"
 
@@ -90,7 +95,7 @@ export const MemoryBankStatusBadge: React.FC<{ className?: string }> = ({ classN
 				<div className="p-4 space-y-2 text-sm">
 					<div className="flex items-center gap-2">
 						<span className={`inline-block w-2.5 h-2.5 rounded-full ${statusColorClass}`} />
-						<span>{status.exists ? "Active" : "Not initialized"}</span>
+						<span>{status.initializing && !status.exists ? "Initializing..." : status.exists ? "Active" : "Not initialized"}</span>
 					</div>
 					{status.exists && (
 						<>

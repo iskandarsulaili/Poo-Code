@@ -394,6 +394,57 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
     return this.cacheManager.getStats();
   }
 
+  async persistCacheStats(storagePath: string): Promise<void> {
+    const cm = this.cacheManager as any;
+    const data = { astHits: cm.hits?.get("ast") ?? 0, astMisses: cm.misses?.get("ast") ?? 0, symbolHits: cm.hits?.get("symbol") ?? 0, symbolMisses: cm.misses?.get("symbol") ?? 0, graphHits: cm.hits?.get("graph") ?? 0, graphMisses: cm.misses?.get("graph") ?? 0, embeddingHits: cm.hits?.get("embedding") ?? 0, embeddingMisses: cm.misses?.get("embedding") ?? 0 };
+    try { const fs = await import("fs/promises"); const p = await import("path"); await fs.writeFile(p.join(storagePath, "codebase-mapping-cache-stats.json"), JSON.stringify(data), "utf-8"); } catch {}
+  }
+
+  async restoreCacheStats(storagePath: string): Promise<void> {
+    try { const fs = await import("fs/promises"); const p = await import("path"); const raw = await fs.readFile(p.join(storagePath, "codebase-mapping-cache-stats.json"), "utf-8"); const data = JSON.parse(raw); const cm = this.cacheManager as any; if (cm.hits && cm.misses && data.astHits != null) { cm.hits.set("ast", data.astHits); cm.misses.set("ast", data.astMisses); cm.hits.set("symbol", data.symbolHits); cm.misses.set("symbol", data.symbolMisses); cm.hits.set("graph", data.graphHits); cm.misses.set("graph", data.graphMisses); cm.hits.set("embedding", data.embeddingHits); cm.misses.set("embedding", data.embeddingMisses); } } catch {}
+  }
+
+  async updateSingleFile(filePath: string, rootPath: string): Promise<void> {
+    this.ensureInitialized();
+    if (!this.currentGraph || this._scanStatus !== "completed") {
+      this.logger.info(`Graph not ready, fallback to full scan for ${filePath}`);
+      await this.scanWorkspace(); return;
+    }
+    try {
+      const { content, hash, size } = await this.fileDiscovery.readFile(filePath);
+      const { masked } = this.securityLayer.maskSecrets(content, filePath);
+      const language = detectLanguage(filePath);
+      const parseResult = await this.astParser.parse(filePath, masked, language);
+      this.cacheManager.setAST(rootPath, filePath, parseResult);
+      this.allParseResults.set(filePath, parseResult);
+      const symbols = this.symbolExtractor.extractSymbols(parseResult);
+      this.cacheManager.setSymbols(rootPath, filePath, symbols);
+      this.allSymbols.set(filePath, symbols);
+      const imports: string[] = []; const exports: string[] = [];
+      for (const sym of symbols) {
+        const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string;
+        if (metaKind === "import_statement") imports.push(sym.name);
+        if (metaKind === "export_statement") exports.push(sym.name);
+      }
+      const fileNode = createFileNode(filePath, language, size, hash, Date.now());
+      fileNode.imports = imports; fileNode.exports = exports;
+      this.currentGraph!.files.set(filePath, fileNode);
+      const newEdges: import("./types.js").DependencyEdge[] = [];
+      for (const [fp, node] of this.currentGraph!.files) {
+        for (const imp of node.imports) newEdges.push(createDependencyEdge(fp, imp, "import", false, false));
+      }
+      this.currentGraph!.edges = newEdges;
+      this.deadCodeResults = this.detectDeadCodeInternal();
+      this._filesScanned = this.currentGraph!.files.size;
+      this._accumulatedEdges = newEdges.length;
+      this.emitEvent({ type: "file_modified", timestamp: Date.now(), data: { filePath, symbolsFound: symbols.length } });
+      this.logger.info(`Incremental update: ${filePath}: ${symbols.length} symbols, ${newEdges.length} edges`);
+    } catch (err) {
+      this.logger.error(`Incremental update failed for ${filePath}:`, err);
+      this._lastScanErrors++; await this.scanWorkspace();
+    }
+  }
+
   async getDocUpdates(): Promise<DocUpdate[]> {
     this.ensureInitialized();
     const updates: DocUpdate[] = [];

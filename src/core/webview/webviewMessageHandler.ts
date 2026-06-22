@@ -2921,7 +2921,7 @@ export const webviewMessageHandler = async (
 			if (!cwd) {
 				provider.postMessageToWebview({
 					type: "memoryBankStatusUpdate",
-					values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+					values: { exists: false, initializing: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
 				})
 				break
 			}
@@ -2931,7 +2931,7 @@ export const webviewMessageHandler = async (
 				if (!exists) {
 					provider.postMessageToWebview({
 						type: "memoryBankStatusUpdate",
-						values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+						values: { exists: false, initializing: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
 					})
 					break
 				}
@@ -2949,16 +2949,16 @@ export const webviewMessageHandler = async (
 							latestMtime = stat.mtime
 							lastUpdated = new Date(stat.mtime).toISOString().replace("T", " ").substring(0, 16)
 						}
-					} catch { /* file doesn't exist */ }
+					} catch { }
 				}
 				provider.postMessageToWebview({
 					type: "memoryBankStatusUpdate",
-					values: { exists: true, fileCount, totalSizeKB, lastUpdated },
+					values: { exists: true, initializing: false, fileCount, totalSizeKB, lastUpdated },
 				})
 			} catch {
 				provider.postMessageToWebview({
 					type: "memoryBankStatusUpdate",
-					values: { exists: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
+					values: { exists: false, initializing: false, fileCount: 0, totalSizeKB: 0, lastUpdated: null },
 				})
 			}
 			break

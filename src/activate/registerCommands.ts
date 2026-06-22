@@ -86,6 +86,25 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		}),
 	)
 
+	// Force restart scan — resets stuck _scanInProgress guard
+	context.subscriptions.push(
+		vscode.commands.registerCommand("zoo-code.forceRescanCodebaseMap", async () => {
+			const instances = CodebaseMappingManager.getAllInstances();
+			if (instances.length === 0) {
+				vscode.window.showInformationMessage("No codebase mapping instances active.");
+				return;
+			}
+			for (const svc of instances) {
+				(svc as any)._scanInProgress = false;
+			}
+			vscode.window.showInformationMessage("Force-restarting codebase map scan...");
+			await Promise.all(instances.map((svc) => svc.scanWorkspace()));
+			vscode.window.showInformationMessage(
+				`Codebase map force-refreshed for ${instances.length} workspace(s).`,
+			);
+		}),
+	)
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.showCodebaseMap", async () => {
 			const instances = CodebaseMappingManager.getAllInstances();
