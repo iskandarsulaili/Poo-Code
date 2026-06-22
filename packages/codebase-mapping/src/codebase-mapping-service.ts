@@ -1,3 +1,4 @@
+import { stat } from "node:fs/promises"
 import { ASTParser } from "./ast-parser.js"
 import { CacheManager } from "./cache-manager.js"
 import { DEFAULT_CONFIG, createLogger } from "./models.js"
@@ -191,6 +192,15 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
 				for (const filePath of files) {
 					try {
+						// Skip files larger than maxFileSize — readFile + regex parse would hang
+						const stats = await stat(filePath)
+						if (stats.size > this.config.maxFileSize) {
+							this.logger.warn(`Skipping oversized file (${(stats.size / 1024 / 1024).toFixed(1)}MB > ${(this.config.maxFileSize / 1024 / 1024).toFixed(0)}MB): ${filePath}`)
+							this._filesScanned++
+							this._totalFilesToScan-- // adjust total since we're skipping
+							filesSinceLastProgress++
+							continue
+						}
 						const { content, hash, size } = await this.fileDiscovery.readFile(filePath)
 						const { masked } = this.securityLayer.maskSecrets(content, filePath)
 						const language = detectLanguage(filePath)
