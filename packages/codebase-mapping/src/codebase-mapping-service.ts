@@ -453,6 +453,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 	}
 
 	async persistCacheStats(storagePath: string): Promise<void> {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const cm = this.cacheManager as any
 		const data = {
 			astHits: cm.hits?.get("ast") ?? 0,
@@ -469,7 +470,9 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			const p = await import("path")
 			const filePath = p.join(storagePath, "codebase-mapping-cache-stats.json")
 			await fs.writeFile(filePath, JSON.stringify(data), "utf-8")
-		} catch {}
+		} catch {
+			// Silently ignore — cache stats are best-effort
+		}
 	}
 
 	async restoreCacheStats(storagePath: string): Promise<void> {
@@ -478,6 +481,7 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			const p = await import("path")
 			const raw = await fs.readFile(p.join(storagePath, "codebase-mapping-cache-stats.json"), "utf-8")
 			const data = JSON.parse(raw)
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const cm = this.cacheManager as any
 			if (cm.hits && cm.misses && data.astHits != null) {
 				cm.hits.set("ast", data.astHits)
@@ -489,7 +493,9 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 				cm.hits.set("embedding", data.embeddingHits)
 				cm.misses.set("embedding", data.embeddingMisses)
 			}
-		} catch {}
+		} catch {
+			// Silently ignore — cache stats are best-effort
+		}
 	}
 
 	async updateSingleFile(filePath: string, rootPath: string): Promise<void> {

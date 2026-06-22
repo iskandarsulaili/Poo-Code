@@ -137,7 +137,10 @@ export class ParallelSubtaskOrchestrator {
 		this.blackboard = blackboard
 		this.contextRouter = contextRouter
 		this.logAggregator = logAggregator
-		this.maxParallel = maxParallel
+		// Force maxParallel=1 — startSubtask() changes the "current task" in ClineProvider
+		// and only ONE child can be active at a time. The single-open-task invariant is a
+		// hard constraint regardless of the experiment flag.
+		this.maxParallel = 1
 	}
 
 	/**
@@ -538,29 +541,43 @@ export class ParallelSubtaskOrchestrator {
 			// Execute the subtask via the real executor (spawns a child agent).
 			// If no executor is set, we fall back to a minimal delay for testing.
 			if (this.subtaskExecutor) {
-				const result = await this.subtaskExecutor({
-					subtaskId: subtask.id,
-					message: subtask.prompt,
-					mode: subtask.mode,
-					todos: undefined,
-				})
+				// Start heartbeat refresh loop — touches the heartbeat file every 5s
+				// so the heartbeat monitor doesn't falsely mark the subtask as dead
+				// while the child task is still running (can take minutes).
+				const heartbeatInterval = setInterval(() => {
+					this.lockManager.touchHeartbeat(heartbeatPath)
+				}, 5000)
 
-				// Mark as completed with the child's result
-				subtask.status = "completed"
-				subtask.metadata.completedAt = Date.now()
-				subtask.metadata.result = result.result
-				this.emitStatusUpdate(dag)
-				this.thoughtCallback?.(subtask.id, `Completed subtask "${subtask.id}" — result: ${result.result.slice(0, 100)}`)
+				try {
+					const result = await this.subtaskExecutor({
+						subtaskId: subtask.id,
+						message: subtask.prompt,
+						mode: subtask.mode,
+						todos: undefined,
+					})
 
-				this.logAggregator.log({
-					correlationId,
-					subtaskId: subtask.id,
-					component: "orchestrator",
-					level: "info",
-					message: `Subtask "${subtask.id}" completed (child: ${result.taskId})`,
-					timestamp: new Date().toISOString(),
-					durationMs: Date.now() - startTime,
-				})
+					// Mark as completed with the child's result
+					subtask.status = "completed"
+					subtask.metadata.completedAt = Date.now()
+					subtask.metadata.result = result.result
+					this.emitStatusUpdate(dag)
+					this.thoughtCallback?.(
+						subtask.id,
+						`Completed subtask "${subtask.id}" — result: ${result.result.slice(0, 100)}`,
+					)
+
+					this.logAggregator.log({
+						correlationId,
+						subtaskId: subtask.id,
+						component: "orchestrator",
+						level: "info",
+						message: `Subtask "${subtask.id}" completed (child: ${result.taskId})`,
+						timestamp: new Date().toISOString(),
+						durationMs: Date.now() - startTime,
+					})
+				} finally {
+					clearInterval(heartbeatInterval)
+				}
 			} else {
 				// No executor set — this is a test or dry-run scenario.
 				// Use a minimal delay so tests still pass.
@@ -590,7 +607,10 @@ export class ParallelSubtaskOrchestrator {
 			subtask.metadata.completedAt = Date.now()
 			subtask.metadata.error = error instanceof Error ? error.message : String(error)
 			this.emitStatusUpdate(dag)
-			this.thoughtCallback?.(subtask.id, `Failed subtask "${subtask.id}": ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`)
+			this.thoughtCallback?.(
+				subtask.id,
+				`Failed subtask "${subtask.id}": ${error instanceof Error ? error.message.slice(0, 100) : String(error)}`,
+			)
 
 			this.logAggregator.log({
 				correlationId,
@@ -753,9 +773,9 @@ export class ParallelSubtaskOrchestrator {
 	// ========================================================================
 
 	/**
-		* Emit a DAG status update via the status callback (if set).
-		* Called after each subtask status change so the webview can display live progress.
-		*/
+	 * Emit a DAG status update via the status callback (if set).
+	 * Called after each subtask status change so the webview can display live progress.
+	 */
 	private emitStatusUpdate(dag: SubtaskDAG): void {
 		if (this.statusCallback) {
 			try {
