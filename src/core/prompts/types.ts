@@ -9,4 +9,6 @@ export interface SystemPromptSettings {
 	newTaskRequireTodos: boolean
 	/** When true, model should hide vendor/company identity in responses */
 	isStealthModel?: boolean
+	/** Model context window size in tokens (for adaptive injection limits) */
+	contextWindow?: number
 }

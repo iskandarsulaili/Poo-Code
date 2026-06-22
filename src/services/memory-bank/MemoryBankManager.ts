@@ -1,5 +1,6 @@
 import * as fs from "fs/promises"
 import * as path from "path"
+import * as fsSync from "fs"
 
 /**
  * Memory Bank — structured markdown files for persistent project context.
@@ -110,6 +111,8 @@ export class MemoryBankManager {
   private memoryBankDir: string
   private _initialized: boolean = false
   private _contentCache: Map<MemoryBankFile, string> = new Map()
+  /** File watcher for detecting external edits to memory-bank/ files */
+  private _watcher: fsSync.FSWatcher | null = null
 
   /** Singleton instances keyed by workspace path */
   private static instances = new Map<string, MemoryBankManager>()
@@ -161,6 +164,9 @@ export class MemoryBankManager {
 
       // Ensure .gitignore has memory-bank/ entry
       await this._ensureGitignoreEntry()
+
+      // Start file watcher to invalidate cache on external edits
+      this._startWatcher()
 
       this._initialized = true
     } catch (err) {
@@ -297,12 +303,17 @@ export class MemoryBankManager {
       const header = lines.slice(0, COMPRESS_RETAIN_HEADER_LINES).join("\n")
       const body = lines.slice(COMPRESS_RETAIN_HEADER_LINES)
 
-      // Split body into entries: each `---` line is a separator between entries
-      // or each `###` / `*Updated` is an entry start
+      // Split body into entries: each `---` on its own line preceded by blank line is a separator,
+      // or each `### ` / `*Updated ` at the start of a line is an entry start.
+      // This avoids splitting on `---` used as horizontal rules within entry content.
       const entries: string[] = []
       let currentEntry: string[] = []
+      let prevLineWasBlank = false
       for (const line of body) {
-        if (line.trim() === "---" || line.startsWith("### ")) {
+        const trimmed = line.trim()
+        const isSeparator = trimmed === "---" && prevLineWasBlank
+        const isEntryStart = line.startsWith("### ") || line.startsWith("*Updated ")
+        if (isSeparator || isEntryStart) {
           if (currentEntry.length > 0) {
             entries.push(currentEntry.join("\n"))
           }
@@ -310,6 +321,7 @@ export class MemoryBankManager {
         } else {
           currentEntry.push(line)
         }
+        prevLineWasBlank = trimmed === ""
       }
       if (currentEntry.length > 0) {
         entries.push(currentEntry.join("\n"))
@@ -363,32 +375,46 @@ export class MemoryBankManager {
 
   /**
    * Ensure .gitignore has a memory-bank/ entry.
-   * Creates .gitignore if it doesn't exist.
+   * Also ensures .rooignore has a memory-bank/ entry so agent file tools don't waste context.
+   * Creates files if they don't exist.
    */
   private async _ensureGitignoreEntry(): Promise<void> {
-    const gitignorePath = path.join(this.cwd, ".gitignore")
+    // .gitignore — prevent git tracking of session state
+    await this._ensureIgnoreFileEntry(".gitignore")
+    // .rooignore — prevent agent file tools from reading memory bank files directly
+    // (they already load via system prompt injection)
+    await this._ensureIgnoreFileEntry(".rooignore")
+  }
+
+  /**
+   * Add memory-bank/ entry to an ignore file if not already present.
+   */
+  private async _ensureIgnoreFileEntry(filename: string): Promise<void> {
+    const filePath = path.join(this.cwd, filename)
     try {
       let content = ""
       try {
-        content = await fs.readFile(gitignorePath, "utf-8")
+        content = await fs.readFile(filePath, "utf-8")
       } catch {
-        // .gitignore doesn't exist, we'll create it
+        // File doesn't exist, we'll create it
       }
 
       const entry = `\n# Memory bank — per-session project context\n${MEMORY_BANK_DIR}/\n`
       if (!content.includes(MEMORY_BANK_DIR)) {
-        await fs.writeFile(gitignorePath, content + entry, "utf-8")
+        await fs.writeFile(filePath, content + entry, "utf-8")
       }
     } catch {
-      // Non-blocking — .gitignore is optional
+      // Non-blocking — ignore files are optional
     }
   }
 
   /**
    * Read ALL memory bank files and return a formatted context block
    * suitable for injection into the system prompt.
+   * If maxBytes is provided, the output is truncated to fit within that limit
+   * (adaptive to the model's context window).
    */
-  async getMemoryBankContext(): Promise<string> {
+  async getMemoryBankContext(maxBytes?: number): Promise<string> {
     await this.initialize()
     const sections: string[] = []
 
@@ -403,7 +429,7 @@ ${content.trim()}`)
 
     if (sections.length === 0) return ""
 
-    return `====
+    let result = `====
 
 MEMORY BANK — PERSISTENT PROJECT CONTEXT
 
@@ -419,13 +445,73 @@ Update it with the \`update_memory_bank\` tool whenever you:
 - Change core product understanding (→ productContext.md)
 
 ${sections.join("\n\n")}`
+
+    // Adaptive truncation: if result exceeds maxBytes, trim from the end
+    // but always keep the header + instructions (first ~600 bytes)
+    if (maxBytes && result.length > maxBytes) {
+      const headerEnd = result.indexOf("Update it with the") + "Update it with the".length
+      const keepHeader = result.substring(0, headerEnd + 200) // header + instructions
+      const body = result.substring(headerEnd + 200)
+
+      // Keep as much of the body as fits
+      const maxBodyBytes = Math.max(0, maxBytes - keepHeader.length - 200) // 200 bytes for truncation notice
+      const truncatedBody = body.length > maxBodyBytes
+        ? body.substring(0, maxBodyBytes) + "\n\n<!-- Memory bank context truncated to fit model context window -->"
+        : body
+
+      result = keepHeader + truncatedBody
+    }
+
+    return result
   }
 
   /**
    * Reset all cached instances (for workspace switch / shutdown).
    */
   static resetAllInstances(): void {
+    // Stop all watchers before clearing
+    for (const inst of MemoryBankManager.instances.values()) {
+      inst._stopWatcher()
+    }
     MemoryBankManager.instances.clear()
+  }
+
+  /**
+   * Start a file watcher on the memory-bank directory.
+   * Invalidates the content cache when files are changed externally.
+   */
+  private _startWatcher(): void {
+    this._stopWatcher() // Ensure no duplicate watcher
+    try {
+      this._watcher = fsSync.watch(this.memoryBankDir, (eventType, filename) => {
+        if (eventType === "change" && filename) {
+          const file = filename as string
+          // Check if it's one of our tracked files
+          for (const mbFile of MEMORY_BANK_FILES) {
+            if (file === mbFile || file.endsWith(`/${mbFile}`)) {
+              this._contentCache.delete(mbFile)
+              break
+            }
+          }
+        }
+      })
+    } catch {
+      // Non-blocking — watcher is optional
+    }
+  }
+
+  /**
+   * Stop the file watcher.
+   */
+  private _stopWatcher(): void {
+    if (this._watcher) {
+      try {
+        this._watcher.close()
+      } catch {
+        // Non-blocking
+      }
+      this._watcher = null
+    }
   }
 
   /** Cached initialized status */

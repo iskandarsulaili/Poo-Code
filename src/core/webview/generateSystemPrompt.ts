@@ -31,7 +31,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 
 	// Create a temporary API handler to check model info for stealth mode.
 	// This avoids relying on an active Cline instance which might not exist during preview.
-	let modelInfo: { isStealthModel?: boolean } | undefined
+	let modelInfo: { isStealthModel?: boolean; contextWindow?: number } | undefined
 	try {
 		const tempApiHandler = buildApiHandler(apiConfiguration)
 		modelInfo = tempApiHandler.getModel().info
@@ -60,6 +60,7 @@ export const generateSystemPrompt = async (provider: ClineProvider, message: Web
 				.getConfiguration(Package.name)
 				.get<boolean>("newTaskRequireTodos", false),
 			isStealthModel: modelInfo?.isStealthModel,
+			contextWindow: modelInfo?.contextWindow,
 		},
 		undefined, // todoList
 		undefined, // modelId

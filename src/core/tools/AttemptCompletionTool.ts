@@ -914,11 +914,22 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 			if (!exists) return
 
 			const timestamp = new Date().toISOString().replace("T", " ").substring(0, 16)
+			// Update progress.md with completed task entry
 			await manager.updateFile(
 				"progress.md",
 				`### Task Completed (${timestamp})\n${result.trim()}\n`,
 				true,
 			)
+			// Also update decisionLog.md with a summary entry if result contains decision-like content
+			// (starts with "Decision:" or "## Decision" or contains "architectural")
+			const lower = result.toLowerCase()
+			if (lower.includes("decision:") || lower.includes("## decision") || lower.includes("architectural")) {
+				await manager.updateFile(
+					"decisionLog.md",
+					`### Decision (${timestamp})\n${result.trim().substring(0, 500)}\n`,
+					true,
+				)
+			}
 		} catch {
 			// Non-blocking — silent failure
 		}

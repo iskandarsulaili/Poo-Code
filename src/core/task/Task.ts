@@ -4123,6 +4123,7 @@ Choose an alternative approach now.]`
 						.getConfiguration(Package.name)
 						.get<boolean>("newTaskRequireTodos", false),
 					isStealthModel: modelInfo?.isStealthModel,
+					contextWindow: modelInfo?.contextWindow,
 				},
 				undefined, // todoList
 				this.api.getModel().id,

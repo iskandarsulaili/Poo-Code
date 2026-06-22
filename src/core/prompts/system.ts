@@ -100,7 +100,7 @@ Use the \`codebase_dependency\` tool to query the dependency graph before refact
  * Injected into the system prompt so the agent has immediate awareness of
  * project goals, decisions, and progress across sessions.
  */
-async function getMemoryBankSection(cwd: string, experiments?: Partial<Experiments>): Promise<string> {
+async function getMemoryBankSection(cwd: string, experiments?: Partial<Experiments>, settings?: SystemPromptSettings): Promise<string> {
 	// Return empty if user explicitly disabled memory bank
 	if (experiments?.disableMemoryBank) return ""
 
@@ -109,7 +109,13 @@ async function getMemoryBankSection(cwd: string, experiments?: Partial<Experimen
 		const exists = await manager.exists()
 		if (!exists) return ""
 
-		const context = await manager.getMemoryBankContext()
+		// Adaptive context limit: use at most 10% of the model's context window (default 128K tokens)
+		const contextWindow = settings?.contextWindow ?? 128_000
+		const maxContextBytes = Math.floor((contextWindow) * 10 / 100) // 10% of context window in ~tokens
+		// Rough estimate: 1 token ~ 4 bytes for markdown
+		const maxContentBytes = maxContextBytes * 4
+
+		const context = await manager.getMemoryBankContext(maxContentBytes)
 		if (!context) return ""
 
 		return `\n${context}`
@@ -220,7 +226,7 @@ ${getCapabilitiesSection(cwd, shouldIncludeMcp ? mcpHub : undefined)}
 ${modesSection}
 ${skillsSection ? `\n${skillsSection}` : ""}${combinedLearningContext}
 ${await getCodebaseMappingSection(cwd, context, experiments)}
-${await getMemoryBankSection(cwd, experiments)}
+${await getMemoryBankSection(cwd, experiments, settings)}
 ${getRulesSection(cwd, settings)}
 
 ${getSystemInfoSection(cwd)}
