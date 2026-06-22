@@ -29,14 +29,7 @@ const DEFAULT_CONFIG: RequirementsVerifierConfig = {
 }
 
 /** File-writing tool names whose params contain a file path (lowercase) */
-const FILE_WRITE_TOOL_NAMES = new Set([
-	"write_to_file",
-	"apply_diff",
-	"edit",
-	"search_replace",
-	"edit_file",
-	"patch",
-])
+const FILE_WRITE_TOOL_NAMES = new Set(["write_to_file", "apply_diff", "edit", "search_replace", "edit_file", "patch"])
 
 /**
  * Minimal interface for Anthropic tool_use blocks in API conversation history.
@@ -176,13 +169,12 @@ export class RequirementsVerifier {
 	 * @param apiMessages - The API conversation history (ApiMessage[] from task.apiConversationHistory)
 	 * @param cwd - The working directory for resolving relative paths
 	 */
-	autoVerifyFromToolHistory(
-		apiMessages: ApiMessage[],
-		cwd: string,
-	): void {
+	autoVerifyFromToolHistory(apiMessages: ApiMessage[], cwd: string): void {
 		const active = this.getActiveRequirements()
 		if (active.length === 0) {
-			this.logger?.appendLine("[RequirementsVerifier] No active requirements to auto-verify against tool history.")
+			this.logger?.appendLine(
+				"[RequirementsVerifier] No active requirements to auto-verify against tool history.",
+			)
 			return
 		}
 
@@ -195,22 +187,30 @@ export class RequirementsVerifier {
 		)
 
 		if (filePaths.length > 0) {
-			this.logger?.appendLine(`[RequirementsVerifier] Files modified: ${filePaths.slice(0, 10).join(", ")}${filePaths.length > 10 ? `... (+${filePaths.length - 10} more)` : ""}`)
+			this.logger?.appendLine(
+				`[RequirementsVerifier] Files modified: ${filePaths.slice(0, 10).join(", ")}${filePaths.length > 10 ? `... (+${filePaths.length - 10} more)` : ""}`,
+			)
 		}
 
 		// Read the git diff if available for more precise change detection
 		let gitDiffFiles: string[] = []
 		try {
 			const { execSync } = require("child_process")
-			const diffOutput = execSync("git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD", {
-				cwd,
-				encoding: "utf-8",
-				timeout: 5000,
-				stdio: ["pipe", "pipe", "pipe"],
-			}) as string
+			const diffOutput = execSync(
+				"git diff --name-only --diff-filter=ACMRTD && echo '---STAGED---' && git diff --cached --name-only --diff-filter=ACMRTD",
+				{
+					cwd,
+					encoding: "utf-8",
+					timeout: 5000,
+					stdio: ["pipe", "pipe", "pipe"],
+				},
+			) as string
 			const parts = diffOutput.split("---STAGED---")
 			const allGitFiles = new Set<string>()
-			for (const f of (parts[0] || "").trim().split("\n").concat((parts[1] || "").trim().split("\n"))) {
+			for (const f of (parts[0] || "")
+				.trim()
+				.split("\n")
+				.concat((parts[1] || "").trim().split("\n"))) {
 				const clean = f.trim()
 				if (clean && !clean.startsWith("---STAGED---")) allGitFiles.add(clean)
 			}
@@ -305,19 +305,105 @@ export class RequirementsVerifier {
 	 */
 	private extractKeywords(text: string): string[] {
 		const stopWords = new Set([
-			"the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-			"of", "with", "by", "from", "as", "is", "was", "be", "been", "are",
-			"were", "has", "have", "had", "do", "does", "did", "will", "would",
-			"should", "could", "can", "may", "might", "shall", "need", "must",
-			"this", "that", "these", "those", "it", "its", "all", "each", "every",
-			"some", "any", "no", "not", "only", "just", "also", "very", "too",
-			"make", "made", "use", "used", "using", "add", "added", "adding",
-			"new", "create", "created", "creating", "implement", "implemented",
-			"implementing", "implementation", "update", "updated", "updating",
-			"change", "changed", "changing", "remove", "removed", "removing",
-			"fix", "fixed", "fixing", "ensure", "ensures", "ensuring",
-			"support", "supports", "supported", "supporting", "function",
-			"functionality", "feature", "file", "files", "code", "way", "work",
+			"the",
+			"a",
+			"an",
+			"and",
+			"or",
+			"but",
+			"in",
+			"on",
+			"at",
+			"to",
+			"for",
+			"of",
+			"with",
+			"by",
+			"from",
+			"as",
+			"is",
+			"was",
+			"be",
+			"been",
+			"are",
+			"were",
+			"has",
+			"have",
+			"had",
+			"do",
+			"does",
+			"did",
+			"will",
+			"would",
+			"should",
+			"could",
+			"can",
+			"may",
+			"might",
+			"shall",
+			"need",
+			"must",
+			"this",
+			"that",
+			"these",
+			"those",
+			"it",
+			"its",
+			"all",
+			"each",
+			"every",
+			"some",
+			"any",
+			"no",
+			"not",
+			"only",
+			"just",
+			"also",
+			"very",
+			"too",
+			"make",
+			"made",
+			"use",
+			"used",
+			"using",
+			"add",
+			"added",
+			"adding",
+			"new",
+			"create",
+			"created",
+			"creating",
+			"implement",
+			"implemented",
+			"implementing",
+			"implementation",
+			"update",
+			"updated",
+			"updating",
+			"change",
+			"changed",
+			"changing",
+			"remove",
+			"removed",
+			"removing",
+			"fix",
+			"fixed",
+			"fixing",
+			"ensure",
+			"ensures",
+			"ensuring",
+			"support",
+			"supports",
+			"supported",
+			"supporting",
+			"function",
+			"functionality",
+			"feature",
+			"file",
+			"files",
+			"code",
+			"way",
+			"work",
 		])
 
 		const words = text
@@ -362,31 +448,51 @@ export class RequirementsVerifier {
 
 		// Strong signals — explicit read-only statements
 		const strongReadOnly = [
-			"do not modify", "don't modify", "do not change", "don't change",
-			"do not create", "don't create", "do not write", "don't write",
-			"read-only", "read only", "readonly", "without making changes",
-			"without modifying", "review only", "audit only",
+			"do not modify",
+			"don't modify",
+			"do not change",
+			"don't change",
+			"do not create",
+			"don't create",
+			"do not write",
+			"don't write",
+			"read-only",
+			"read only",
+			"readonly",
+			"without making changes",
+			"without modifying",
+			"review only",
+			"audit only",
 		]
 		for (const phrase of strongReadOnly) {
 			if (taskText.includes(phrase)) return true
 		}
 
 		// Count weak signals — need at least 2 to trigger
-		const weakAuditSignals = [
-			"audit", "review", "inspect", "analyze",
-		]
+		const weakAuditSignals = ["audit", "review", "inspect", "analyze"]
 		const readOnlySignalCount = weakAuditSignals.filter((kw) => taskText.includes(kw)).length
 
 		// If the task explicitly talks about "verify" or "check" in a read-only context
 		// (paired with existing code language like "verify that", "check if")
 		const hasVerificationContext = /\b(verify|check)\s+(that|if|whether|the|your)\b/i.test(taskText)
-		const isExploratory = /\b(what|how|why|where|when|which)\b/i.test(taskText) &&
+		const isExploratory =
+			/\b(what|how|why|where|when|which)\b/i.test(taskText) &&
 			/\b(does|is|are|was|were|has|have)\b/i.test(taskText)
 
 		// Count write/modify keywords — if these appear, it's NOT read-only
 		const writeSignals = [
-			"create", "implement", "build", "write", "modify", "add",
-			"fix", "refactor", "update", "change", "make", "produce",
+			"create",
+			"implement",
+			"build",
+			"write",
+			"modify",
+			"add",
+			"fix",
+			"refactor",
+			"update",
+			"change",
+			"make",
+			"produce",
 		]
 		const writeSignalCount = writeSignals.filter((kw) => taskText.includes(kw)).length
 
@@ -506,7 +612,8 @@ export class RequirementsVerifier {
 		const requirements: Requirement[] = []
 
 		// Action verbs that signal a new requirement
-		const actionVerbs = /^(create|implement|build|add|make|write|develop|design|set. up|configure|install|deploy|integrate|migrate|convert|refactor|rewrite|restructure|optimize|improve|fix|resolve|address|handle|manage|process|generate|produce|render|display|show|list|filter|search|sort|paginate|authenticate|authorize|validate|sanitize|encrypt|decrypt|notify|send|receive|fetch|load|save|store|cache|sync|backup|restore|monitor|log|test|cover|ensure|verify|check|support|allow|prevent|block|restrict|limit|extend|modify|update|change|replace|remove|delete|clean|clear|reset|reinitialize)/i
+		const actionVerbs =
+			/^(create|implement|build|add|make|write|develop|design|set. up|configure|install|deploy|integrate|migrate|convert|refactor|rewrite|restructure|optimize|improve|fix|resolve|address|handle|manage|process|generate|produce|render|display|show|list|filter|search|sort|paginate|authenticate|authorize|validate|sanitize|encrypt|decrypt|notify|send|receive|fetch|load|save|store|cache|sync|backup|restore|monitor|log|test|cover|ensure|verify|check|support|allow|prevent|block|restrict|limit|extend|modify|update|change|replace|remove|delete|clean|clear|reset|reinitialize)/i
 
 		for (const sentence of sentences) {
 			const trimmed = sentence.trim()

@@ -1,35 +1,35 @@
 {
-  "name": "@zoo-code/codebase-mapping",
-  "version": "0.1.0",
-  "description": "Codebase mapping system for Zoo-Code — AST parsing, token optimization, cross-language resolution, and multi-modal serialization",
-  "private": true,
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    }
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "lint": "eslint src/"
-  },
-  "dependencies": {
-    "web-tree-sitter": "^0.22.6",
-    "p-limit": "^6.2.0",
-    "ignore": "^7.0.3",
-    "minimatch": "^10.0.1"
-  },
-  "devDependencies": {
-    "@roo-code/config-eslint": "workspace:^",
-    "@types/node": "^22.13.0",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.3",
-    "eslint": "^9.22.0"
-  }
+	"name": "@zoo-code/codebase-mapping",
+	"version": "0.1.0",
+	"description": "Codebase mapping system for Zoo-Code — AST parsing, token optimization, cross-language resolution, and multi-modal serialization",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint src/"
+	},
+	"dependencies": {
+		"web-tree-sitter": "^0.22.6",
+		"p-limit": "^6.2.0",
+		"ignore": "^7.0.3",
+		"minimatch": "^10.0.1"
+	},
+	"devDependencies": {
+		"@roo-code/config-eslint": "workspace:^",
+		"@types/node": "^22.13.0",
+		"typescript": "^5.8.3",
+		"vitest": "^3.2.3",
+		"eslint": "^9.22.0"
+	}
 }

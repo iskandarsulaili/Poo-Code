@@ -1,6 +1,6 @@
 import { DEFAULT_CONFIG, createLogger } from "./models.js"
 import { SymbolKind } from "./types.js"
-import type { CodebaseMappingConfig, ExtractedSymbol, ParseResult, SymbolReference } from "./types.js"
+import type { CodebaseMappingConfig, ExtractedSymbol, ParseResult } from "./types.js"
 import { createExtractedSymbol, createSymbolReference } from "./models.js"
 
 const NODE_KIND_TO_SYMBOL_KIND: Record<string, SymbolKind> = {

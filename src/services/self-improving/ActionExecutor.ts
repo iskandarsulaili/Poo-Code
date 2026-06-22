@@ -274,7 +274,7 @@ export class ActionExecutor {
 				const existing = await this.skillsManager.getSkillContent(skillName, mode)
 				if (existing && existing.instructions.trim() === resolvedContent.trim()) {
 					this.logger.appendLine(`[ActionExecutor] Skill content unchanged for ${skillName}, skipping update`)
-					return false
+					return true // Return true so action is removed from pending queue — prevents infinite loop
 				}
 			} catch {
 				// If we can't read the existing content, proceed with update
