@@ -21,7 +21,7 @@ interface AttemptCompletionParams {
 }
 
 export interface AttemptCompletionCallbacks extends ToolCallbacks {
-	taskFinishSubTaskApproval: () => Promise<boolean>
+	askFinishSubTaskApproval: () => Promise<boolean>
 	toolDescription: () => string
 }
 
@@ -1140,3 +1140,5 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 		}
 	}
 }
+
+export const attemptCompletionTool = new AttemptCompletionTool()

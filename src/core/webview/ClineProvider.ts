@@ -92,6 +92,7 @@ import { fileExistsAtPath } from "../../utils/fs"
 import { setTtsEnabled, setTtsSpeed } from "../../utils/tts"
 import { getWorkspaceGitInfo } from "../../utils/git"
 import { getWorkspacePath } from "../../utils/path"
+import { setFullMachineAccess } from "../../utils/pathUtils"
 import { OrganizationAllowListViolationError } from "../../utils/errors"
 
 import { setPanel } from "../../activate/registerCommands"
@@ -2254,6 +2255,7 @@ export class ClineProvider
 			disabledTools,
 			telemetrySetting,
 			showRooIgnoredFiles,
+			fullMachineAccess,
 			enableSubfolderRules,
 			language,
 			maxImageFileSize,
@@ -2295,6 +2297,9 @@ export class ClineProvider
 			kaizenRemoteName,
 			kaizenCommitTemplate,
 		} = await this.getState()
+
+		// Sync fullMachineAccess flag to the module-level pathUtils setting
+		setFullMachineAccess(fullMachineAccess ?? true)
 
 		let cloudOrganizations: CloudOrganizationMembership[] = []
 
@@ -2420,6 +2425,7 @@ export class ClineProvider
 			telemetryKey,
 			machineId,
 			showRooIgnoredFiles: showRooIgnoredFiles ?? false,
+			fullMachineAccess: fullMachineAccess ?? true,
 			enableSubfolderRules: enableSubfolderRules ?? false,
 			language: language ?? formatLanguage(vscode.env.language),
 			renderContext: this.renderContext,
@@ -2634,6 +2640,7 @@ export class ClineProvider
 			disabledTools: stateValues.disabledTools,
 			telemetrySetting: stateValues.telemetrySetting || "unset",
 			showRooIgnoredFiles: stateValues.showRooIgnoredFiles ?? false,
+			fullMachineAccess: stateValues.fullMachineAccess ?? true,
 			enableSubfolderRules: stateValues.enableSubfolderRules ?? false,
 			maxImageFileSize: stateValues.maxImageFileSize ?? 5,
 			maxTotalImageSize: stateValues.maxTotalImageSize ?? 20,
@@ -3783,7 +3790,12 @@ export class ClineProvider
 		if (instances.length === 0) return
 
 		this._codebaseMappingProgressHandler = (event: any) => {
-			if (event.type === "scan_started" || event.type === "file_added" || event.type === "file_modified" || event.type === "scan_completed") {
+			if (
+				event.type === "scan_started" ||
+				event.type === "file_added" ||
+				event.type === "file_modified" ||
+				event.type === "scan_completed"
+			) {
 				this._sendCodebaseMappingStatus()
 			}
 		}
@@ -3834,17 +3846,12 @@ export class ClineProvider
 				}
 
 				// Report real stats — even partial during scan
-				const fileCount =
-					svc._filesScanned > 0
-						? svc._filesScanned
-						: graph.files.size
+				const fileCount = svc._filesScanned > 0 ? svc._filesScanned : graph.files.size
 				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
 
 				// Use provisional edge count during scan, real edge count after graph build
 				const edgeCount =
-					uiStatus === "scanning" && svc._accumulatedEdges > 0
-						? svc._accumulatedEdges
-						: graph.edges.length
+					uiStatus === "scanning" && svc._accumulatedEdges > 0 ? svc._accumulatedEdges : graph.edges.length
 				// Cache hit rate is always from stats — it's cumulative
 				const cacheHitRate = stats.astHitRate
 

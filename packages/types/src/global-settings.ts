@@ -181,6 +181,13 @@ export const globalSettingsSchema = z.object({
 	maxOpenTabsContext: z.number().optional(),
 	maxWorkspaceFiles: z.number().optional(),
 	showRooIgnoredFiles: z.boolean().optional(),
+	/**
+	 * Whether to allow file operations outside the VS Code workspace.
+	 * When enabled (default), Zoo-Code can read/write anywhere on the filesystem.
+	 * When disabled, file operations are restricted to the opened workspace folder.
+	 * @default true
+	 */
+	fullMachineAccess: z.boolean().optional(),
 	enableSubfolderRules: z.boolean().optional(),
 	maxImageFileSize: z.number().optional(),
 	maxTotalImageSize: z.number().optional(),

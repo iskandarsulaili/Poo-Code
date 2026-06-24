@@ -46,6 +46,12 @@ import { webSearchTool } from "../tools/WebSearchTool"
 import { webExtractTool } from "../tools/WebExtractTool"
 import { executeParallelSubtaskTool } from "../tools/ExecuteParallelSubtaskTool"
 import { executeParallelChildTaskTool } from "../tools/ExecuteParallelChildTaskTool"
+import { sessionSearchTool } from "../tools/SessionSearchTool"
+import { delegateTaskTool } from "../tools/DelegateTaskTool"
+import { cronjobTool } from "../tools/CronjobTool"
+import { webhookTool } from "../tools/WebhookTool"
+import { codeExecutionTool } from "../tools/CodeExecutionTool"
+import { browserTool } from "../tools/BrowserTool"
 
 import { formatResponse } from "../prompts/responses"
 import { sanitizeToolUseId } from "../../utils/tool-id"
@@ -965,6 +971,48 @@ export async function presentAssistantMessage(cline: Task) {
 					break
 				case "execute_parallel_child_task":
 					await executeParallelChildTaskTool.handle(cline, block as ToolUse<"execute_parallel_child_task">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "session_search":
+					await sessionSearchTool.handle(cline, block as ToolUse<"session_search">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "delegate_task":
+					await delegateTaskTool.handle(cline, block as ToolUse<"delegate_task">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "cronjob":
+					await cronjobTool.handle(cline, block as ToolUse<"cronjob">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "webhook":
+					await webhookTool.handle(cline, block as ToolUse<"webhook">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "code_execution":
+					await codeExecutionTool.handle(cline, block as ToolUse<"code_execution">, {
+						askApproval,
+						handleError,
+						pushToolResult,
+					})
+					break
+				case "browser":
+					await browserTool.handle(cline, block as ToolUse<"browser">, {
 						askApproval,
 						handleError,
 						pushToolResult,

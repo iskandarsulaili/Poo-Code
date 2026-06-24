@@ -32,6 +32,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 	maxOpenTabsContext: number
 	maxWorkspaceFiles: number
 	showRooIgnoredFiles?: boolean
+	fullMachineAccess?: boolean
 	enableSubfolderRules?: boolean
 	maxImageFileSize?: number
 	maxTotalImageSize?: number
@@ -50,6 +51,7 @@ type ContextManagementSettingsProps = HTMLAttributes<HTMLDivElement> & {
 		| "maxOpenTabsContext"
 		| "maxWorkspaceFiles"
 		| "showRooIgnoredFiles"
+		| "fullMachineAccess"
 		| "enableSubfolderRules"
 		| "maxImageFileSize"
 		| "maxTotalImageSize"
@@ -70,6 +72,7 @@ export const ContextManagementSettings = ({
 	maxOpenTabsContext,
 	maxWorkspaceFiles,
 	showRooIgnoredFiles,
+	fullMachineAccess,
 	enableSubfolderRules,
 	setCachedStateField,
 	maxImageFileSize,
@@ -226,6 +229,23 @@ export const ContextManagementSettings = ({
 					</VSCodeCheckbox>
 					<div className="text-vscode-descriptionForeground text-sm mt-1 mb-3">
 						{t("settings:contextManagement.rooignore.description")}
+					</div>
+				</SearchableSetting>
+
+				<SearchableSetting
+					settingId="context-full-machine-access"
+					section="contextManagement"
+					label="Full Machine Access">
+					<VSCodeCheckbox
+						checked={fullMachineAccess}
+						onChange={(e: any) => setCachedStateField("fullMachineAccess", e.target.checked)}
+						data-testid="full-machine-access-checkbox">
+						<label className="block font-medium mb-1">Full Machine Access</label>
+					</VSCodeCheckbox>
+					<div className="text-vscode-descriptionForeground text-sm mt-1 mb-3">
+						Allow file operations outside the VS Code workspace. When enabled, Zoo-Code can read/write
+						anywhere on the filesystem. When disabled, file operations are restricted to the opened
+						workspace folder.
 					</div>
 				</SearchableSetting>
 

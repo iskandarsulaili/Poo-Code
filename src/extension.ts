@@ -219,10 +219,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-		// Initialize codebase mapping service
-		CodebaseMappingManager.initializeAll(context, vscode.workspace.workspaceFolders!).catch((err) => {
-			outputChannel.appendLine(`[CodebaseMapping] Initialization error: ${err instanceof Error ? err.message : String(err)}`)
-		})
+	// Initialize codebase mapping service
+	CodebaseMappingManager.initializeAll(context, vscode.workspace.workspaceFolders!).catch((err) => {
+		outputChannel.appendLine(
+			`[CodebaseMapping] Initialization error: ${err instanceof Error ? err.message : String(err)}`,
+		)
+	})
 
 	// Initialize output parser registry for structured command output parsing.
 	const outputParser = new OutputParser()
@@ -326,6 +328,32 @@ export async function activate(context: vscode.ExtensionContext) {
 			)
 		}
 	}
+
+	// Initialize cron scheduler in background
+	void (async () => {
+		try {
+			const { CronScheduler } = await import("./services/cron/CronScheduler")
+			await CronScheduler.getInstance().initialize()
+			outputChannel.appendLine("[CronScheduler] Initialized")
+		} catch (error) {
+			outputChannel.appendLine(
+				`[CronScheduler] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	})()
+
+	// Initialize webhook manager in background
+	void (async () => {
+		try {
+			const { WebhookManager } = await import("./services/webhook/WebhookManager")
+			await WebhookManager.getInstance().initialize()
+			outputChannel.appendLine("[WebhookManager] Initialized")
+		} catch (error) {
+			outputChannel.appendLine(
+				`[WebhookManager] Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+			)
+		}
+	})()
 
 	// Initialize the provider *before* the Roo Code Cloud service.
 	const provider = new ClineProvider(context, outputChannel, "sidebar", contextProxy, mdmService)
@@ -528,4 +556,16 @@ export async function deactivate() {
 	TelemetryService.instance.shutdown()
 	TerminalRegistry.cleanup()
 	CodebaseMappingManager.disposeAll()
+
+	// Cleanup cron scheduler
+	try {
+		const { CronScheduler } = require("./services/cron/CronScheduler")
+		CronScheduler.getInstance().dispose()
+	} catch {}
+
+	// Cleanup webhook manager
+	try {
+		const { WebhookManager } = require("./services/webhook/WebhookManager")
+		WebhookManager.getInstance().dispose()
+	} catch {}
 }

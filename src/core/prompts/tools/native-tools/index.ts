@@ -30,6 +30,12 @@ import executeParallelChildTask from "./execute_parallel_child_task"
 import codebaseDependency from "./codebase_dependency"
 import codebaseMappingQuery from "./codebase_mapping_query"
 import updateMemoryBank from "./update_memory_bank"
+import sessionSearch from "./session_search"
+import delegateTask from "./delegate_task"
+import cronjob from "./cronjob"
+import webhook from "./webhook"
+import codeExecution from "./code_execution"
+import browser from "./browser"
 
 export { getMcpServerTools } from "./mcp_server"
 export { convertOpenAIToolToAnthropic, convertOpenAIToolsToAnthropic } from "./converters"
@@ -85,10 +91,16 @@ export function getNativeTools(options: NativeToolsOptions = {}): OpenAI.Chat.Ch
 		webExtract,
 		executeParallelSubtask,
 		executeParallelChildTask,
-	codebaseDependency,
-	codebaseMappingQuery,
-	updateMemoryBank,
-] satisfies OpenAI.Chat.ChatCompletionTool[]
+		codebaseDependency,
+		codebaseMappingQuery,
+		updateMemoryBank,
+		sessionSearch,
+		delegateTask,
+		cronjob,
+		webhook,
+		codeExecution,
+		browser,
+	] satisfies OpenAI.Chat.ChatCompletionTool[]
 }
 
 // Backward compatibility: export default tools with line ranges enabled

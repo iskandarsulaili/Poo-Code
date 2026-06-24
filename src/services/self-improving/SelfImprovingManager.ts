@@ -31,7 +31,7 @@ import { MemoryBackendFactory } from "./MemoryBackendFactory"
 import { MemoryStore } from "./MemoryStore"
 import { SkillUsageStore } from "./SkillUsageStore"
 import { ActionExecutor } from "./ActionExecutor"
-import { CuratorService } from "./CuratorService"
+import { CuratorService, DEFAULT_CURATOR_CONFIG } from "./CuratorService"
 import type { CuratorReport } from "./CuratorService"
 import { ReviewPromptFactory } from "./ReviewPromptFactory"
 import { TranscriptRecall } from "./TranscriptRecall"
@@ -1033,7 +1033,18 @@ export class SelfImprovingManager {
 	private createCuratorService(
 		config: SelfImprovingManagerOptions["curatorConfig"] = this.curatorConfig,
 	): CuratorService {
-		return new CuratorService(this.storageBasePath, this.skillUsageStore, this.logger, config)
+		const mergedConfig = { ...DEFAULT_CURATOR_CONFIG, ...config }
+		const service = new CuratorService(this.storageBasePath, this.skillUsageStore, this.logger, mergedConfig)
+		// Wire real LLM review provider if enabled
+		if (mergedConfig.llmReviewEnabled) {
+			try {
+				const { LLMReviewProviderImpl } = require("./LLMReviewProviderImpl")
+				service.setLLMReviewProvider(new LLMReviewProviderImpl())
+			} catch (err) {
+				this.logger.appendLine(`[SelfImprovingManager] Failed to wire LLM review provider: ${err}`)
+			}
+		}
+		return service
 	}
 
 	private createTranscriptRecall(): TranscriptRecall {

@@ -584,6 +584,66 @@ export class NativeToolCallParser {
 					}
 				}
 				break
+			case "session_search":
+				if (partialArgs.query !== undefined) {
+					nativeArgs = {
+						query: partialArgs.query,
+						limit: partialArgs.limit,
+						mode: partialArgs.mode,
+					}
+				}
+				break
+			case "delegate_task":
+				if (partialArgs.goal !== undefined) {
+					nativeArgs = {
+						goal: partialArgs.goal,
+						context: partialArgs.context,
+						toolsets: partialArgs.toolsets,
+					}
+				}
+				break
+			case "cronjob":
+				if (partialArgs.action !== undefined) {
+					nativeArgs = {
+						action: partialArgs.action,
+						schedule: partialArgs.schedule,
+						prompt: partialArgs.prompt,
+						name: partialArgs.name,
+						job_id: partialArgs.job_id,
+					}
+				}
+				break
+			case "webhook":
+				if (partialArgs.action !== undefined) {
+					nativeArgs = {
+						action: partialArgs.action,
+						name: partialArgs.name,
+						url: partialArgs.url,
+						prompt: partialArgs.prompt,
+					}
+				}
+				break
+			case "code_execution":
+				if (partialArgs.code !== undefined) {
+					nativeArgs = {
+						code: partialArgs.code,
+						timeout: partialArgs.timeout,
+					}
+				}
+				break
+			case "browser":
+				if (partialArgs.action !== undefined) {
+					nativeArgs = {
+						action: partialArgs.action,
+						url: partialArgs.url,
+						selector: partialArgs.selector,
+						text: partialArgs.text,
+						direction: partialArgs.direction,
+						key: partialArgs.key,
+						timeout: partialArgs.timeout,
+					}
+				}
+				break
 
 			case "switch_mode":
 				if (partialArgs.mode_slug !== undefined || partialArgs.reason !== undefined) {
