@@ -1128,11 +1128,11 @@ export class AttemptCompletionTool extends BaseTool<"attempt_completion"> {
 	private emitTaskCompleted(task: Task, result: string): void {
 		try {
 			const ts = TelemetryService.instance
-			if (ts?.trackEvent) {
-				ts.trackEvent(RooCodeEventName.TaskCompleted, {
+			if (ts && "trackEvent" in ts) {
+				;(ts as any).trackEvent(RooCodeEventName.TaskCompleted, {
 					taskId: task.taskId,
 					resultLength: result.length,
-					mode: task.mode,
+					mode: (task as any).mode,
 				})
 			}
 		} catch {
