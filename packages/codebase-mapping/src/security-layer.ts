@@ -76,9 +76,71 @@ export class SecurityLayer {
 		return detections
 	}
 
-	checkComplianceBoundaries(_filePath: string): ComplianceBoundary[] {
-		// Compliance boundary checking will be implemented here
-		return []
+	checkComplianceBoundaries(filePath: string): ComplianceBoundary[] {
+		const boundaries: ComplianceBoundary[] = []
+		const lower = filePath.toLowerCase()
+
+		// Check .gitignore boundaries
+		if (lower.includes(".git") || lower.includes(".svn") || lower.includes(".hg")) {
+			boundaries.push({
+				pattern: "**/.git/**",
+				type: "gitignore",
+				matchedFiles: [filePath],
+			})
+		}
+
+		// Check .rooignore boundaries
+		if (lower.includes("node_modules") || lower.includes("dist") || lower.includes("build") || lower.includes(".next")) {
+			boundaries.push({
+				pattern: "**/node_modules/**, **/dist/**, **/build/**, **/.next/**",
+				type: "rooignore",
+				matchedFiles: [filePath],
+			})
+		}
+
+		// Check custom deny patterns from config
+		for (const pattern of this.config.excludedPatterns) {
+			const globToRegex = pattern
+				.replace(/\./g, "\\.")
+				.replace(/\*\*/g, "___GLOBSTAR___")
+				.replace(/\*/g, "[^/]*")
+				.replace(/___GLOBSTAR___/g, ".*")
+			try {
+				const re = new RegExp(`^${globToRegex}$`)
+				if (re.test(filePath)) {
+					boundaries.push({
+						pattern,
+						type: "custom_deny",
+						matchedFiles: [filePath],
+					})
+				}
+			} catch {
+				// Skip invalid regex patterns
+			}
+		}
+
+		// Check custom allow patterns
+		for (const pattern of this.config.allowedPatterns) {
+			const globToRegex = pattern
+				.replace(/\./g, "\\.")
+				.replace(/\*\*/g, "___GLOBSTAR___")
+				.replace(/\*/g, "[^/]*")
+				.replace(/___GLOBSTAR___/g, ".*")
+			try {
+				const re = new RegExp(`^${globToRegex}$`)
+				if (re.test(filePath)) {
+					boundaries.push({
+						pattern,
+						type: "custom_allow",
+						matchedFiles: [filePath],
+					})
+				}
+			} catch {
+				// Skip invalid regex patterns
+			}
+		}
+
+		return boundaries
 	}
 
 	private initializeSecretPatterns(): RegExp[] {

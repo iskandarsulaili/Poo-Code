@@ -529,7 +529,7 @@ export interface CodebaseMappingAPI {
 	getImplicitFlows(): Promise<ImplicitFlow[]>
 	getGitMetadata(filePath: string): Promise<GitMetadata | null>
 	getCacheStats(): Promise<CacheStats>
-	getDocUpdates(): Promise<DocUpdate[]>
+	getDocUpdates(limit?: number, offset?: number): Promise<{ updates: DocUpdate[]; staleReports: StaleDocReport[] }>
 	onEvent(handler: (event: MappingEvent) => void): void
 	dispose(): void
 }

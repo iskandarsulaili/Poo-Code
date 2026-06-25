@@ -78,24 +78,82 @@ export class TokenCompressor {
     }
   }
 
-  private summarize(_content: string): string {
-    // Summary extraction will be implemented here
-    return "";
+  private summarize(content: string): string {
+  	// L0: Keep only first line of each file (filename/header) + line count
+  	const lines = content.split("\n")
+  	const header = lines[0] || ""
+  	const totalLines = lines.length
+  	const nonEmpty = lines.filter((l) => l.trim().length > 0).length
+  	return `${header}\n  [${totalLines} lines, ${nonEmpty} non-empty]`
   }
 
-  private extractSignatures(_content: string): string {
-    // Signature extraction will be implemented here
-    return "";
+  private extractSignatures(content: string): string {
+  	// L1: Extract function/class/interface signatures (lines matching declaration patterns)
+  	const lines = content.split("\n")
+  	const sigLines: string[] = []
+  	const sigPatterns = [
+  		/^\s*(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait|fun|func)\s+\w+/,
+  		/^\s*(?:public|private|protected|internal)?\s*(?:static\s+)?(?:async\s+)?(?:get|set|function|method)\s+\w+/,
+  		/^\s*(?:import|from|use|require)\s+/,
+  		/^\s*(?:export\s+)?(?:default\s+)?(?:function|class|const|let|var)\s+\w+/,
+  		/^\s*@\w+/,
+  		/^\s*\/\*\*/,
+  		/^\s*\*\/?/,
+  	]
+  	for (const line of lines) {
+  		for (const pat of sigPatterns) {
+  			if (pat.test(line)) {
+  				sigLines.push(line)
+  				break
+  			}
+  		}
+  	}
+  	return sigLines.join("\n")
   }
 
-  private extractDeclarations(_content: string): string {
-    // Declaration extraction will be implemented here
-    return "";
+  private extractDeclarations(content: string): string {
+  	// L2: Extract declarations + their opening braces (up to first {)
+  	const lines = content.split("\n")
+  	const declLines: string[] = []
+  	let inDecl = false
+  	let braceDepth = 0
+  	for (const line of lines) {
+  		if (!inDecl) {
+  			const isDecl = /^\s*(?:export\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait|fun|func)\s+\w+/.test(line)
+  			if (isDecl) {
+  				inDecl = true
+  				braceDepth = 0
+  			}
+  		}
+  		if (inDecl) {
+  			declLines.push(line)
+  			for (const ch of line) {
+  				if (ch === "{") braceDepth++
+  				if (ch === "}") braceDepth--
+  			}
+  			if (braceDepth <= 0 && /^\s*\}?\s*$/.test(line)) {
+  				inDecl = false
+  			}
+  		}
+  	}
+  	return declLines.join("\n")
   }
 
-  private generateDiff(_oldContent: string, _newContent: string): string {
-    // Diff generation will be implemented here
-    return "";
+  private generateDiff(oldContent: string, newContent: string): string {
+  	// Simple line-based diff (no external dep needed)
+  	const oldLines = oldContent.split("\n")
+  	const newLines = newContent.split("\n")
+  	const result: string[] = []
+  	const maxLen = Math.max(oldLines.length, newLines.length)
+  	for (let i = 0; i < maxLen; i++) {
+  		const oldLine = oldLines[i] ?? ""
+  		const newLine = newLines[i] ?? ""
+  		if (oldLine !== newLine) {
+  			if (oldLine) result.push(`- ${oldLine}`)
+  			if (newLine) result.push(`+ ${newLine}`)
+  		}
+  	}
+  	return result.join("\n")
   }
 
   private computeHash(content: string): string {

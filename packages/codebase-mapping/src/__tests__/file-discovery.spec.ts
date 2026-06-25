@@ -16,14 +16,24 @@ describe("FileDiscovery", () => {
     const fd = new FileDiscovery({
       workspaceRoots: ["/test"],
       excludedPatterns: ["**/node_modules/**"],
+      allowedPatterns: [],
     });
-    expect(fd.isAllowed("/test/node_modules/foo.js")).toBe(false);
+    expect(fd.isAllowed("/test/node_modules/foo.bin")).toBe(false);
   });
 
-  it("should allow matching file patterns", () => {
+  it("should allow override of excluded pattern via allowedPatterns", () => {
     const fd = new FileDiscovery({
       workspaceRoots: ["/test"],
+      excludedPatterns: ["**/node_modules/**"],
       allowedPatterns: ["**/*.ts"],
+    });
+    expect(fd.isAllowed("/test/node_modules/override.ts")).toBe(true);
+  });
+
+  it("should allow files not in excluded patterns by default", () => {
+    const fd = new FileDiscovery({
+      workspaceRoots: ["/test"],
+      allowedPatterns: [],
     });
     expect(fd.isAllowed("/test/src/index.ts")).toBe(true);
   });

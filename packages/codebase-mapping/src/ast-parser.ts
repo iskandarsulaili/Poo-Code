@@ -22,6 +22,10 @@ export class ASTParser {
 		this.logger = createLogger(this.config.logLevel)
 	}
 
+	/**
+	 * No-op: parser works via regex, no initialization needed.
+	 * Tree-sitter WASM loading would go here if switching to AST-based parsing.
+	 */
 	async initialize(): Promise<void> {
 		this.logger.info("Initializing AST parser (regex + multi-line mode)")
 	}

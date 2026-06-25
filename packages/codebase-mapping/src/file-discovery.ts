@@ -52,8 +52,12 @@ export class FileDiscovery {
 
 	isAllowed(filePath: string): boolean {
 		const relativePath = relative(resolve(this.config.workspaceRoots[0] || ""), filePath)
-		if (this.ig.ignores(relativePath)) return false
-		return this.config.allowedPatterns.some((pattern) => minimatch(filePath, pattern))
+		// If excluded by pattern, check if allowedPatterns overrides
+		if (this.ig.ignores(relativePath)) {
+			return this.config.allowedPatterns.some((pattern) => minimatch(filePath, pattern))
+		}
+		// Not excluded — allowed by default
+		return true
 	}
 
 	private async walkDirectory(dirPath: string): Promise<string[]> {
@@ -61,12 +65,28 @@ export class FileDiscovery {
 		const entries = await readdir(dirPath, { withFileTypes: true })
 		const results: string[] = []
 
+		const SKIP_DIRS = new Set([
+			"node_modules",
+			".git",
+			".svn",
+			".hg",
+			"__pycache__",
+			".next",
+			".turbo",
+			"dist",
+			"build",
+			"coverage",
+			".cache",
+			"vendor",
+			".bundle",
+		])
+
 		const limit = pLimit(this.config.parallelism.maxFileReads)
 		const tasks = entries.map((entry) =>
 			limit(async () => {
 				const fullPath = join(dirPath, entry.name)
 				if (entry.isDirectory()) {
-					if (entry.name.startsWith(".") || entry.name === "node_modules") return
+					if (SKIP_DIRS.has(entry.name)) return
 					const sub = await this.walkDirectory(fullPath)
 					results.push(...sub)
 				} else if (entry.isFile()) {

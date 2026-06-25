@@ -1,8 +1,8 @@
-## Poo Code (v3.57.3)
+## Poo Code (v3.58.7)
 
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline.
 
-> **Release v3.57.3** — Settings toggle, auto-init, .gitignore, file truncation (see [Changelog](#changelog) below)
+> **Release v3.58.7** — Codebase Mapping: all stubs implemented, 6 performance fixes, 8 memory leak fixes, 5 dead-code removals (see [Changelog](#changelog) below)
 
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
@@ -229,6 +229,46 @@ Don't star this repo. It will just get me excited to drag you into the jobless c
 Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Org/Zoo-Code/issues as they know more than me (no cap)
 
 ## Changelog
+
+### v3.58.7 — Codebase Mapping: Full Implementation & Hardening
+
+Complete implementation of all 17 stubs across 6 files in `@zoo-code/codebase-mapping`, plus 30+ bug fixes across 4 audit rounds.
+
+**All stubs implemented:**
+- `Serializer`: Mermaid, Graphviz, ASCII, HTML, Markdown format generators — full data-driven output with dead code sections, HTML escaping, edge styles
+- `TokenCompressor`: L0 summary, L1 signatures, L2 declarations, line-based diff — all 4 LODs now produce real content
+- `SecurityLayer`: `checkComplianceBoundaries()` — glob-to-regex matching against gitignore, rooignore, custom deny/allow patterns
+- `DocGenerator`: Template-based JSDoc/TSDoc generation with kind detection, existing doc extraction, stale doc detection
+- `CodebaseMappingService`: `getDelta()` (added/deleted/modified), `getConfigLinks()` (13 config types), `getImplicitFlows()` (event/middleware/callback), `getGitMetadata()` (git log + blame)
+- `SymbolExtractor`: `resolveReferences()` — cross-references imports against local declarations
+
+**Performance (6 fixes):**
+- `getImplicitFlows()` O(n³) → O(n) with reference index map
+- `getConfigLinks()` O(n²) → O(n) with cached directory index
+- `getSymbol()` O(n) → O(1) with `_symbolByName` index
+- `getSymbols(kind)` O(n) → O(1) with `_symbolsByKind` index
+- `serialize()` caches format-independent payload — no recompute on format switch
+- `getDocUpdates()` sequential await → batched `Promise.all` at concurrency 50
+
+**Memory leaks (8 fixes):**
+- `_cachedRawContent` cleared on reset, dispose, scan, incremental update
+- `_previousFileHashes` cleared on resetScanState and dispose
+- `_symbolByName`/`_symbolsByKind` cleared on dispose
+- `_cachedSerializationData`/`_cachedSerializationPayload`/`_cachedDirIndex`/`_cachedRefIndex` invalidated on all lifecycle events
+
+**Data integrity (5 fixes):**
+- `getDocUpdates()` no longer overwrites real docs with TODO stubs — only generates for symbols without existing docs
+- `_symbolByName` changed from `Map<name, ExtractedSymbol>` to `Map<name, ExtractedSymbol[]>` — duplicate names no longer silently overwritten
+- `getConfigLinks()` reads raw file content for JSON parsing, not secret-masked AST text
+- `getDelta()` snapshots hashes even on failed scan — delta detection always has a baseline
+- `getDocUpdates()` stale detection bounded by `limit * 2` — `watchDocFiles` flag now has real behavior
+
+**Dead code removed (5 fixes):**
+- `buildSerializationData()` unused `_graph` parameter removed
+- `resolveReferences()` no-op replaced with real implementation
+- `watchDocFiles` config flag wired as stale-check cap
+- `ast-parser.ts` `initialize()` JSDoc explains it's intentionally a no-op
+- `import("./types.js").ParseResult`/`DependencyEdge`/`CacheStats` type imports cleaned up
 
 ### v3.57.3 — Memory Bank: Settings Toggle, Auto-Init, .gitignore, File Truncation
 
