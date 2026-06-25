@@ -552,6 +552,7 @@ describe("ClineProvider", () => {
 			maxWorkspaceFiles: 200,
 			telemetrySetting: "unset",
 			showRooIgnoredFiles: false,
+			fullMachineAccess: true,
 			enableSubfolderRules: false,
 			renderContext: "sidebar",
 			maxImageFileSize: 5,

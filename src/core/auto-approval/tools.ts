@@ -13,5 +13,10 @@ export function isReadOnlyToolAction(tool: ClineSayTool): boolean {
 		"searchFiles",
 		"codebaseSearch",
 		"runSlashCommand",
+		"sessionSearch",
+		"delegateTask",
+		"cronjob",
+		"webhook",
+		"browser",
 	].includes(tool.tool)
 }

@@ -56,6 +56,12 @@ export const toolNames = [
 	"codebase_dependency",
 	"update_memory_bank",
 	"codebase_mapping_query",
+	"session_search",
+	"delegate_task",
+	"cronjob",
+	"webhook",
+	"code_execution",
+	"browser",
 ] as const
 
 export const toolNamesSchema = z.enum(toolNames)

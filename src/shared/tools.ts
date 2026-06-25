@@ -203,6 +203,39 @@ export type NativeToolArgs = {
 	codebase_dependency: { action: string; target: string | null; module: string | null; limit?: number | null }
 	codebase_mapping_query: { action: "schema" | "formats" | "stats" | "help" }
 	update_memory_bank: { file: string; content: string; mode?: "append" | "replace" }
+	session_search: { query: string; limit?: number; mode?: "fulltext" | "semantic" | "hybrid" }
+	delegate_task: { goal: string; context?: string; toolsets?: string[] }
+	cronjob: {
+		action: "create" | "list" | "update" | "pause" | "resume" | "remove" | "run"
+		schedule?: string
+		prompt?: string
+		name?: string
+		job_id?: string
+	}
+	webhook: { action: "subscribe" | "list" | "remove"; name?: string; url?: string; prompt?: string }
+	code_execution: { code: string; timeout?: number }
+	browser: {
+		action:
+			| "navigate"
+			| "click"
+			| "type"
+			| "snapshot"
+			| "scroll"
+			| "press"
+			| "evaluate"
+			| "screenshot"
+			| "close"
+			| "back"
+			| "forward"
+			| "hover"
+			| "waitForSelector"
+		url?: string
+		selector?: string
+		text?: string
+		direction?: "up" | "down"
+		key?: string
+		timeout?: number
+	}
 	// Add more tools as they are migrated to native protocol
 }
 
@@ -412,6 +445,12 @@ export const TOOL_DISPLAY_NAMES: Record<ToolName, string> = {
 	web_fetch: "fetch web page content",
 	web_search: "search the web",
 	web_extract: "extract structured data from web pages",
+	session_search: "search past sessions",
+	delegate_task: "delegate task to subagent",
+	cronjob: "manage scheduled jobs",
+	webhook: "manage webhook subscriptions",
+	code_execution: "execute Python code in sandbox",
+	browser: "interact with web browser",
 } as const
 
 // Define available tool groups.
@@ -434,7 +473,17 @@ export const TOOL_GROUPS: Record<ToolGroup, ToolGroupConfig> = {
 		alwaysAvailable: true,
 	},
 	web: {
-		tools: ["web_fetch", "web_search", "web_extract"],
+		tools: [
+			"web_fetch",
+			"web_search",
+			"web_extract",
+			"session_search",
+			"delegate_task",
+			"cronjob",
+			"webhook",
+			"code_execution",
+			"browser",
+		],
 	},
 }
 
@@ -455,6 +504,12 @@ export const ALWAYS_AVAILABLE_TOOLS: ToolName[] = [
 	"execute_parallel_child_task",
 	"list_files",
 	"read_file",
+	"session_search",
+	"delegate_task",
+	"cronjob",
+	"webhook",
+	"code_execution",
+	"browser",
 ] as const
 
 /**

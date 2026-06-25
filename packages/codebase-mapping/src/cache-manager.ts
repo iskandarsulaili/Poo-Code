@@ -73,12 +73,39 @@ export class CacheManager {
   }
 
   clear(rootPath?: string): void {
-    if (rootPath) {
-      this.roots.delete(rootPath);
-    } else {
-      this.roots.clear();
-    }
-    this.logger.info("Cache cleared");
+  	if (rootPath) {
+  		this.roots.delete(rootPath);
+  	} else {
+  		this.roots.clear();
+  	}
+  	this.logger.info("Cache cleared");
+  }
+
+  getHitCounts(): Record<string, number> {
+  	return {
+  		ast: this.hits.get("ast") ?? 0,
+  		symbol: this.hits.get("symbol") ?? 0,
+  		graph: this.hits.get("graph") ?? 0,
+  		embedding: this.hits.get("embedding") ?? 0,
+  	}
+  }
+
+  getMissCounts(): Record<string, number> {
+  	return {
+  		ast: this.misses.get("ast") ?? 0,
+  		symbol: this.misses.get("symbol") ?? 0,
+  		graph: this.misses.get("graph") ?? 0,
+  		embedding: this.misses.get("embedding") ?? 0,
+  	}
+  }
+
+  restoreCounts(hits: Record<string, number>, misses: Record<string, number>): void {
+  	for (const [key, val] of Object.entries(hits)) {
+  		if (val > 0) this.hits.set(key, val)
+  	}
+  	for (const [key, val] of Object.entries(misses)) {
+  		if (val > 0) this.misses.set(key, val)
+  	}
   }
 
   getStats(): CacheStats {

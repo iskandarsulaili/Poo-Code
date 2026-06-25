@@ -9,15 +9,19 @@ import { Serializer } from "./serializer.js"
 import { SymbolExtractor } from "./symbol-extractor.js"
 import { TokenCompressor } from "./token-compressor.js"
 import { DocGenerator } from "./doc-generator.js"
-import { DeadCodeReason, DependencyGraph, DocUpdateType } from "./types.js"
+import { DeadCodeReason, DependencyGraph, DocUpdateType, ImplicitFlowKind, SymbolKind } from "./types.js"
 import type {
+	BlameInfo,
+	CacheStats,
 	CodebaseMappingAPI,
 	CodebaseMappingConfig,
 	CodebaseMappingOptions,
+	CommitInfo,
 	CompressedRepresentation,
 	ConfigLink,
 	DeadSymbol,
 	DeltaChange,
+	DependencyEdge,
 	DocUpdate,
 	ExtractedSymbol,
 	FileNode,
@@ -25,9 +29,11 @@ import type {
 	ImplicitFlow,
 	LevelOfDetail,
 	MappingEvent,
+	ParseResult,
 	SerializationFormat,
 	SerializationData,
 } from "./types.js"
+import type { StaleDocReport } from "./types.js"
 import { createDependencyEdge, createFileNode, detectLanguage } from "./models.js"
 
 export class CodebaseMappingService implements CodebaseMappingAPI {
@@ -63,7 +69,21 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 	public _accumulatedEdges: number = 0
 	/** Cached file list from pre-count pass, reused in scan loop to avoid double walk */
 	private _rootFileCache: Map<string, string[]>
-	/** Guard against concurrent scanWorkspace() calls */
+	/** Snapshot of file hashes from the previous scan, for delta detection */
+	private _previousFileHashes: Map<string, string> = new Map()
+	/** Cached serialization data — invalidated when graph changes */
+	private _cachedSerializationData: { data: SerializationData; format: SerializationFormat } | null = null
+	/** Cached serialization data payload (format-independent) — invalidated when graph changes */
+	private _cachedSerializationPayload: { flows: ImplicitFlow[]; configLinks: ConfigLink[]; gitMetadata: GitMetadata | null } | null = null
+	/** Cached directory→files index for getConfigLinks() — invalidated when graph changes */
+	private _cachedDirIndex: Map<string, string[]> | null = null
+	/** Cached reference index for getImplicitFlows() — invalidated when graph changes */
+	private _cachedRefIndex: Map<string, Array<{ filePath: string; name: string }>> | null = null
+	/** Cached raw file content for config files (avoids re-reading from disk) */
+	private _cachedRawContent: Map<string, string> = new Map()
+	private _symbolByName: Map<string, ExtractedSymbol[]> = new Map()
+	/** SymbolKind → ExtractedSymbol[] index for O(1) getSymbols(kind) */
+	private _symbolsByKind: Map<string, ExtractedSymbol[]> = new Map()
 	public _scanInProgress: boolean = false
 	/** Timestamp when the last scan started (for stuck detection) */
 	private _scanStartTime: number = 0
@@ -104,6 +124,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 	resetScanState(): void {
 		this.allParseResults.clear()
 		this.allSymbols.clear()
+		this._symbolByName.clear()
+		this._symbolsByKind.clear()
 		this.currentGraph = null
 		this.deadCodeResults = []
 		this.compressedResults = []
@@ -117,6 +139,12 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 		this._updateInProgress = false
 		this._scanStatus = "idle"
 		this._rootFileCache.clear()
+		this._previousFileHashes.clear()
+		this._cachedSerializationData = null
+		this._cachedSerializationPayload = null
+		this._cachedDirIndex = null
+		this._cachedRefIndex = null
+		this._cachedRawContent.clear()
 	}
 
 	async initialize(options?: CodebaseMappingOptions): Promise<void> {
@@ -165,6 +193,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
 		this.allParseResults.clear()
 		this.allSymbols.clear()
+		this._symbolByName.clear()
+		this._symbolsByKind.clear()
 		this.currentGraph = null
 		this.deadCodeResults = []
 		this.compressedResults = []
@@ -221,6 +251,15 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 							this.cacheManager.setSymbols(rootPath, filePath, symbols)
 						}
 						this.allSymbols.set(filePath, symbols)
+						// Populate symbol indexes
+						for (const sym of symbols) {
+							const byName = this._symbolByName.get(sym.name) ?? []
+							byName.push(sym)
+							this._symbolByName.set(sym.name, byName)
+							const byKind = this._symbolsByKind.get(sym.kind) ?? []
+							byKind.push(sym)
+							this._symbolsByKind.set(sym.kind, byKind)
+						}
 
 						for (const sym of symbols) {
 							const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string
@@ -266,6 +305,11 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			this.currentGraph = this.graphBuilder.buildGraph(allFileNodes, allEdges)
 			this.deadCodeResults = this.detectDeadCodeInternal()
 			this.compressedResults = await this.compressInternal()
+			this._cachedSerializationData = null
+			this._cachedSerializationPayload = null
+			this._cachedDirIndex = null
+			this._cachedRefIndex = null
+			this._cachedRawContent.clear()
 
 			this._scanStatus = "completed"
 			this.emitEvent({
@@ -282,10 +326,20 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			this.logger.info(
 				`Scan complete: ${allFileNodes.length} files, ${allEdges.length} edges, ${this.deadCodeResults.length} dead symbols`,
 			)
+			// Snapshot current file hashes for delta detection
+			this._previousFileHashes.clear()
+			for (const [fp, pr] of this.allParseResults) {
+				this._previousFileHashes.set(fp, pr.contentHash)
+			}
 		} catch (err) {
 			// Critical failure (e.g. disk error, permission denied) — reset status so UI doesn't stick on "scanning"
 			this.logger.error("Scan failed with critical error:", err)
 			this._scanStatus = "completed"
+			// Still snapshot whatever we managed to parse, so delta detection has a baseline
+			this._previousFileHashes.clear()
+			for (const [fp, pr] of this.allParseResults) {
+				this._previousFileHashes.set(fp, pr.contentHash)
+			}
 			this.emitEvent({
 				type: "scan_completed",
 				timestamp: Date.now(),
@@ -332,23 +386,22 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 
 	async getSymbol(name: string, filePath?: string): Promise<ExtractedSymbol | null> {
 		this.ensureInitialized()
-		for (const [fp, symbols] of this.allSymbols) {
-			if (filePath && fp !== filePath) continue
-			const found = symbols.find((s) => s.name === name)
-			if (found) return found
+		if (filePath) {
+			const symbols = this.allSymbols.get(filePath)
+			return symbols?.find((s) => s.name === name) ?? null
 		}
-		return null
+		const matches = this._symbolByName.get(name)
+		return matches?.[0] ?? null
 	}
 
 	async getSymbols(kind?: import("./types.js").SymbolKind): Promise<ExtractedSymbol[]> {
 		this.ensureInitialized()
+		if (kind) {
+			return this._symbolsByKind.get(kind) ?? []
+		}
 		const all: ExtractedSymbol[] = []
 		for (const symbols of this.allSymbols.values()) {
-			if (kind) {
-				all.push(...symbols.filter((s) => s.kind === kind))
-			} else {
-				all.push(...symbols)
-			}
+			all.push(...symbols)
 		}
 		return all
 	}
@@ -371,18 +424,89 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 		return this.compressedResults.filter((c) => c.lod === lod)
 	}
 
-	async getDelta(_fromHash: string, _toHash: string): Promise<DeltaChange[]> {
+	async getDelta(fromHash: string, toHash: string): Promise<DeltaChange[]> {
 		this.ensureInitialized()
-		return []
+		const changes: DeltaChange[] = []
+
+		// Deleted files: in previous snapshot but not in current parse results
+		if (this._previousFileHashes.size > 0) {
+			for (const [fp, oldHash] of this._previousFileHashes) {
+				if (!this.allParseResults.has(fp)) {
+					changes.push({
+						filePath: fp,
+						changeType: "deleted",
+						oldHash,
+						newHash: null,
+						diff: null,
+						affectedSymbols: [],
+					})
+				}
+			}
+		}
+
+		// Added/modified files: in current parse results
+		for (const [filePath, parseResult] of this.allParseResults) {
+			const contentHash = parseResult.contentHash
+			const oldHash = this._previousFileHashes.get(filePath)
+
+			if (oldHash === undefined) {
+				// New file — only report if toHash doesn't match (caller wants delta to a specific state)
+				if (toHash && contentHash !== toHash) {
+					const symbols = this.allSymbols.get(filePath) ?? []
+					changes.push({
+						filePath,
+						changeType: "added",
+						oldHash: null,
+						newHash: contentHash,
+						diff: null,
+						affectedSymbols: symbols.map((s) => s.id),
+					})
+				}
+			} else if (contentHash !== fromHash) {
+				// Modified file — only report if content differs from the requested baseline
+				const symbols = this.allSymbols.get(filePath) ?? []
+				changes.push({
+					filePath,
+					changeType: "modified",
+					oldHash,
+					newHash: contentHash,
+					diff: null,
+					affectedSymbols: symbols.map((s) => s.id),
+				})
+			}
+		}
+		return changes
 	}
 
 	async serialize(format: SerializationFormat): Promise<string> {
 		this.ensureInitialized()
 		if (!this.currentGraph) return ""
 
+		// Return cached serialization if available and format matches
+		if (this._cachedSerializationData && this._cachedSerializationData.format === format) {
+			return this.serializer.serialize(this._cachedSerializationData.data, format)
+		}
+
 		const allSymbols: ExtractedSymbol[] = []
 		for (const symbols of this.allSymbols.values()) {
 			allSymbols.push(...symbols)
+		}
+
+		// Use cached payload if available (format-independent)
+		let flows: ImplicitFlow[]
+		let configLinks: ConfigLink[]
+		let gitMetadata: GitMetadata | null
+		if (this._cachedSerializationPayload) {
+			flows = this._cachedSerializationPayload.flows
+			configLinks = this._cachedSerializationPayload.configLinks
+			gitMetadata = this._cachedSerializationPayload.gitMetadata
+		} else {
+			;[flows, configLinks, gitMetadata] = await Promise.all([
+				this.getImplicitFlows(),
+				this.getConfigLinks(),
+				this.getGitMetadata(this.config.workspaceRoots[0] ?? ""),
+			])
+			this._cachedSerializationPayload = { flows, configLinks, gitMetadata }
 		}
 
 		const data: SerializationData = {
@@ -424,27 +548,262 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 				isDynamic: e.isDynamic,
 			})),
 			deadCode: this.deadCodeResults,
-			flows: [],
-			configLinks: [],
-			gitMetadata: null,
+			flows,
+			configLinks,
+			gitMetadata,
 		}
 
+		this._cachedSerializationData = { data, format }
 		return this.serializer.serialize(data, format)
 	}
 
 	async getConfigLinks(): Promise<ConfigLink[]> {
 		this.ensureInitialized()
-		return []
+		const links: ConfigLink[] = []
+		const configPatterns: Array<{ type: ConfigLink["configType"]; patterns: string[] }> = [
+			{ type: "package.json", patterns: ["**/package.json"] },
+			{ type: "tsconfig", patterns: ["**/tsconfig.json", "**/tsconfig.*.json"] },
+			{ type: "Dockerfile", patterns: ["**/Dockerfile", "**/Dockerfile.*"] },
+			{ type: "env", patterns: ["**/.env*", "**/.env.*"] },
+			{ type: "Cargo.toml", patterns: ["**/Cargo.toml"] },
+			{ type: "Makefile", patterns: ["**/Makefile", "**/makefile"] },
+			{ type: "docker-compose", patterns: ["**/docker-compose*.yml", "**/docker-compose*.yaml"] },
+			{ type: "eslint", patterns: ["**/.eslintrc*", "**/eslint.config.*"] },
+			{ type: "prettier", patterns: ["**/.prettierrc*", "**/prettier.config.*"] },
+			{ type: "babel", patterns: ["**/.babelrc*", "**/babel.config.*"] },
+			{ type: "webpack", patterns: ["**/webpack.config.*"] },
+			{ type: "vite", patterns: ["**/vite.config.*"] },
+			{ type: "jest", patterns: ["**/jest.config.*", "**/jest.setup.*"] },
+		]
+
+		// Build directory index once (O(n)) instead of per-config-file (O(n²))
+		if (!this._cachedDirIndex) {
+			this._cachedDirIndex = new Map()
+			for (const [fp] of this.allParseResults) {
+				const dir = fp.substring(0, fp.lastIndexOf("/") + 1)
+				const files = this._cachedDirIndex.get(dir) ?? []
+				files.push(fp)
+				this._cachedDirIndex.set(dir, files)
+			}
+		}
+
+		const { minimatch } = await import("minimatch")
+		for (const [filePath] of this.allParseResults) {
+			for (const entry of configPatterns) {
+				for (const pattern of entry.patterns) {
+					if (minimatch(filePath, pattern)) {
+						const dir = filePath.substring(0, filePath.lastIndexOf("/") + 1)
+						const linkedFiles = (this._cachedDirIndex.get(dir) ?? []).filter((fp) => fp !== filePath)
+						const keyValues: Record<string, string> = {}
+						// Extract key values from package.json (use cached raw content, not masked AST text)
+						if (entry.type === "package.json") {
+							try {
+								let raw = this._cachedRawContent.get(filePath)
+								if (!raw) {
+									const rawContent = await this.fileDiscovery.readFile(filePath)
+									raw = rawContent.content
+									this._cachedRawContent.set(filePath, raw)
+								}
+								const pkg = JSON.parse(raw)
+								if (pkg.name) keyValues.name = pkg.name
+								if (pkg.version) keyValues.version = pkg.version
+								if (pkg.description) keyValues.description = pkg.description
+							} catch {
+								// Not valid JSON or file not readable — skip
+							}
+						}
+						links.push({
+							configFile: filePath,
+							configType: entry.type,
+							linkedFiles: linkedFiles.slice(0, 50),
+							keyValues,
+						})
+						break
+					}
+				}
+			}
+		}
+		return links
 	}
 
 	async getImplicitFlows(): Promise<ImplicitFlow[]> {
 		this.ensureInitialized()
-		return []
+		const flows: ImplicitFlow[] = []
+		if (!this.currentGraph) return flows
+
+		// Build reference index once (O(n)) and cache it
+		if (!this._cachedRefIndex) {
+			this._cachedRefIndex = new Map()
+			for (const [filePath, symbols] of this.allSymbols) {
+				for (const sym of symbols) {
+					for (const ref of sym.references) {
+						const entries = this._cachedRefIndex.get(ref.toSymbolId) ?? []
+						entries.push({ filePath, name: sym.name })
+						this._cachedRefIndex.set(ref.toSymbolId, entries)
+					}
+				}
+			}
+		}
+		const refIndex = this._cachedRefIndex
+
+		// Event emitter flows: class_declaration with "event" in name → its referrers
+		for (const [filePath, symbols] of this.allSymbols) {
+			for (const sym of symbols) {
+				const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string
+				if (metaKind === "class_declaration" && sym.name.toLowerCase().includes("event")) {
+					const referrers = refIndex.get(sym.id) ?? []
+					for (const ref of referrers) {
+						if (ref.filePath === filePath) continue
+						flows.push({
+							kind: ImplicitFlowKind.EventEmitter,
+							sourceFile: filePath,
+							sourceSymbol: sym.name,
+							targetFile: ref.filePath,
+							targetSymbol: ref.name,
+							description: `${ref.name} in ${ref.filePath} uses event emitter ${sym.name}`,
+							confidence: 0.6,
+						})
+					}
+				}
+			}
+		}
+
+		// Middleware chain flows: function/method with middleware-like name → its referrers
+		const middlewarePattern = /middleware|handler|interceptor|filter/i
+		for (const [filePath, symbols] of this.allSymbols) {
+			for (const sym of symbols) {
+				if (middlewarePattern.test(sym.name) && (sym.kind === SymbolKind.Function || sym.kind === SymbolKind.Method)) {
+					const referrers = refIndex.get(sym.id) ?? []
+					for (const ref of referrers) {
+						if (ref.filePath === filePath) continue
+						flows.push({
+							kind: ImplicitFlowKind.MiddlewareChain,
+							sourceFile: filePath,
+							sourceSymbol: sym.name,
+							targetFile: ref.filePath,
+							targetSymbol: ref.name,
+							description: `${ref.name} in ${ref.filePath} uses middleware ${sym.name}`,
+							confidence: 0.5,
+						})
+					}
+				}
+			}
+		}
+
+		// Callback flows: parameters typed as callback
+		for (const [, symbols] of this.allSymbols) {
+			for (const sym of symbols) {
+				if (sym.typeAnnotation && /=>|Function|Callback|Handler/i.test(sym.typeAnnotation)) {
+					flows.push({
+						kind: ImplicitFlowKind.Callback,
+						sourceFile: sym.filePath,
+						sourceSymbol: sym.name,
+						targetFile: sym.filePath,
+						targetSymbol: sym.name,
+						description: `${sym.name} in ${sym.filePath} accepts a callback parameter`,
+						confidence: 0.4,
+					})
+				}
+			}
+		}
+
+		return flows
 	}
 
-	async getGitMetadata(_filePath: string): Promise<GitMetadata | null> {
+	async getGitMetadata(filePath: string): Promise<GitMetadata | null> {
 		this.ensureInitialized()
-		return null
+		if (!this.config.enableGitIntegration) return null
+
+		try {
+			const { execFile } = await import("child_process")
+			const { promisify } = await import("util")
+			const execFileAsync = promisify(execFile)
+			const dir = filePath.substring(0, filePath.lastIndexOf("/") + 1) || "."
+
+			// Git log — async, non-blocking
+			const logResult = await execFileAsync("git", [
+				"-C", dir, "log", "--oneline", "--follow",
+				`--format=%H|%an|%at|%s`, "--", filePath,
+			], { encoding: "utf-8", timeout: 5000, maxBuffer: 1024 * 1024 }).catch(() => ({ stdout: "" }))
+
+			const lines = logResult.stdout.trim().split("\n").filter(Boolean)
+			if (lines.length === 0) return null
+
+			const commitHistory: CommitInfo[] = []
+			const authors = new Set<string>()
+			let lastModifiedCommit = ""
+			let lastModifiedDate = 0
+
+			for (const line of lines) {
+				const parts = line.split("|")
+				if (parts.length >= 4) {
+					const hash = parts[0] ?? ""
+					const author = parts[1] ?? ""
+					const date = parseInt(parts[2] ?? "0", 10) * 1000
+					const message = parts.slice(3).join("|")
+
+					commitHistory.push({
+						hash,
+						author,
+						date,
+						message,
+						filesChanged: [filePath],
+					})
+					authors.add(author)
+
+					if (date > lastModifiedDate) {
+						lastModifiedDate = date
+						lastModifiedCommit = hash
+					}
+				}
+			}
+
+			// Git blame — async, non-blocking, limited to 500 lines of porcelain output
+			const blameResult = await execFileAsync("git", [
+				"-C", dir, "blame", "--line-porcelain", filePath,
+			], { encoding: "utf-8", timeout: 5000, maxBuffer: 1024 * 1024 }).catch(() => ({ stdout: "" }))
+
+			const blameLines = blameResult.stdout.split("\n").slice(0, 500)
+			const blameInfo: BlameInfo[] = []
+			let currentAuthor = ""
+			let currentHash = ""
+			let currentDate = 0
+			let currentLine = 0
+
+			for (const bl of blameLines) {
+				if (bl.startsWith("author ")) {
+					currentAuthor = bl.slice(7)
+				} else if (bl.startsWith("author-time ")) {
+					currentDate = parseInt(bl.slice(12), 10) * 1000
+				} else if (/^[0-9a-f]{40}/.test(bl) && bl.includes(" ")) {
+					const parts = bl.split(" ")
+					currentHash = parts[0] ?? ""
+					currentLine = parseInt(parts[1] ?? "0", 10)
+				} else if (bl.startsWith("	") && currentHash) {
+					blameInfo.push({
+						line: currentLine,
+						author: currentAuthor,
+						commitHash: currentHash,
+						date: currentDate,
+						lineCount: 1,
+					})
+					currentHash = ""
+				}
+			}
+
+			return {
+				filePath,
+				blameInfo: blameInfo.slice(0, 100),
+				commitHistory: commitHistory.slice(0, 50),
+				lastModifiedCommit,
+				lastModifiedDate,
+				changeFrequency: commitHistory.length,
+				authors: Array.from(authors),
+			}
+		} catch (err) {
+			this.logger.warn(`Git metadata unavailable for ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
+			return null
+		}
 	}
 
 	async getCacheStats(): Promise<import("./types.js").CacheStats> {
@@ -453,17 +812,17 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 	}
 
 	async persistCacheStats(storagePath: string): Promise<void> {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const cm = this.cacheManager as any
+		const hits = this.cacheManager.getHitCounts()
+		const misses = this.cacheManager.getMissCounts()
 		const data = {
-			astHits: cm.hits?.get("ast") ?? 0,
-			astMisses: cm.misses?.get("ast") ?? 0,
-			symbolHits: cm.hits?.get("symbol") ?? 0,
-			symbolMisses: cm.misses?.get("symbol") ?? 0,
-			graphHits: cm.hits?.get("graph") ?? 0,
-			graphMisses: cm.misses?.get("graph") ?? 0,
-			embeddingHits: cm.hits?.get("embedding") ?? 0,
-			embeddingMisses: cm.misses?.get("embedding") ?? 0,
+			astHits: hits.ast,
+			astMisses: misses.ast,
+			symbolHits: hits.symbol,
+			symbolMisses: misses.symbol,
+			graphHits: hits.graph,
+			graphMisses: misses.graph,
+			embeddingHits: hits.embedding,
+			embeddingMisses: misses.embedding,
 		}
 		try {
 			const fs = await import("fs/promises")
@@ -481,17 +840,21 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			const p = await import("path")
 			const raw = await fs.readFile(p.join(storagePath, "codebase-mapping-cache-stats.json"), "utf-8")
 			const data = JSON.parse(raw)
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const cm = this.cacheManager as any
-			if (cm.hits && cm.misses && data.astHits != null) {
-				cm.hits.set("ast", data.astHits)
-				cm.misses.set("ast", data.astMisses)
-				cm.hits.set("symbol", data.symbolHits)
-				cm.misses.set("symbol", data.symbolMisses)
-				cm.hits.set("graph", data.graphHits)
-				cm.misses.set("graph", data.graphMisses)
-				cm.hits.set("embedding", data.embeddingHits)
-				cm.misses.set("embedding", data.embeddingMisses)
+			if (data.astHits != null) {
+				this.cacheManager.restoreCounts(
+					{
+						ast: data.astHits,
+						symbol: data.symbolHits,
+						graph: data.graphHits,
+						embedding: data.embeddingHits,
+					},
+					{
+						ast: data.astMisses,
+						symbol: data.symbolMisses,
+						graph: data.graphMisses,
+						embedding: data.embeddingMisses,
+					},
+				)
 			}
 		} catch {
 			// Silently ignore — cache stats are best-effort
@@ -521,6 +884,31 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 			const symbols = this.symbolExtractor.extractSymbols(parseResult)
 			this.cacheManager.setSymbols(rootPath, filePath, symbols)
 			this.allSymbols.set(filePath, symbols)
+			// Update symbol indexes: remove old entries for this file, add new ones
+			for (const [name, entries] of this._symbolByName) {
+				const filtered = entries.filter((e) => e.filePath !== filePath)
+				if (filtered.length > 0) {
+					this._symbolByName.set(name, filtered)
+				} else {
+					this._symbolByName.delete(name)
+				}
+			}
+			for (const [kind, entries] of this._symbolsByKind) {
+				const filtered = entries.filter((e) => e.filePath !== filePath)
+				if (filtered.length > 0) {
+					this._symbolsByKind.set(kind, filtered)
+				} else {
+					this._symbolsByKind.delete(kind)
+				}
+			}
+			for (const sym of symbols) {
+				const byName = this._symbolByName.get(sym.name) ?? []
+				byName.push(sym)
+				this._symbolByName.set(sym.name, byName)
+				const byKind = this._symbolsByKind.get(sym.kind) ?? []
+				byKind.push(sym)
+				this._symbolsByKind.set(sym.kind, byKind)
+			}
 			const imports: string[] = []
 			const exports: string[] = []
 			for (const sym of symbols) {
@@ -546,6 +934,14 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 				data: { filePath, symbolsFound: symbols.length },
 			})
 			this.logger.info(`Incremental update: ${filePath}: ${symbols.length} symbols, ${newEdges.length} edges`)
+			// Update hash snapshot for delta detection
+			this._previousFileHashes.set(filePath, hash)
+			// Invalidate all caches
+			this._cachedSerializationData = null
+			this._cachedSerializationPayload = null
+			this._cachedDirIndex = null
+			this._cachedRefIndex = null
+			this._cachedRawContent.clear()
 		} catch (err) {
 			this.logger.error(`Incremental update failed for ${filePath}:`, err)
 			this._lastScanErrors++
@@ -555,26 +951,106 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 		}
 	}
 
-	async getDocUpdates(): Promise<DocUpdate[]> {
+	async getDocUpdates(limit = 1000, offset = 0): Promise<{ updates: DocUpdate[]; staleReports: StaleDocReport[] }> {
 		this.ensureInitialized()
+		if (!this.config.enableDocGenerator) return { updates: [], staleReports: [] }
+
+		const docConfig = this.docGenerator.getConfig()
+		if (!docConfig.enabled) return { updates: [], staleReports: [] }
+
 		const updates: DocUpdate[] = []
+		const staleReports: StaleDocReport[] = []
+		let staleChecked = 0
+		const maxStaleChecks = docConfig.watchDocFiles ? Infinity : limit * 2
+
+		// Pre-pass: collect stale reports sequentially (no shared mutable state in concurrent code)
+		// and build eligible list for doc generation (only symbols without existing docs)
+		const eligible: Array<{ sym: ExtractedSymbol; sourceCode: string }> = []
 		for (const [filePath, symbols] of this.allSymbols) {
+			const parseResult = this.allParseResults.get(filePath)
+			const sourceCode = parseResult?.ast?.text ?? ""
+
 			for (const sym of symbols) {
-				const doc = await this.docGenerator.generateDoc(sym.filePath, sym.name, sym.documentation ?? "")
-				if (doc) {
-					updates.push({
-						filePath,
+				const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string
+				if (metaKind === "import_statement" || metaKind === "export_statement") continue
+				if (!docConfig.autoRegenerateJSDoc && !docConfig.autoRegenerateTSDoc) continue
+
+				// Stale detection for symbols with existing docs (sequential, no race)
+				if (sym.documentation) {
+					if (staleChecked < maxStaleChecks) {
+						staleChecked++
+						const stale = this.docGenerator.detectStaleDocs(sym.filePath, sourceCode, sym.documentation)
+						if (stale) staleReports.push(stale)
+					}
+					continue // never generate new docs for symbols that already have docs
+				}
+
+				// Only symbols without docs go into the eligible batch
+				eligible.push({ sym, sourceCode })
+				if (eligible.length >= offset + limit) break
+			}
+			if (eligible.length >= offset + limit) break
+		}
+
+		// Apply offset
+		const batch = eligible.slice(offset, offset + limit)
+
+		// Process doc generation with concurrency limit
+		const CONCURRENCY = 50
+		for (let i = 0; i < batch.length; i += CONCURRENCY) {
+			const slice = batch.slice(i, i + CONCURRENCY)
+			const results = await Promise.all(
+				slice.map(async ({ sym, sourceCode }) => {
+					const useTSDoc = docConfig.autoRegenerateTSDoc && !docConfig.autoRegenerateJSDoc
+					const doc = await this.docGenerator.generateDoc(sym.filePath, sym.name, sourceCode, useTSDoc)
+					if (!doc) return null
+
+					const finalDoc = doc.newDoc.length > docConfig.maxDocSize
+						? doc.newDoc.slice(0, docConfig.maxDocSize) + "\n// [truncated]"
+						: doc.newDoc
+
+					const oldDoc = sym.documentation
+					sym.documentation = finalDoc
+
+					return {
+						filePath: sym.filePath,
 						symbolId: sym.id,
 						symbolName: sym.name,
-						oldDoc: sym.documentation,
-						newDoc: doc.newDoc,
-						updateType: DocUpdateType.JSDocRegenerated,
+						oldDoc,
+						newDoc: finalDoc,
+						updateType: useTSDoc ? DocUpdateType.TSDocRegenerated : DocUpdateType.JSDocRegenerated,
 						generatedAt: Date.now(),
-					})
+					} satisfies DocUpdate
+				}),
+			)
+			for (const r of results) {
+				if (r) updates.push(r)
+			}
+		}
+
+		// Handle README updates if enabled
+		if (docConfig.autoUpdateREADME) {
+			for (const [filePath] of this.allParseResults) {
+				if (filePath.endsWith("README.md")) {
+					// README update would go here — placeholder for future implementation
+					this.logger.debug(`README update requested for ${filePath} (autoUpdateREADME enabled)`)
 				}
 			}
 		}
-		return updates
+
+		// Emit doc_updated event if any updates or stale reports
+		if (updates.length > 0 || staleReports.length > 0) {
+			this.emitEvent({
+				type: "doc_updated",
+				timestamp: Date.now(),
+				data: {
+					updatesGenerated: updates.length,
+					staleDocsDetected: staleReports.length,
+				},
+			})
+		}
+
+		return { updates, staleReports }
 	}
 
 	dispose(): void {
@@ -583,6 +1059,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 		this.cacheManager.clear()
 		this.allParseResults.clear()
 		this.allSymbols.clear()
+		this._symbolByName.clear()
+		this._symbolsByKind.clear()
 		this.currentGraph = null
 		this.deadCodeResults = []
 		this.compressedResults = []
@@ -592,6 +1070,8 @@ export class CodebaseMappingService implements CodebaseMappingAPI {
 		this._pendingRescan = false
 		this._rescanDepth = 0
 		this._updateInProgress = false
+		this._previousFileHashes.clear()
+		this._cachedRawContent.clear()
 	}
 
 	private ensureInitialized(): void {

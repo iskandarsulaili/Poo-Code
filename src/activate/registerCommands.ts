@@ -74,73 +74,69 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 	// Codebase Mapping Commands
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.refreshCodebaseMap", async () => {
-			const instances = CodebaseMappingManager.getAllInstances();
+			const instances = CodebaseMappingManager.getAllInstances()
 			if (instances.length === 0) {
-				vscode.window.showInformationMessage("No codebase mapping instances active.");
-				return;
+				vscode.window.showInformationMessage("No codebase mapping instances active.")
+				return
 			}
-			await Promise.all(instances.map((svc) => svc.scanWorkspace()));
-			vscode.window.showInformationMessage(
-				`Codebase map refreshed for ${instances.length} workspace(s).`,
-			);
+			await Promise.all(instances.map((svc) => svc.scanWorkspace()))
+			vscode.window.showInformationMessage(`Codebase map refreshed for ${instances.length} workspace(s).`)
 		}),
 	)
 
 	// Force restart scan — resets stuck _scanInProgress guard and clears partial state
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.forceRescanCodebaseMap", async () => {
-			const instances = CodebaseMappingManager.getAllInstances();
+			const instances = CodebaseMappingManager.getAllInstances()
 			if (instances.length === 0) {
-				vscode.window.showInformationMessage("No codebase mapping instances active.");
-				return;
+				vscode.window.showInformationMessage("No codebase mapping instances active.")
+				return
 			}
 			for (const svc of instances) {
-				svc.resetScanState();
+				svc.resetScanState()
 			}
-			vscode.window.showInformationMessage("Force-restarting codebase map scan...");
-			await Promise.all(instances.map((svc) => svc.scanWorkspace()));
-			vscode.window.showInformationMessage(
-				`Codebase map force-refreshed for ${instances.length} workspace(s).`,
-			);
+			vscode.window.showInformationMessage("Force-restarting codebase map scan...")
+			await Promise.all(instances.map((svc) => svc.scanWorkspace()))
+			vscode.window.showInformationMessage(`Codebase map force-refreshed for ${instances.length} workspace(s).`)
 		}),
 	)
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.showCodebaseMap", async () => {
-			const instances = CodebaseMappingManager.getAllInstances();
+			const instances = CodebaseMappingManager.getAllInstances()
 			if (instances.length === 0) {
-				vscode.window.showInformationMessage("No codebase mapping instances active.");
-				return;
+				vscode.window.showInformationMessage("No codebase mapping instances active.")
+				return
 			}
-			const svc = instances[0];
-			const graph = await svc.getDependencyGraph();
-			const deadCode = await svc.getDeadCode();
-			const stats = await svc.getCacheStats();
+			const svc = instances[0]
+			const graph = await svc.getDependencyGraph()
+			const deadCode = await svc.getDeadCode()
+			const stats = await svc.getCacheStats()
 			const message = [
 				`**Codebase Map**`,
 				`- Files: ${graph.files.size}`,
 				`- Edges: ${graph.edges.length}`,
 				`- Dead symbols: ${deadCode.length}`,
 				`- Cache hit rate: ${(stats.astHitRate * 100).toFixed(1)}%`,
-			].join("\n");
-			vscode.window.showInformationMessage(message);
+			].join("\n")
+			vscode.window.showInformationMessage(message)
 		}),
 	)
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("zoo-code.exportCodebaseMap", async () => {
-			const instances = CodebaseMappingManager.getAllInstances();
+			const instances = CodebaseMappingManager.getAllInstances()
 			if (instances.length === 0) {
-				vscode.window.showInformationMessage("No codebase mapping instances active.");
-				return;
+				vscode.window.showInformationMessage("No codebase mapping instances active.")
+				return
 			}
-			const svc = instances[0];
-			const mermaid = await svc.serialize(4 as any); // SerializationFormat.Mermaid
+			const svc = instances[0]
+			const mermaid = await svc.serialize(4 as any) // SerializationFormat.Mermaid
 			const doc = await vscode.workspace.openTextDocument({
 				content: mermaid,
 				language: "markdown",
-			});
-			vscode.window.showTextDocument(doc);
+			})
+			vscode.window.showTextDocument(doc)
 		}),
 	)
 
@@ -149,14 +145,14 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		vscode.commands.registerCommand("zoo-code.initMemoryBank", async () => {
 			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
 			if (!cwd) {
-				vscode.window.showInformationMessage("No workspace open.");
-				return;
+				vscode.window.showInformationMessage("No workspace open.")
+				return
 			}
-			const manager = MemoryBankManager.getInstance(cwd);
-			await manager.initialize();
+			const manager = MemoryBankManager.getInstance(cwd)
+			await manager.initialize()
 			vscode.window.showInformationMessage(
-				`Memory bank initialized in ${MEMORY_BANK_DIR}/ — 5 files created with templates.`
-			);
+				`Memory bank initialized in ${MEMORY_BANK_DIR}/ — 5 files created with templates.`,
+			)
 		}),
 	)
 
@@ -164,10 +160,10 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		vscode.commands.registerCommand("zoo-code.openMemoryBank", async () => {
 			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
 			if (!cwd) {
-				vscode.window.showInformationMessage("No workspace open.");
-				return;
+				vscode.window.showInformationMessage("No workspace open.")
+				return
 			}
-			const mbDir = vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, MEMORY_BANK_DIR)
+			const mbDir = vscode.Uri.joinPath(vscode.Uri.file(cwd), MEMORY_BANK_DIR)
 			try {
 				await vscode.commands.executeCommand("revealInExplorer", mbDir)
 			} catch {
@@ -181,20 +177,18 @@ export const registerCommands = (options: RegisterCommandOptions) => {
 		vscode.commands.registerCommand("zoo-code.updateMemoryBank", async () => {
 			const cwd = vscode.workspace.workspaceFolders?.[0]?.uri?.fsPath
 			if (!cwd) {
-				vscode.window.showInformationMessage("No workspace open.");
-				return;
+				vscode.window.showInformationMessage("No workspace open.")
+				return
 			}
-			const manager = MemoryBankManager.getInstance(cwd);
-			const exists = await manager.exists();
+			const manager = MemoryBankManager.getInstance(cwd)
+			const exists = await manager.exists()
 			if (!exists) {
-				vscode.window.showInformationMessage(
-					"Memory bank not initialized. Run zoo-code.initMemoryBank first."
-				);
-				return;
+				vscode.window.showInformationMessage("Memory bank not initialized. Run zoo-code.initMemoryBank first.")
+				return
 			}
 			vscode.window.showInformationMessage(
-				"Memory bank paths ready: call `update_memory_bank` tool per file, or fill in the templates manually."
-			);
+				"Memory bank paths ready: call `update_memory_bank` tool per file, or fill in the templates manually.",
+			)
 		}),
 	)
 }

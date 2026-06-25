@@ -105,6 +105,23 @@ export class SymbolExtractor {
 
 	resolveReferences(symbols: ExtractedSymbol[]): ExtractedSymbol[] {
 		this.logger.debug(`Resolving references for ${symbols.length} symbols`)
+		// Build local name→symbol map for quick lookup
+		const localSymbols = new Map<string, ExtractedSymbol>()
+		for (const sym of symbols) {
+			if (sym.metadata && (sym.metadata as Record<string, unknown>)?.kind !== "import_statement") {
+				localSymbols.set(sym.name, sym)
+			}
+		}
+		// For each import, try to match against locally declared symbols
+		for (const sym of symbols) {
+			const metaKind = (sym.metadata as Record<string, unknown>)?.kind as string
+			if (metaKind === "import_statement") {
+				const match = localSymbols.get(sym.name)
+				if (match && !sym.references.some((r) => r.toSymbolId === match.id)) {
+					sym.references.push(createSymbolReference(sym.id, sym.filePath, match.id, match.filePath, sym.range, "usage", false))
+				}
+			}
+		}
 		return symbols
 	}
 

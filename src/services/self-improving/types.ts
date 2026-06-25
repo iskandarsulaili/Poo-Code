@@ -101,6 +101,7 @@ export interface SelfImprovingManagerOptions {
 		archiveAfterDays?: number
 		backupsEnabled?: boolean
 		maxBackups?: number
+		llmReviewEnabled?: boolean
 	}
 	/** Optional SkillsManager reference for skill telemetry integration */
 	skillsManager?: {

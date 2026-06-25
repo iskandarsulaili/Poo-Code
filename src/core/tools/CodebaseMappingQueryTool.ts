@@ -347,23 +347,17 @@ const json = await service.serialize(0)    // SerializationFormat.JSON
 
 			switch (action) {
 				case "schema": {
-					const dynamicDoc = context && task.cwd
-						? await this.getSchemaDoc(context, task.cwd)
-						: SCHEMA_DOC
+					const dynamicDoc = context && task.cwd ? await this.getSchemaDoc(context, task.cwd) : SCHEMA_DOC
 					pushToolResult(dynamicDoc)
 					break
 				}
 				case "formats": {
-					const dynamicDoc = context && task.cwd
-						? await this.getFormatsDoc(context, task.cwd)
-						: FORMATS_DOC
+					const dynamicDoc = context && task.cwd ? await this.getFormatsDoc(context, task.cwd) : FORMATS_DOC
 					pushToolResult(dynamicDoc)
 					break
 				}
 				case "help": {
-					const dynamicDoc = context && task.cwd
-						? await this.getHelpDoc(context, task.cwd)
-						: HELP_DOC
+					const dynamicDoc = context && task.cwd ? await this.getHelpDoc(context, task.cwd) : HELP_DOC
 					pushToolResult(dynamicDoc)
 					break
 				}
@@ -385,11 +379,12 @@ const json = await service.serialize(0)    // SerializationFormat.JSON
 					const scanStatus = (service as any)._scanStatus || "unknown"
 					const errorCount = (service as any)._lastScanErrors || 0
 
-					const statusInfo = scanStatus === "scanning"
-						? "⚠ Scan in progress — results may be incomplete"
-						: errorCount > 0
-							? `⚠ ${errorCount} parse error(s) in last scan`
-							: "✅ Scan complete"
+					const statusInfo =
+						scanStatus === "scanning"
+							? "⚠ Scan in progress — results may be incomplete"
+							: errorCount > 0
+								? `⚠ ${errorCount} parse error(s) in last scan`
+								: "✅ Scan complete"
 
 					const fileCount = (service as any)._filesScanned || graph.files.size
 					const edgeCount = (service as any)._accumulatedEdges || graph.edges.length
@@ -410,7 +405,7 @@ Use \`codebase_mapping_query(action="schema")\` for type reference or \`codebase
 				}
 			}
 		} catch (err) {
-			handleError(`Failed to query codebase mapping: ${err instanceof Error ? err.message : String(err)}`)
+			handleError("querying codebase mapping", err instanceof Error ? err : new Error(String(err)))
 		}
 	}
 }
