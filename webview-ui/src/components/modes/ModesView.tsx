@@ -70,6 +70,7 @@ const ModesView = () => {
 		customModePrompts,
 		listApiConfigMeta,
 		currentApiConfigName,
+		modeApiConfigs,
 		mode,
 		customInstructions,
 		setCustomInstructions,
@@ -82,6 +83,17 @@ const ModesView = () => {
 	// 2. Not syncing with the backend mode state (which would cause flickering)
 	// 3. Still sending the mode change to the backend for persistence
 	const [visualMode, setVisualMode] = useState(mode)
+
+	// Optimistic modeApiConfigs cache — updates UI immediately after bulk assign/clear
+	// Syncs back when backend pushes state (Effect below)
+	const [optimisticModeApiConfigs, setOptimisticModeApiConfigs] = useState<Record<string, string> | undefined>(
+		undefined,
+	)
+	useEffect(() => {
+		// Reset optimistic cache when backend state arrives (prevents stale overrides)
+		setOptimisticModeApiConfigs(undefined)
+	}, [modeApiConfigs])
+	const effectiveModeApiConfigs = optimisticModeApiConfigs ?? modeApiConfigs
 
 	// Build modes fresh each render so search reflects inline rename updates immediately
 	const modes = getAllModes(customModes)
@@ -930,6 +942,93 @@ const ModesView = () => {
 								</SelectContent>
 							</Select>
 						</div>
+						{/* Bulk assign: set current profile for all modes */}
+						<div className="flex gap-2">
+							<Button
+								variant="secondary"
+								size="sm"
+								disabled={!currentApiConfigName}
+								title={
+									!currentApiConfigName ? "No API profile selected — create or load one first" : ""
+								}
+								onClick={() => {
+									const currentConfig = (listApiConfigMeta || []).find(
+										(c) => c.name === currentApiConfigName,
+									)
+									if (!currentConfig?.id) return
+									const bulkConfigs: Record<string, string> = {}
+									for (const m of modes) {
+										bulkConfigs[m.slug] = currentConfig.id
+									}
+									// Optimistic update — UI reflects immediately
+									setOptimisticModeApiConfigs({ ...bulkConfigs })
+									vscode.postMessage({
+										type: "bulkModeApiConfig",
+										values: bulkConfigs,
+									})
+								}}>
+								<span className="codicon codicon-check-all mr-1" />
+								Set for all modes
+							</Button>
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									// Optimistic update — clear immediately
+									setOptimisticModeApiConfigs({})
+									vscode.postMessage({
+										type: "bulkModeApiConfig",
+										values: {},
+									})
+								}}>
+								<span className="codicon codicon-clear-all mr-1" />
+								Clear all overrides
+							</Button>
+						</div>
+						{/* Per-mode override indicators */}
+						{modes.length > 0 && (
+							<div className="mt-2 space-y-1">
+								{modes.map((m) => {
+									const overrideId = effectiveModeApiConfigs?.[m.slug]
+									const overrideName = overrideId
+										? (listApiConfigMeta || []).find((c) => c.id === overrideId)?.name
+										: undefined
+									return (
+										<div key={m.slug} className="flex items-center justify-between text-xs py-0.5">
+											<span className="text-vscode-foreground">{m.name}</span>
+											{overrideName ? (
+												<div className="flex items-center gap-1">
+													<span className="text-vscode-descriptionForeground">
+														{overrideName}
+													</span>
+													<button
+														className="codicon codicon-close text-vscode-descriptionForeground opacity-50 hover:opacity-100 cursor-pointer"
+														title="Clear override"
+														onClick={() => {
+															// Compute updated map once, use it for both optimistic + backend
+															const updated = {
+																...(optimisticModeApiConfigs ??
+																	effectiveModeApiConfigs),
+															}
+															delete updated[m.slug]
+															setOptimisticModeApiConfigs(updated)
+															vscode.postMessage({
+																type: "bulkModeApiConfig",
+																values: updated,
+															})
+														}}
+													/>
+												</div>
+											) : (
+												<span className="text-vscode-descriptionForeground opacity-60">
+													(default)
+												</span>
+											)}
+										</div>
+									)
+								})}
+							</div>
+						)}
 					</div>
 				</div>
 

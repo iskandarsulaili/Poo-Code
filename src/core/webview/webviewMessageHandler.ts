@@ -1613,6 +1613,23 @@ export const webviewMessageHandler = async (
 			break
 		}
 
+		case "bulkModeApiConfig": {
+			// message.values: Record<modeSlug, configId>
+			if (message.values) {
+				try {
+					await provider.providerSettingsManager.setModeApiConfigs(message.values)
+					await provider.postStateToWebview()
+				} catch (error) {
+					provider.log(`Failed to bulk-set mode API configs: ${error}`)
+					await provider.postMessageToWebview({
+						type: "state",
+						payload: { error: `Failed to set mode configs: ${error}` },
+					})
+				}
+			}
+			break
+		}
+
 		case "toggleApiConfigPin":
 			if (message.text) {
 				const currentPinned = getGlobalState("pinnedApiConfigs") ?? {}
@@ -1991,6 +2008,16 @@ export const webviewMessageHandler = async (
 					const isNewMode = !existingModes.some((mode) => mode.slug === message.modeConfig?.slug)
 
 					await provider.customModesManager.updateCustomMode(message.modeConfig.slug, message.modeConfig)
+					// Auto-populate modeApiConfigs for new custom modes
+					if (isNewMode) {
+						const firstConfigId = (await provider.providerSettingsManager.listConfig())[0]?.id
+						if (firstConfigId) {
+							await provider.providerSettingsManager.setModeConfig(
+								message.modeConfig.slug as any,
+								firstConfigId,
+							)
+						}
+					}
 					// Update state after saving the mode
 					const customModes = await provider.customModesManager.getCustomModes()
 					await updateGlobalState("customModes", customModes)
@@ -2758,17 +2785,12 @@ export const webviewMessageHandler = async (
 				}
 
 				// Report real stats — even partial during scan
-				const fileCount =
-					svc._filesScanned > 0
-						? svc._filesScanned
-						: graph.files.size
+				const fileCount = svc._filesScanned > 0 ? svc._filesScanned : graph.files.size
 				const totalFiles = svc._totalFilesToScan > 0 ? svc._totalFilesToScan : undefined
 
 				// Use provisional edge count during scan, real edges after graph build
 				const edgeCount =
-					uiStatus === "scanning" && svc._accumulatedEdges > 0
-						? svc._accumulatedEdges
-						: graph.edges.length
+					uiStatus === "scanning" && svc._accumulatedEdges > 0 ? svc._accumulatedEdges : graph.edges.length
 				const cacheHitRate = stats.astHitRate
 
 				let message: string | undefined
@@ -2842,15 +2864,9 @@ export const webviewMessageHandler = async (
 							uiStatus = "idle"
 					}
 
-					const fileCount =
-						svc._filesScanned > 0
-							? svc._filesScanned
-							: graph.files.size
+					const fileCount = svc._filesScanned > 0 ? svc._filesScanned : graph.files.size
 
-					const edgeCount =
-						graph.edges.length > 0
-							? graph.edges.length
-							: svc._accumulatedEdges
+					const edgeCount = graph.edges.length > 0 ? graph.edges.length : svc._accumulatedEdges
 
 					let message: string | undefined = `Refreshed ${instances.length} workspace(s)`
 					if (svc._lastScanErrors > 0) {
@@ -2939,7 +2955,13 @@ export const webviewMessageHandler = async (
 				let totalSizeKB = 0
 				let lastUpdated: string | null = null
 				let latestMtime = 0
-				for (const f of ["productContext.md", "activeContext.md", "decisionLog.md", "systemPatterns.md", "progress.md"]) {
+				for (const f of [
+					"productContext.md",
+					"activeContext.md",
+					"decisionLog.md",
+					"systemPatterns.md",
+					"progress.md",
+				]) {
 					const filePath = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, MEMORY_BANK_DIR, f)
 					try {
 						const stat = await vscode.workspace.fs.stat(filePath)
@@ -2949,7 +2971,7 @@ export const webviewMessageHandler = async (
 							latestMtime = stat.mtime
 							lastUpdated = new Date(stat.mtime).toISOString().replace("T", " ").substring(0, 16)
 						}
-					} catch { }
+					} catch {}
 				}
 				provider.postMessageToWebview({
 					type: "memoryBankStatusUpdate",

@@ -654,6 +654,7 @@ export interface WebviewMessage {
 		| "moveSkill"
 		| "updateSkillModes"
 		| "openSkillFile"
+		| "bulkModeApiConfig"
 		// Parallel subtask control messages (Webview → Extension)
 		| "parallelSubtaskPause"
 		| "parallelSubtaskResume"

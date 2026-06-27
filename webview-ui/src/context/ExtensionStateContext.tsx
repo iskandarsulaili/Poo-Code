@@ -98,6 +98,7 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setTaskSyncEnabled: (value: boolean) => void
 	setCurrentApiConfigName: (value: string) => void
 	setListApiConfigMeta: (value: ProviderSettingsEntry[]) => void
+	setModeApiConfigs: (value: Record<string, string>) => void
 	mode: Mode
 	setMode: (value: Mode) => void
 	setCustomModePrompts: (value: CustomModePrompts) => void
@@ -291,6 +292,11 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 
 	const setListApiConfigMeta = useCallback(
 		(value: ProviderSettingsEntry[]) => setState((prevState) => ({ ...prevState, listApiConfigMeta: value })),
+		[],
+	)
+
+	const setModeApiConfigs = useCallback(
+		(value: Record<string, string>) => setState((prevState) => ({ ...prevState, modeApiConfigs: value })),
 		[],
 	)
 
@@ -547,6 +553,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setTaskSyncEnabled: (value) => setState((prevState) => ({ ...prevState, taskSyncEnabled: value }) as any),
 		setCurrentApiConfigName: (value) => setState((prevState) => ({ ...prevState, currentApiConfigName: value })),
 		setListApiConfigMeta,
+		setModeApiConfigs,
 		setMode: (value: Mode) => setState((prevState) => ({ ...prevState, mode: value })),
 		setCustomModePrompts: (value) => setState((prevState) => ({ ...prevState, customModePrompts: value })),
 		setCustomSupportPrompts: (value) => setState((prevState) => ({ ...prevState, customSupportPrompts: value })),

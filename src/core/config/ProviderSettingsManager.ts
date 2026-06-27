@@ -524,6 +524,22 @@ export class ProviderSettingsManager {
 	}
 
 	/**
+	 * Bulk-set API configs for multiple modes at once.
+	 * Replaces the entire modeApiConfigs map with the provided entries.
+	 */
+	public async setModeApiConfigs(modeConfigs: Record<string, string>) {
+		try {
+			return await this.lock(async () => {
+				const providerProfiles = await this.load()
+				providerProfiles.modeApiConfigs = { ...modeConfigs }
+				await this.store(providerProfiles)
+			})
+		} catch (error) {
+			throw new Error(`Failed to set mode configs: ${error}`)
+		}
+	}
+
+	/**
 	 * Get the API config ID for a specific mode.
 	 */
 	public async getModeConfigId(mode: Mode) {
