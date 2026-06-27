@@ -553,6 +553,23 @@ export class ProviderSettingsManager {
 		}
 	}
 
+	/**
+	 * Remove the API config assignment for a specific mode.
+	 */
+	public async removeModeConfig(mode: string) {
+		try {
+			return await this.lock(async () => {
+				const providerProfiles = await this.load()
+				if (providerProfiles.modeApiConfigs && mode in providerProfiles.modeApiConfigs) {
+					delete providerProfiles.modeApiConfigs[mode]
+					await this.store(providerProfiles)
+				}
+			})
+		} catch (error) {
+			throw new Error(`Failed to remove mode config: ${error}`)
+		}
+	}
+
 	public async export() {
 		try {
 			return await this.lock(async () => {

@@ -1621,10 +1621,9 @@ export const webviewMessageHandler = async (
 					await provider.postStateToWebview()
 				} catch (error) {
 					provider.log(`Failed to bulk-set mode API configs: ${error}`)
-					await provider.postMessageToWebview({
-						type: "state",
-						payload: { error: `Failed to set mode configs: ${error}` },
-					})
+					vscode.window.showErrorMessage(
+						`Failed to set mode API configs: ${error instanceof Error ? error.message : String(error)}`,
+					)
 				}
 			}
 			break
@@ -2097,6 +2096,8 @@ export const webviewMessageHandler = async (
 
 				// Delete the mode
 				await provider.customModesManager.deleteCustomMode(message.slug)
+				// Clean up orphaned modeApiConfigs entry
+				await provider.providerSettingsManager.removeModeConfig(message.slug)
 
 				// Delete the rules folder if it exists
 				if (rulesFolderExists) {
