@@ -531,6 +531,13 @@ export class ProviderSettingsManager {
 		try {
 			return await this.lock(async () => {
 				const providerProfiles = await this.load()
+				// Validate that all config IDs exist
+				const validIds = new Set(Object.values(providerProfiles.apiConfigs).map((c) => c.id))
+				for (const [modeSlug, configId] of Object.entries(modeConfigs)) {
+					if (!validIds.has(configId)) {
+						throw new Error(`Invalid config ID '${configId}' for mode '${modeSlug}'`)
+					}
+				}
 				providerProfiles.modeApiConfigs = { ...modeConfigs }
 				await this.store(providerProfiles)
 			})

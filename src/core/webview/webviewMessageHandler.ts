@@ -1614,7 +1614,6 @@ export const webviewMessageHandler = async (
 		}
 
 		case "bulkModeApiConfig": {
-			// message.values: Record<modeSlug, configId>
 			if (message.values) {
 				try {
 					await provider.providerSettingsManager.setModeApiConfigs(message.values)
@@ -1624,6 +1623,8 @@ export const webviewMessageHandler = async (
 					vscode.window.showErrorMessage(
 						`Failed to set mode API configs: ${error instanceof Error ? error.message : String(error)}`,
 					)
+					// Push current state back so optimistic UI resets to real state
+					await provider.postStateToWebview()
 				}
 			}
 			break

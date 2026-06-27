@@ -974,15 +974,30 @@ const ModesView = () => {
 								variant="ghost"
 								size="sm"
 								onClick={() => {
-									// Optimistic update — clear immediately
-									setOptimisticModeApiConfigs({})
+									// Clear only entries that match the current default profile,
+									// preserving overrides that differ from default
+									const defaultConfig = (listApiConfigMeta || []).find(
+										(c) => c.name === currentApiConfigName,
+									)
+									const defaultId = defaultConfig?.id
+									const effective = optimisticModeApiConfigs ?? modeApiConfigs
+									const cleaned: Record<string, string> = {}
+									if (effective) {
+										for (const [slug, id] of Object.entries(effective)) {
+											// Keep only entries that differ from the default profile
+											if (id !== defaultId) {
+												cleaned[slug] = id
+											}
+										}
+									}
+									setOptimisticModeApiConfigs(cleaned)
 									vscode.postMessage({
 										type: "bulkModeApiConfig",
-										values: {},
+										values: cleaned,
 									})
 								}}>
 								<span className="codicon codicon-clear-all mr-1" />
-								Clear all overrides
+								Clear default overrides
 							</Button>
 						</div>
 						{/* Per-mode override indicators */}
