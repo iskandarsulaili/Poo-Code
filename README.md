@@ -1,8 +1,8 @@
-## Poo Code (v3.58.7)
+## Poo Code (v3.58.8)
 
 Poo-Code is a fork of [Zoo-Code](https://github.com/Zoo-Code-Org/Zoo-Code) which is a fork of Roo-Code which is a fork of Cline.
 
-> **Release v3.58.7** — Codebase Mapping: all stubs implemented, 6 performance fixes, 8 memory leak fixes, 5 dead-code removals (see [Changelog](#changelog) below)
+> **Release v3.58.8** — Bulk Mode API Config: assign API profiles to all modes at once with optimistic UI (see [Changelog](#changelog) below)
 
 (The truth is I am too lazy to chunk it into smaller commits — the full pile lives in the [selfimproving](https://github.com/iskandarsulaili/Poo-Code/tree/selfimproving) branch)
 
@@ -23,102 +23,102 @@ This fork adds **~31,000 lines** of new infrastructure across **230+ files**, al
 
 ### Core Features
 
-| Feature | Poo-Code (this branch) | Zoo-Code main |
-|---------|--------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| **Self-improving loop** | `SelfImprovingManager` — background review pass every N turns/tool calls. Learns from mistakes, curates skills, suggests optimizations. | ❌ No automated self-review |
-| **Pattern analysis** | `PatternAnalyzer` — detects recurring tool-use patterns, error signatures, and skill gaps from execution history. | ❌ No pattern detection |
-| **Curator service** | `CuratorService` — tar.gz-backed skill store (backup/rollback). Decides when to create/update/merge skills from learned patterns. | ❌ Manual skill authoring only |
-| **Skill automation** | `ActionExecutor` + `ImprovementApplier` — auto-creates and updates skills from reviewed patterns. | ❌ No auto skill creation |
-| **Insights engine** | `InsightsEngine` — generates project-level insights (dead code, stale configs, architecture notes). | ❌ No project insights |
-| **Resilience** | `ResilienceService` — streaming backoff, tool error healer, auto-retry with learned recovery strategies. Separate streaming failure counter prevents cross-contamination. | ❌ Basic retry only |
-| **Question evaluation** | `QuestionEvaluatorService` — evaluates user questions for clarity/completeness; auto-selects best answer when choices are offered. | ❌ Always picks first choice |
-| **Trust service** | `TrustService` — learns tool-approval patterns over time. Full-trust mode auto-approves known-safe tools. | ❌ Static auto-approval rules |
-| **Review team** | `ReviewTeamService` — multi-agent review (innovator + critic + decider) scores every learned pattern before applying it. | ❌ No pre-apply validation |
-| **Agent memory** | `AgentMemoryAdapter` + `MemoryStore` + `MemoryBackendFactory` — pluggable memory backend (SQLite default, configurable). Bounded context injection via `memory.ts` types. | ❌ No persistent agent memory |
-| **Learning store** | `LearningStore` — stores/retrieves learned patterns with confidence scoring. Schema-versioned for forward compat. | ❌ No learning storage |
-| **Transcript recall** | `TranscriptRecall` — retrieves past conversation context for pattern learning. | ❌ No historical context |
-| **Skill usage tracking** | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions. | ❌ No usage metrics |
-| **Auto-mode orchestrator** | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type. | ❌ Manual mode switching |
-| **Mode factory** | `ModeFactoryService` — generates custom modes from learned workflows. | ❌ Fixed mode set |
+| Feature                    | Poo-Code (this branch)                                                                                                                                                    | Zoo-Code main                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| **Self-improving loop**    | `SelfImprovingManager` — background review pass every N turns/tool calls. Learns from mistakes, curates skills, suggests optimizations.                                   | ❌ No automated self-review    |
+| **Pattern analysis**       | `PatternAnalyzer` — detects recurring tool-use patterns, error signatures, and skill gaps from execution history.                                                         | ❌ No pattern detection        |
+| **Curator service**        | `CuratorService` — tar.gz-backed skill store (backup/rollback). Decides when to create/update/merge skills from learned patterns.                                         | ❌ Manual skill authoring only |
+| **Skill automation**       | `ActionExecutor` + `ImprovementApplier` — auto-creates and updates skills from reviewed patterns.                                                                         | ❌ No auto skill creation      |
+| **Insights engine**        | `InsightsEngine` — generates project-level insights (dead code, stale configs, architecture notes).                                                                       | ❌ No project insights         |
+| **Resilience**             | `ResilienceService` — streaming backoff, tool error healer, auto-retry with learned recovery strategies. Separate streaming failure counter prevents cross-contamination. | ❌ Basic retry only            |
+| **Question evaluation**    | `QuestionEvaluatorService` — evaluates user questions for clarity/completeness; auto-selects best answer when choices are offered.                                        | ❌ Always picks first choice   |
+| **Trust service**          | `TrustService` — learns tool-approval patterns over time. Full-trust mode auto-approves known-safe tools.                                                                 | ❌ Static auto-approval rules  |
+| **Review team**            | `ReviewTeamService` — multi-agent review (innovator + critic + decider) scores every learned pattern before applying it.                                                  | ❌ No pre-apply validation     |
+| **Agent memory**           | `AgentMemoryAdapter` + `MemoryStore` + `MemoryBackendFactory` — pluggable memory backend (SQLite default, configurable). Bounded context injection via `memory.ts` types. | ❌ No persistent agent memory  |
+| **Learning store**         | `LearningStore` — stores/retrieves learned patterns with confidence scoring. Schema-versioned for forward compat.                                                         | ❌ No learning storage         |
+| **Transcript recall**      | `TranscriptRecall` — retrieves past conversation context for pattern learning.                                                                                            | ❌ No historical context       |
+| **Skill usage tracking**   | `SkillUsageStore` — tracks which skills fire, success rate, frequency. Feeds curator decisions.                                                                           | ❌ No usage metrics            |
+| **Auto-mode orchestrator** | `AutoModeOrchestrator` — automatically switches between VS Code modes based on task type.                                                                                 | ❌ Manual mode switching       |
+| **Mode factory**           | `ModeFactoryService` — generates custom modes from learned workflows.                                                                                                     | ❌ Fixed mode set              |
 
 ### Parallel Execution Engine
 
-| Feature | Poo-Code | Zoo-Code |
-|---------|----------|----------|
-| **Parallel execution** | `ExecuteParallelSubtaskTool` + `ExecuteParallelChildTaskTool` — DAG-based parallel task execution with dependency resolution, lock-aware scheduling, and blackboard communication between subtasks. Real child agent spawning via SubtaskExecutor callback. | ❌ No parallel execution |
-| **Parallel orchestrator** | `ParallelSubtaskOrchestrator` — topological DAG wave scheduling, cycle detection, subtask heartbeat monitoring, automatic retry/failure handling, resume/skip/cancel controls. | ❌ No orchestrator |
-| **Parallel dashboard UI** | Slide-in overlay panel with tabbed views (Subtasks, Child Tasks, DAG, Logs). Live DAG visualization, subtask cards with status/duration/deps, intervention controls (pause/resume/cancel/retry/skip), agent thought stream, system log stream. Auto-opens on parallel task start; closeable via Escape/backdrop/X. | ❌ No UI |
-| **Log forwarding** | Live log streaming from orchestrator to webview via onLog callback. Every subtask lifecycle event (start, complete, fail) pushed to dashboard in real-time. | ❌ No equivalent |
+| Feature                   | Poo-Code                                                                                                                                                                                                                                                                                                           | Zoo-Code                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| **Parallel execution**    | `ExecuteParallelSubtaskTool` + `ExecuteParallelChildTaskTool` — DAG-based parallel task execution with dependency resolution, lock-aware scheduling, and blackboard communication between subtasks. Real child agent spawning via SubtaskExecutor callback.                                                        | ❌ No parallel execution |
+| **Parallel orchestrator** | `ParallelSubtaskOrchestrator` — topological DAG wave scheduling, cycle detection, subtask heartbeat monitoring, automatic retry/failure handling, resume/skip/cancel controls.                                                                                                                                     | ❌ No orchestrator       |
+| **Parallel dashboard UI** | Slide-in overlay panel with tabbed views (Subtasks, Child Tasks, DAG, Logs). Live DAG visualization, subtask cards with status/duration/deps, intervention controls (pause/resume/cancel/retry/skip), agent thought stream, system log stream. Auto-opens on parallel task start; closeable via Escape/backdrop/X. | ❌ No UI                 |
+| **Log forwarding**        | Live log streaming from orchestrator to webview via onLog callback. Every subtask lifecycle event (start, complete, fail) pushed to dashboard in real-time.                                                                                                                                                        | ❌ No equivalent         |
 
 ### Verification System
 
-| Feature | Poo-Code | Zoo-Code |
-|---------|----------|----------|
-| **Requirements extraction** | `RequirementsVerifier` — parses user prompts for bullet points, numbered lists, and narrative action verbs. Splits "Create a login page with auth and session management" into 3+ granular requirements. | ❌ No requirement tracking |
-| **Auto-verification** | Cross-references requirements against actual tool_use blocks in API conversation history. Marks requirements as verified when matching file paths found, failed when no corresponding file changes. | ❌ No equivalent |
-| **File-changes gate** | `VerificationEngine` runs `git diff --diff-filter=ACMRTD` at completion time to verify files were actually modified (not just claimed). | ❌ No file-change validation |
-| **Content volume check** | Parses `git diff --stat` to count lines inserted+deleted. Warns when <5 lines changed across all files (suggests stubs/placeholders). | ❌ No equivalent |
-| **Stub detection** | Scans modified files for TODO, FIXME, HACK, `throw new Error('not implemented')`, `@ts-ignore`, `@ts-nocheck`. Flags files where >5% of lines match. | ❌ No stub scanning |
-| **Build config integrity** | SHA256-hashes 15 build config files (package.json, Cargo.toml, pyproject.toml, etc.) at task start. Re-checks at completion — fails if agent tampered with build scripts. | ❌ No integrity check |
-| **Claim cross-reference** | Extracts file names from the agent's `attempt_completion` result text. Blocks completion when >50% of claimed files were not actually modified by tool calls. | ❌ No claim validation |
-| **Result substance check** | Rejects empty or evasion-language result text. Minimum 20 meaningful characters, blocks "nothing/failed/unable to" patterns under 80 chars. | ❌ No validation |
-| **Test coverage gate** | Supports `coverageCommand` + `minCoverage` config. Parses `XX%` from coverage tool output (matches last occurrence for total). Auto-detects coverage command per language. | ❌ No coverage check |
-| **Escalation** | After 5 consecutive verification failures across any gate, prompts user to bypass, retry, or cancel. Cross-call tracking persists across `attempt_completion` retries. | ❌ No escalation |
-| **Bypass mode** | Single `verificationLevel: "bypass"` skips ALL 5 gate sections (requirements, auto-verify, claim check, substance check, code quality). Opt-out from verification. | ❌ No equivalent |
-| **Child task scoping** | Aggregates tool call files from delegated children into parent's verification. Children store files under direct parent taskId; no sibling pollution. Cleaned up on delegation completion/denied/error. | ❌ No equivalent |
-| **Gate consistency** | `vLevel` resolved once, enforced uniformly across all 5 checks. No gate runs when bypassed. | ❌ No equivalent |
+| Feature                     | Poo-Code                                                                                                                                                                                                 | Zoo-Code                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **Requirements extraction** | `RequirementsVerifier` — parses user prompts for bullet points, numbered lists, and narrative action verbs. Splits "Create a login page with auth and session management" into 3+ granular requirements. | ❌ No requirement tracking   |
+| **Auto-verification**       | Cross-references requirements against actual tool_use blocks in API conversation history. Marks requirements as verified when matching file paths found, failed when no corresponding file changes.      | ❌ No equivalent             |
+| **File-changes gate**       | `VerificationEngine` runs `git diff --diff-filter=ACMRTD` at completion time to verify files were actually modified (not just claimed).                                                                  | ❌ No file-change validation |
+| **Content volume check**    | Parses `git diff --stat` to count lines inserted+deleted. Warns when <5 lines changed across all files (suggests stubs/placeholders).                                                                    | ❌ No equivalent             |
+| **Stub detection**          | Scans modified files for TODO, FIXME, HACK, `throw new Error('not implemented')`, `@ts-ignore`, `@ts-nocheck`. Flags files where >5% of lines match.                                                     | ❌ No stub scanning          |
+| **Build config integrity**  | SHA256-hashes 15 build config files (package.json, Cargo.toml, pyproject.toml, etc.) at task start. Re-checks at completion — fails if agent tampered with build scripts.                                | ❌ No integrity check        |
+| **Claim cross-reference**   | Extracts file names from the agent's `attempt_completion` result text. Blocks completion when >50% of claimed files were not actually modified by tool calls.                                            | ❌ No claim validation       |
+| **Result substance check**  | Rejects empty or evasion-language result text. Minimum 20 meaningful characters, blocks "nothing/failed/unable to" patterns under 80 chars.                                                              | ❌ No validation             |
+| **Test coverage gate**      | Supports `coverageCommand` + `minCoverage` config. Parses `XX%` from coverage tool output (matches last occurrence for total). Auto-detects coverage command per language.                               | ❌ No coverage check         |
+| **Escalation**              | After 5 consecutive verification failures across any gate, prompts user to bypass, retry, or cancel. Cross-call tracking persists across `attempt_completion` retries.                                   | ❌ No escalation             |
+| **Bypass mode**             | Single `verificationLevel: "bypass"` skips ALL 5 gate sections (requirements, auto-verify, claim check, substance check, code quality). Opt-out from verification.                                       | ❌ No equivalent             |
+| **Child task scoping**      | Aggregates tool call files from delegated children into parent's verification. Children store files under direct parent taskId; no sibling pollution. Cleaned up on delegation completion/denied/error.  | ❌ No equivalent             |
+| **Gate consistency**        | `vLevel` resolved once, enforced uniformly across all 5 checks. No gate runs when bypassed.                                                                                                              | ❌ No equivalent             |
 
 ### Codebase Intelligence & Developer Experience
 
-| Feature | Poo-Code | Zoo-Code |
-|---------|----------|----------|
-| **Codebase mapping** | `@zoo-code/codebase-mapping` package — AST parsing via web-tree-sitter, dependency graph with circular detection, symbol extraction, token compression for LLM context, multi-format serialization (JSON/Mermaid/Markdown/DOT), security layer (PII/secret scanning), AST cache with TTL. 3 VS Code commands: refresh/show/export map. | ❌ No equivalent |
-| **Prompt compression** | `compressPrompt()` — lossless compression for child agent prompts (verbose phrase shortening, whitespace optimization, markdown stripping, JSON compaction, file path shortening). Prevents child agent context overload. | ❌ No compression |
-| **i18n translation** | All 18 locales fully translated for parallel UI (dashboard, subtask cards, intervention controls, resume panel, detail panel, DAG labels). Languages: ca, de, en, es, fr, hi, id, it, ja, ko, nl, pl, pt-BR, ru, tr, vi, zh-CN, zh-TW. Fixed `defaultNS: "common"` so dashboard renders labels instead of raw keys. | ❌ Partial EN-only |
+| Feature                | Poo-Code                                                                                                                                                                                                                                                                                                                               | Zoo-Code           |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| **Codebase mapping**   | `@zoo-code/codebase-mapping` package — AST parsing via web-tree-sitter, dependency graph with circular detection, symbol extraction, token compression for LLM context, multi-format serialization (JSON/Mermaid/Markdown/DOT), security layer (PII/secret scanning), AST cache with TTL. 3 VS Code commands: refresh/show/export map. | ❌ No equivalent   |
+| **Prompt compression** | `compressPrompt()` — lossless compression for child agent prompts (verbose phrase shortening, whitespace optimization, markdown stripping, JSON compaction, file path shortening). Prevents child agent context overload.                                                                                                              | ❌ No compression  |
+| **i18n translation**   | All 18 locales fully translated for parallel UI (dashboard, subtask cards, intervention controls, resume panel, detail panel, DAG labels). Languages: ca, de, en, es, fr, hi, id, it, ja, ko, nl, pl, pt-BR, ru, tr, vi, zh-CN, zh-TW. Fixed `defaultNS: "common"` so dashboard renders labels instead of raw keys.                    | ❌ Partial EN-only |
 
 ### Orchestrator Modes
 
-| Feature | Poo-Code | Zoo-Code |
-|---------|----------|----------|
-| **ONE-SHOT Orchestrator** | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass | ❌ No equivalent |
-| **KAIZEN Orchestrator** | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals | ❌ No equivalent |
+| Feature                        | Poo-Code                                                                                                                                                                            | Zoo-Code         |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| **ONE-SHOT Orchestrator**      | Autonomous 8-phase sequential build agent — handles entire projects from requirements to verification in a single pass                                                              | ❌ No equivalent |
+| **KAIZEN Orchestrator**        | Continuous improvement agent with 7-step iteration loop (Analyze → Identify → Fix → Verify → Enhance → Git Push → Re-evaluate) and self-evolving mini-goals                         | ❌ No equivalent |
 | **Proactive Error Prevention** | Pre-execution tool call validation, structured error classification (12 categories), cascading failure detection, and prevention hint injection — catches errors BEFORE they happen | ❌ No equivalent |
-| **Git Auto-Push** | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically | ❌ No equivalent |
-| **Self-Evolving Mini-Goals** | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first | ❌ No equivalent |
+| **Git Auto-Push**              | KAIZEN mode auto-commits and pushes every cycle, enabling CI/CD pipelines to apply changes to staging/production automatically                                                      | ❌ No equivalent |
+| **Self-Evolving Mini-Goals**   | Mini-goals automatically evolve upward as each is achieved, with healing that reverts to fixing regressions first                                                                   | ❌ No equivalent |
 
 ### Infrastructure
 
-| Feature | Poo-Code | Zoo-Code |
-|---------|----------|----------|
-| **Skill name validation** | Validates skill name format (1-64 chars, lowercase alphanumeric/hyphens) in `SkillManageTool` (create/update/delete/merge) and `ActionExecutor`. Hash-truncated names pass validation with safe fallback. | ❌ No validation |
-| **MemoryManager init** | Calls `initialize()` before `consolidate()` in F3 cycle — prevents silent init failures on cold start. | ❌ No equivalent |
-| **ConfidenceScorer wiring** | Fixed: only scores when patterns exist; passes proper typed args to `calculateScore()`. | ❌ No equivalent |
-| **Always-available tools** | `list_files` + `read_file` promoted to always-available tools (available in any mode). | ❌ Gated per mode |
-| **Streaming failure resilience** | Separate `streamingFailureCount` counter so consecutive tool mistakes don't exhaust streaming retry budget. | ❌ Single counter |
-| **Verification ON by default** | Verification engines created on extension activation. Opt-out with `experiments.disableVerification: true`. Previously required opt-in. | ❌ No default |
+| Feature                          | Poo-Code                                                                                                                                                                                                  | Zoo-Code          |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| **Skill name validation**        | Validates skill name format (1-64 chars, lowercase alphanumeric/hyphens) in `SkillManageTool` (create/update/delete/merge) and `ActionExecutor`. Hash-truncated names pass validation with safe fallback. | ❌ No validation  |
+| **MemoryManager init**           | Calls `initialize()` before `consolidate()` in F3 cycle — prevents silent init failures on cold start.                                                                                                    | ❌ No equivalent  |
+| **ConfidenceScorer wiring**      | Fixed: only scores when patterns exist; passes proper typed args to `calculateScore()`.                                                                                                                   | ❌ No equivalent  |
+| **Always-available tools**       | `list_files` + `read_file` promoted to always-available tools (available in any mode).                                                                                                                    | ❌ Gated per mode |
+| **Streaming failure resilience** | Separate `streamingFailureCount` counter so consecutive tool mistakes don't exhaust streaming retry budget.                                                                                               | ❌ Single counter |
+| **Verification ON by default**   | Verification engines created on extension activation. Opt-out with `experiments.disableVerification: true`. Previously required opt-in.                                                                   | ❌ No default     |
 
 ### Experiment gate reference
 
-| Toggle | Enables |
-| ------ | ------- |
-| `selfImproving` | Master switch — enables the entire learning loop |
-| `selfImprovingAutoSkills` | Auto-create/update/merge skills from learned patterns |
-| `selfImprovingAutoMode` | Auto-switch VS Code modes based on task |
-| `selfImprovingReviewTeam` | Multi-agent review before applying learned patterns |
-| `selfImprovingFullTrust` | Auto-approve tools that TrustService considers safe |
-| `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer |
-| `oneShotOrchestrator` | Enable ONE-SHOT Orchestrator mode for autonomous project builds |
-| `kaizenOrchestrator` | Enable KAIZEN Orchestrator mode for continuous improvement |
-| `proactiveErrorPrevention` | Enable pre-execution tool call validation and cascade detection |
-| `gitAutoPush` | Enable auto-commit and push in KAIZEN mode |
-| `selfEvolvingMiniGoals` | Enable self-evolving mini-goals with regression healing |
-| `fullUICoverage` | Enable full UI coverage for all self-improving services |
-| `parallelExecution` | Enable DAG-based parallel task execution |
-| `structuredOutputParsing` | Enable structured output parsing for model responses |
-| `dependencyGraph` | Enable dependency graph analysis for task ordering |
-| `multiRootWorkspace` | Enable multi-root workspace support |
-| `parallelSubtask` | Enable parallel subtask execution with blackboard communication |
-| `disableVerification` | Disable ALL verification gates (verification ON by default) |
+| Toggle                            | Enables                                                         |
+| --------------------------------- | --------------------------------------------------------------- |
+| `selfImproving`                   | Master switch — enables the entire learning loop                |
+| `selfImprovingAutoSkills`         | Auto-create/update/merge skills from learned patterns           |
+| `selfImprovingAutoMode`           | Auto-switch VS Code modes based on task                         |
+| `selfImprovingReviewTeam`         | Multi-agent review before applying learned patterns             |
+| `selfImprovingFullTrust`          | Auto-approve tools that TrustService considers safe             |
+| `selfImprovingQuestionEvaluation` | Evaluate user questions for clarity; auto-select best answer    |
+| `oneShotOrchestrator`             | Enable ONE-SHOT Orchestrator mode for autonomous project builds |
+| `kaizenOrchestrator`              | Enable KAIZEN Orchestrator mode for continuous improvement      |
+| `proactiveErrorPrevention`        | Enable pre-execution tool call validation and cascade detection |
+| `gitAutoPush`                     | Enable auto-commit and push in KAIZEN mode                      |
+| `selfEvolvingMiniGoals`           | Enable self-evolving mini-goals with regression healing         |
+| `fullUICoverage`                  | Enable full UI coverage for all self-improving services         |
+| `parallelExecution`               | Enable DAG-based parallel task execution                        |
+| `structuredOutputParsing`         | Enable structured output parsing for model responses            |
+| `dependencyGraph`                 | Enable dependency graph analysis for task ordering              |
+| `multiRootWorkspace`              | Enable multi-root workspace support                             |
+| `parallelSubtask`                 | Enable parallel subtask execution with blackboard communication |
+| `disableVerification`             | Disable ALL verification gates (verification ON by default)     |
 
 ## Use Case Examples
 
@@ -230,11 +230,40 @@ Any issue not related to self-learning, submit at https://github.com/Zoo-Code-Or
 
 ## Changelog
 
+### v3.58.8 — Bulk Mode API Config: Assign Profiles to All Modes at Once
+
+**Backend:**
+
+- `ProviderSettingsManager.setModeApiConfigs()` — bulk-replaces the entire mode→config map in one atomic write under lock
+- `ProviderSettingsManager.removeModeConfig()` — removes a single mode's config assignment (used on mode delete)
+- Config ID validation — `setModeApiConfigs` verifies every config ID exists in `apiConfigs` before saving, rejects stale/deleted IDs with a clear error
+
+**Webview:**
+
+- `"bulkModeApiConfig"` message type + handler in `webviewMessageHandler.ts`
+- Error path calls `vscode.window.showErrorMessage()` (native toast) instead of ignored webview state message
+- Error path re-pushes state so optimistic UI rolls back on failure
+- Auto-populate: new custom modes receive the first available config ID automatically
+
+**UI:**
+
+- "Set for all modes" button — assigns the currently selected API profile to all modes at once
+- "Clear default overrides" — removes only entries matching the default profile, preserving actual per-mode overrides
+- Optimistic UI — `optimisticModeApiConfigs` local state updates instantly, syncs back when backend state arrives
+- Disabled guard — "Set for all modes" is greyed out when no API profile is selected, with tooltip explaining why
+- Per-mode override indicators — shows assigned profile name or "(default)" for each mode, with X button to clear individual override
+- `setModeApiConfigs` setter added to `ExtensionStateContext`
+
+**Cleanup:**
+
+- Orphan prevention — `deleteCustomMode` handler calls `removeModeConfig()` to clean up stale entries in `modeApiConfigs`
+
 ### v3.58.7 — Codebase Mapping: Full Implementation & Hardening
 
 Complete implementation of all 17 stubs across 6 files in `@zoo-code/codebase-mapping`, plus 30+ bug fixes across 4 audit rounds.
 
 **All stubs implemented:**
+
 - `Serializer`: Mermaid, Graphviz, ASCII, HTML, Markdown format generators — full data-driven output with dead code sections, HTML escaping, edge styles
 - `TokenCompressor`: L0 summary, L1 signatures, L2 declarations, line-based diff — all 4 LODs now produce real content
 - `SecurityLayer`: `checkComplianceBoundaries()` — glob-to-regex matching against gitignore, rooignore, custom deny/allow patterns
@@ -243,6 +272,7 @@ Complete implementation of all 17 stubs across 6 files in `@zoo-code/codebase-ma
 - `SymbolExtractor`: `resolveReferences()` — cross-references imports against local declarations
 
 **Performance (6 fixes):**
+
 - `getImplicitFlows()` O(n³) → O(n) with reference index map
 - `getConfigLinks()` O(n²) → O(n) with cached directory index
 - `getSymbol()` O(n) → O(1) with `_symbolByName` index
@@ -251,12 +281,14 @@ Complete implementation of all 17 stubs across 6 files in `@zoo-code/codebase-ma
 - `getDocUpdates()` sequential await → batched `Promise.all` at concurrency 50
 
 **Memory leaks (8 fixes):**
+
 - `_cachedRawContent` cleared on reset, dispose, scan, incremental update
 - `_previousFileHashes` cleared on resetScanState and dispose
 - `_symbolByName`/`_symbolsByKind` cleared on dispose
 - `_cachedSerializationData`/`_cachedSerializationPayload`/`_cachedDirIndex`/`_cachedRefIndex` invalidated on all lifecycle events
 
 **Data integrity (5 fixes):**
+
 - `getDocUpdates()` no longer overwrites real docs with TODO stubs — only generates for symbols without existing docs
 - `_symbolByName` changed from `Map<name, ExtractedSymbol>` to `Map<name, ExtractedSymbol[]>` — duplicate names no longer silently overwritten
 - `getConfigLinks()` reads raw file content for JSON parsing, not secret-masked AST text
@@ -264,6 +296,7 @@ Complete implementation of all 17 stubs across 6 files in `@zoo-code/codebase-ma
 - `getDocUpdates()` stale detection bounded by `limit * 2` — `watchDocFiles` flag now has real behavior
 
 **Dead code removed (5 fixes):**
+
 - `buildSerializationData()` unused `_graph` parameter removed
 - `resolveReferences()` no-op replaced with real implementation
 - `watchDocFiles` config flag wired as stale-check cap
@@ -300,6 +333,7 @@ New feature inspired by roo-code-memory-bank methodology — structured markdown
 that preserve project context across sessions.
 
 **MemoryBankManager service** (`src/services/memory-bank/`)
+
 - Creates `memory-bank/` directory at project root with 5 template files:
   `productContext.md`, `activeContext.md`, `decisionLog.md`,
   `systemPatterns.md`, `progress.md`
@@ -307,17 +341,20 @@ that preserve project context across sessions.
 - `updateFile()` handles both append and full-replace modes
 
 **Session-start context injection**
+
 - `getMemoryBankSection()` added to system prompt generation
 - Reads all 5 files at every task start and injects into the LLM prompt
 - Agent sees project goals, decisions, and progress immediately without being told
 
 **update_memory_bank native tool**
+
 - Agent calls it anytime: arch decisions → decisionLog.md, new task → progress.md,
   focus change → activeContext.md, pattern discovered → systemPatterns.md
 - Always available to all modes
 - Append mode by default (except productContext/activeContext)
 
 **VS Code commands**
+
 - `zoo-code.initMemoryBank` — creates 5 template files with placeholder sections
 - `zoo-code.openMemoryBank` — reveals `memory-bank/` in the file explorer
 
@@ -326,22 +363,26 @@ that preserve project context across sessions.
 Complete rewrite of codebase mapping status system across 8 files.
 
 **Real scan status** — Previously always showed green "Ready" with zero stats.
+
 - Service: `_scanStatus` (`idle→scanning→completed`) properly mapped to UI (`idle→scanning→ready→error`)
 - All 3 status senders (`ClineProvider._sendCodebaseMappingStatus`, `requestCodebaseMappingStatus`, `refreshCodebaseMap`) now read real status instead of hardcoding `"ready"`
 - Empty graph (null currentGraph) no longer falsely reported as "ready" with zeros
 
 **Live progress indicator** — No feedback during long scans.
+
 - `_filesScanned` / `_totalFilesToScan` counters emit batched progress every 50 files
 - Progress bar in popover (CSS, shows percentage when `totalFileCount` known)
 - Live edge count (`_accumulatedEdges`) during scan instead of 0 until graph build
 - Scan message shows `Scanning... 234/1500 files, 890 edges`
 
 **Precise stats** — `Files: 0 Edges: 0 Cache hit rate: 0.0%`.
+
 - `scanWorkspace()` checks cache before parse (`getAST()`/`getSymbols()` first) so cache hits accumulate on re-scan
 - Cache hit rate now correctly >0% on subsequent scans after file saves
 - `totalFileCount?: number` added to `CodebaseMappingStatus` type, populated in all status payloads
 
 **Concurrency & safety** — Scan corruption, stuck status, handler leaks.
+
 - `_scanInProgress` guard prevents overlapping scans (save watcher + folder change + manual refresh)
 - `_pendingRescan` flag: if a save/delete/folder-change arrives during scan, it's queued and re-triggered in `finally`
 - Full try/catch/finally: critical disk errors don't leave status stuck on "scanning"
@@ -350,10 +391,12 @@ Complete rewrite of codebase mapping status system across 8 files.
 - `refreshCodebaseMap` handler wrapped in try/catch — no silent hangs on scan failure
 
 **Performance** — Double filesystem walk removed.
+
 - `_rootFileCache` caches `discoverFiles()` results from pre-count pass for reuse in scan loop
 - Saves ~50K `stat()` calls per scan on large monorepos
 
 **Install compatibility** — `"Invalid extension detected"`.
+
 - `engines.node` changed from exact `"20.20.2"` to range `">=20.20.2"` — VS Code 1.124 snap bundles different Node patch version
 
 ### v3.56.2 — Initial codebase mapping fixes + VSIX packaging
